@@ -1,0 +1,8 @@
+assets/covers/*
+assets/buttons/pdn
+*.pdn
+test*.py
+audio/*
+__pycache__
+config
+*.sh
