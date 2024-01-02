@@ -98,7 +98,7 @@
             RoundedRectangle:
                 pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 8
                 size: self.size[0] * self.value_normalized, self.height / 8
-                radius: self.height / 16,
+                radius: [(self.height/16, self.height/16), (0, 0), (0, 0), (self.height/16, self.height/16)]
 
     
     Label:
