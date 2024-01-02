@@ -461,7 +461,7 @@ if __name__ == '__main__':
         song_length = common_vars.audioplayer.song_length
         total_frames = int(common_vars.audioplayer.total_frames)
         speed = common_vars.audioplayer.speed
-        fade_duration = int(common_vars.audioplayer.fade_duration)
+        fade_duration = int(common_vars.audioplayer.base_fade_duration)
         fp.write(len(song_data).to_bytes(2, "little"))
         fp.write(bytes(song_data, encoding="utf-8"))
         fp.write(song_pos.to_bytes(4, "little"))
