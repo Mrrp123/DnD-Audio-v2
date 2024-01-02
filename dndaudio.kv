@@ -1,5 +1,7 @@
 #:kivy 2.2.0
 
+#:import dp kivy.metrics.dp
+
 <MainDisplay>:
 
     Image:
@@ -206,19 +208,19 @@
 
         border: (0,0,0,0)
 
-    Button:
-        id: zawarudo
-        bold: True
-        width: root.height * (15/224)
-        height: self.width
-        background_color: 0,1,1,1
-        x: root.width * (1/2) - self.width/2
-        center_x: root.width * (1/2)
-        center_y: root.height * (1/12)
-        text: "ZA WARUDO!!!"
-        on_release: root.stop_time()
+    # Button:
+    #     id: zawarudo
+    #     bold: True
+    #     width: root.height * (15/224)
+    #     height: self.width
+    #     background_color: 0,1,1,1
+    #     x: root.width * (1/2) - self.width/2
+    #     center_x: root.width * (1/2)
+    #     center_y: root.height * (1/12)
+    #     text: "ZA WARUDO!!!"
+    #     on_release: root.stop_time()
 
-        border: (0,0,0,0)
+    #     border: (0,0,0,0)
 
 <SongButton>:
     bold: True
