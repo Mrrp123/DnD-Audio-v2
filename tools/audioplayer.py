@@ -10,6 +10,8 @@ from threading import Thread, Lock
 import time
 from scipy.signal import iirfilter
 from kivy import platform
+import pyogg
+import ctypes
 
 
 try:
@@ -119,6 +121,7 @@ class AudioPlayer():
         self.base_fade_duration = 3000 # Keep original value for when we change speeds and need to adjust this
         self.fade_duration = self.base_fade_duration
         self.chunk_len = 120 # sets a size for how large audio chunks are (ms)
+        pyogg.pyoggSetStreamBufferSize(round(self.rate * encoding//8 * self.chunk_len / 1000))
 
         self.sos = None
         self.filter_state = (np.zeros(shape=(15, 2)), np.zeros(shape=(15, 2)))
@@ -189,7 +192,7 @@ class AudioPlayer():
         Updates the currently available audio files in the audio folder. Only looks for .wav files for now
         """
         # if platform == "win" or platform == "linux":
-        loaded_songs = glob(f"{self.app_folder}/audio/*.wav")
+        loaded_songs = glob(f"{self.app_folder}/audio/*.wav") + glob(f"{self.app_folder}/audio/*.ogg")
         # elif platform == "android":
         #     loaded_songs = glob(f"sdcard/music/*.wav")
         self.playlist = MusicPlaylist(loaded_songs)
@@ -202,7 +205,7 @@ class AudioPlayer():
         This function will load a portion of a song defined by self.chunk_len (set to 120ms).
         Chunks may be shorter than 120ms if at EOF and the song length is not a multiple of self.chunk_len
 
-        file: PathLike: location where the .wav file is stored
+        file: PathLike: location where the audio file is stored
 
         start_pos: int: start reading at time = start_pos milliseconds, can be negative.
         If start_pos is negative, start reading at start_pos milliseconds away from end_pos if end_pos is not None
@@ -213,44 +216,59 @@ class AudioPlayer():
         gain: increase (or decrease) volume of outgoing audiosegment (in dB)
         """
 
+        _, file_type = os.path.splitext(file)
+
+        num_frames = total_frames = self.get_song_length(file)[1]
+        self.next_song_length = (total_frames / self.rate)*1000
+        self.next_total_frames = total_frames
+        if self.bootup:
+            self.song_length = self.next_song_length
+            self.total_frames = self.next_total_frames
+            if self.reverse_audio and not self.init_pos:
+                self.pos = self.song_length
+                self.frame_pos = self.total_frames
+
+        if end_pos is not None and end_pos / 1000 * self.rate < num_frames:
+            num_frames -= (num_frames - end_pos)
+            end_frame = round(end_pos / 1000 * self.rate)
+
+        if start_pos >= 0:
+            start_frame = round(start_pos / 1000 * self.rate)
+            if self.reverse_audio:
+                num_frames -= (total_frames - start_frame)
+            else:
+                num_frames -= start_frame
+        elif end_pos is None:
+            start_frame = total_frames - 1
+            
+        # NEGATIVE VALUES NOT FULLY IMPLEMENTED
+        # elif end_pos is None:
+        #     start_frame = round(1)
+        #     num_frames = round(-start_pos / 1000 * self.rate)
+        # elif end_pos / 1000 * self.rate < num_frames:
+        #     start_frame = end_frame - round(-start_pos / 1000 * self.rate)
+        #     num_frames -= start_frame
+            
+            
+        num_chunks = ceil(num_frames / (self.rate/1000*self.chunk_len))
+        self.num_chunks = num_chunks
+        chunk_frame_len = round(self.rate * (self.chunk_len / 1000))
+
+        if file_type == ".wav":
+            audio_generator = self._load_wav(file, start_frame, gain, num_chunks, chunk_frame_len)
+        
+        elif file_type == ".ogg":
+            audio_generator = self._load_ogg(file, start_frame, gain, num_chunks, chunk_frame_len)
+
+        for audio in audio_generator:
+            yield audio
+
+
+    def _load_wav(self, file, start_frame, gain, num_chunks, chunk_frame_len):
+
+        reverse_audio = self.reverse_audio # set local variable in case we reverse audio during a transition
+
         with wave.open(file, "rb") as fp:
-
-            num_frames = total_frames = fp.getnframes()
-            self.next_song_length = (total_frames / self.rate)*1000
-            self.next_total_frames = total_frames
-            if self.bootup:
-                self.song_length = self.next_song_length
-                self.total_frames = self.next_total_frames
-                if self.reverse_audio and not self.init_pos:
-                    self.pos = self.song_length
-                    self.frame_pos = self.total_frames
-
-            if end_pos is not None and end_pos / 1000 * self.rate < num_frames:
-                num_frames -= (num_frames - end_pos)
-                end_frame = round(end_pos / 1000 * self.rate)
-
-            if start_pos >= 0:
-                start_frame = round(start_pos / 1000 * self.rate)
-                if self.reverse_audio:
-                    num_frames -= (total_frames - start_frame)
-                else:
-                    num_frames -= start_frame
-            elif end_pos is None:
-                start_frame = total_frames - 1
-            
-            # NEGATIVE VALUES NOT FULLY IMPLEMENTED
-            # elif end_pos is None:
-            #     start_frame = round(1)
-            #     num_frames = round(-start_pos / 1000 * self.rate)
-            # elif end_pos / 1000 * self.rate < num_frames:
-            #     start_frame = end_frame - round(-start_pos / 1000 * self.rate)
-            #     num_frames -= start_frame
-            
-            
-            num_chunks = ceil(num_frames / (self.rate/1000*self.chunk_len))
-            self.num_chunks = num_chunks
-            chunk_frame_len = round(self.rate * (self.chunk_len / 1000))
-            reverse_audio = self.reverse_audio # set local variable in case we reverse audio during a transition
 
             for chunk_index in range(num_chunks):
                 if reverse_audio:
@@ -268,9 +286,62 @@ class AudioPlayer():
                 else:
                     yield audio
     
+    def _load_ogg(self, file, start_frame, gain, num_chunks, chunk_frame_len):
+
+        data_stream = pyogg.VorbisFileStream(file)
+        
+        pyogg.vorbis.ov_pcm_seek(ctypes.byref(data_stream.vf), start_frame)
+
+        byte_data = bytes([0])
+
+        reverse_audio = self.reverse_audio # set local variable in case we reverse audio during a transition
+        cut = False
+
+        for chunk_index in range(num_chunks):
+            if reverse_audio:
+                frame_pos = -chunk_frame_len*(chunk_index+1) + start_frame
+                if frame_pos < 0:
+                    chunk_frame_len += frame_pos # frame pos is negative here, so we're subtracting from chunk_frame_len
+                    cut = True # Set flag indicating that we have to cut out a part of the AudioSegment
+                    frame_pos = 0
+                pyogg.vorbis.ov_pcm_seek(ctypes.byref(data_stream.vf), frame_pos)
+
+            byte_data, _ = data_stream.get_buffer()
+
+            if byte_data is None:
+                break
+
+            audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
+            if reverse_audio:
+                if cut:
+                    yield audio[0:chunk_frame_len].reverse()
+                else:
+                    yield audio.reverse()
+            else:
+                yield audio
+
+
+    
+
     def get_song_length(self, song):
-        with wave.open(song, "rb") as fp:
-            num_frames = fp.getnframes()
+        _, file_type = os.path.splitext(song)
+
+        if file_type == ".wav":
+            with wave.open(song, "rb") as fp:
+                num_frames = fp.getnframes()
+
+        elif file_type == ".ogg":
+            with open(song, "rb") as fp:
+                i = 0
+                while True:
+                    fp.seek(-4-i, 2)
+                    data = fp.read(4)
+                    if data == bytes([79, 103, 103, 83]):
+                        fp.read(2)
+                        num_frames = int.from_bytes(fp.read(8), "little")
+                        break
+                    i += 1
+
         return (num_frames / self.rate * 1000), num_frames
 
     

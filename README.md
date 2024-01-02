@@ -5,4 +5,5 @@ pydub
 numpy
 scipy
 audiostream OR pyaudio
+pyogg
 ```
