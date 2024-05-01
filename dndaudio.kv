@@ -87,20 +87,44 @@
         on_touch_down: root.begin_seek(args[1])
         on_touch_move: root.update_seek(args[1])
         on_touch_up: root.end_seek(args[1])
-        canvas.before:
+        canvas:
+            # Draw background rail for song position
             Color:
                 rgba: 0.5,0.5,0.5,1
             RoundedRectangle:
                 pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 16
                 size: self.size[0], self.height / 8
                 radius: self.height / 16,
-        canvas:
+
+            # Create mask for active rail for song pos
+            StencilPush 
+            Color:
+                rgba: 0.5,0.5,0.5,1
+            RoundedRectangle:
+                pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 16
+                size: self.size[0], self.height / 8
+                radius: self.height / 16,
+            
+            # Draw active rail
+            StencilUse
             Color:
                 rgba: 1,1,1,1
             RoundedRectangle:
                 pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 16
                 size: self.size[0] * self.value_normalized, self.height / 8
-                radius: [(self.height/16, self.height/16), (0, 0), (0, 0), (self.height/16, self.height/16)]
+
+            # Remove mask (so that we can draw the rest of the frame)
+            StencilUnUse
+            Color:
+                rgba: 0.5,0.5,0.5,1
+            RoundedRectangle:
+                pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 16
+                size: self.size[0], self.height / 8
+                radius: self.height / 16,
+
+            # Clear the stencil object
+            StencilPop
+            
 
     
     Label:
