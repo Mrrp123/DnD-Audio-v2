@@ -64,6 +64,7 @@ class MainDisplay(Widget):
         self.c2 = "111111"
 
         self.ids.background.texture = Gradient.vertical(get_color_from_hex(self.c1), get_color_from_hex(self.c2))
+        self.time_slider_anim = Animation(pos=(0, 0), size=(0, 0))
 
     
     def on_parent(self, *args, **kwargs):
@@ -161,19 +162,20 @@ class MainDisplay(Widget):
 
 
     def begin_seek(self, touch):
+        if not hasattr(self, "orig_time_slider_pos"):
+            self.orig_time_slider_pos = tuple(self.time_slider.pos) # These fucking variables REFUSE to be initialized within the first couple frames, init them here
+            self.orig_time_slider_size = tuple(self.time_slider.size) # and DONT FUCKING TOUCH THEM
+
         if self.time_slider.collide_point(*touch.pos) and not self.time_slider.disabled:
             self.stop_move = True
             self.update_time_pos = False
-            # new_size = (self.time_slider.size[0] * 1.05, self.time_slider.size[1] * 2)
-            # new_pos = (self.time_slider.pos[0] - self.time_slider.size[0] * .025, self.height * (1/3) - self.time_slider.size[1])
-            # anim = Animation(size=new_size, pos=new_pos, duration=0.1, transition="linear")
-            # anim.start(self.time_slider)
-            # try:
-            #     if self.audio_clock:
-            #         Clock.unschedule(self.audio_clock)
-            #         self.audio_clock = None
-            # except:
-            #     pass
+            new_size = (self.orig_time_slider_size[0] * 1.05, self.orig_time_slider_size[1] * 2)
+            new_pos = (self.orig_time_slider_pos[0] - self.orig_time_slider_size[0] * .025, self.orig_time_slider_pos[1] - self.orig_time_slider_size[1]/2)
+            
+            # Make the song pos bar expand when held
+            self.time_slider_anim.stop(self.time_slider)
+            self.time_slider_anim = Animation(size=new_size, pos=new_pos, duration=0.3, transition="out_expo")
+            self.time_slider_anim.start(self.time_slider)
     
     def update_seek(self, touch):
         if touch.grab_current == self.time_slider:
@@ -184,6 +186,13 @@ class MainDisplay(Widget):
     def end_seek(self, touch):
         if touch.grab_current == self.time_slider:
             self.stop_move = False
+
+            # Revert song pos to original position
+            self.time_slider_anim.stop(self.time_slider)
+            self.time_slider_anim = Animation(size=self.orig_time_slider_size, pos=self.orig_time_slider_pos, duration=0.1, transition="linear")
+            self.time_slider_anim.start(self.time_slider)
+            
+            
             try:
                 self.audioplayer.seek_pos = int(self.time_slider.value_normalized * self.audioplayer.song_length)
                 if self.time_slider.value_normalized == 1 and not self.audioplayer.reverse_audio:
