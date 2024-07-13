@@ -271,13 +271,13 @@ class MainDisplay(Widget):
         new_c1 = get_color_from_hex(new_color[0])
         new_c2 = get_color_from_hex(new_color[1])
 
-        c1_red_transition = np.linspace(old_c1[0], new_c1[0], num=10, endpoint=True)
-        c1_green_transition = np.linspace(old_c1[1], new_c1[1], num=10, endpoint=True)
-        c1_blue_transition = np.linspace(old_c1[2], new_c1[2], num=10, endpoint=True)
+        c1_red_transition = np.linspace(old_c1[0], new_c1[0], num=25, endpoint=True)
+        c1_green_transition = np.linspace(old_c1[1], new_c1[1], num=25, endpoint=True)
+        c1_blue_transition = np.linspace(old_c1[2], new_c1[2], num=25, endpoint=True)
 
-        c2_red_transition = np.linspace(old_c2[0], new_c2[0], num=10, endpoint=True)
-        c2_green_transition = np.linspace(old_c2[1], new_c2[1], num=10, endpoint=True)
-        c2_blue_transition = np.linspace(old_c2[2], new_c2[2], num=10, endpoint=True)
+        c2_red_transition = np.linspace(old_c2[0], new_c2[0], num=25, endpoint=True)
+        c2_green_transition = np.linspace(old_c2[1], new_c2[1], num=25, endpoint=True)
+        c2_blue_transition = np.linspace(old_c2[2], new_c2[2], num=25, endpoint=True)
 
         for c1, c2 in zip(zip(c1_red_transition, c1_green_transition, c1_blue_transition), zip(c2_red_transition, c2_green_transition, c2_blue_transition)):
             c1 = f"{round(c1[0]*255):02x}{round(c1[1]*255):02x}{round(c1[2]*255):02x}"
