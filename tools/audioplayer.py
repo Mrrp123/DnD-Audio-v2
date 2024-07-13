@@ -1,4 +1,5 @@
-from pydub import AudioSegment
+#from pydub import AudioSegment
+from tools.audiosegment import AudioSegment
 from tools.audioprocessing import *
 import tools.common_vars as common_vars
 import numpy as np
@@ -120,7 +121,7 @@ class AudioPlayer():
 
         self.base_fade_duration = 3000 # Keep original value for when we change speeds and need to adjust this
         self.fade_duration = self.base_fade_duration
-        self.chunk_len = 120 # sets a size for how large audio chunks are (ms)
+        self.chunk_len = 50 # sets a size for how large audio chunks are (ms)
         pyogg.pyoggSetStreamBufferSize(round(self.rate * encoding//8 * self.chunk_len / 1000))
 
         self.sos = None
@@ -290,7 +291,8 @@ class AudioPlayer():
 
         data_stream = pyogg.VorbisFileStream(file)
         
-        pyogg.vorbis.ov_pcm_seek(ctypes.byref(data_stream.vf), start_frame)
+        if start_frame != 0:
+            pyogg.vorbis.ov_pcm_seek(ctypes.byref(data_stream.vf), start_frame)
 
         byte_data = bytes([0])
 
@@ -461,13 +463,13 @@ class AudioPlayer():
         if time_remaining > self.fade_duration and self.status == "repeat": # If we aren't exactly fade_duration away from end, play last remaining bit of song
 
             chunk = next(self.chunk_generator)[0:time_remaining-self.fade_duration]
-            self.write_to_buffer(chunk._data)
+            self.write_to_buffer(chunk)
             if self.reverse_audio:
                 self.pos -= len(chunk)
-                self.frame_pos -= len(chunk._data) // 4
+                self.frame_pos -= chunk.get_num_frames()
             else:
                 self.pos += len(chunk)
-                self.frame_pos += len(chunk._data) // 4
+                self.frame_pos += chunk.get_num_frames()
             self.chunk_generator = self.load_chunks(self.song_data["file"], start_pos=self.pos)
         
         next_song_len, next_song_frame_len = self.get_song_length(next_song_data["file"])
@@ -523,17 +525,17 @@ class AudioPlayer():
                 self.next_song_data = None
                 return
 
-            self.write_to_buffer(chunk._data)
+            self.write_to_buffer(chunk)
             if self.reverse_audio:
                 self.pos -= len(chunk)
-                self.frame_pos -= len(chunk._data) // 4
+                self.frame_pos -= chunk.get_num_frames()
                 new_pos -= len(chunk)
-                new_frame_pos -= len(chunk._data) // 4
+                new_frame_pos -= chunk.get_num_frames()
             else:
                 self.pos += len(chunk)
-                self.frame_pos += len(chunk._data) // 4
+                self.frame_pos += chunk.get_num_frames()
                 new_pos += len(chunk)
-                new_frame_pos += len(chunk._data) // 4
+                new_frame_pos += chunk.get_num_frames()
 
         # Once we are done with crossfades, update various variables
         self.pos = new_pos
@@ -551,12 +553,13 @@ class AudioPlayer():
         self.lock_status = True
 
 
-    def write_to_buffer(self, data):
+    def write_to_buffer(self, audio: AudioSegment):
         """
         This will handle checking if the pause button has been pressed (which activates the pause flag), 
         writes the raw audio byte data to the audio buffer (type of which depends on our audio api), will 
         also deal with speeding up and slowing down the audio.
         """
+        data = audio.data
         if self.speed != 1:
             data, self.filter_state = change_speed(data, self.speed, self.sos, zf=self.filter_state)
         self.get_debug_info()
@@ -723,13 +726,13 @@ class AudioPlayer():
                 self.song_length = self.next_song_length
                 self.total_frames = self.next_total_frames
 
-                self.write_to_buffer(self.chunk._data)
+                self.write_to_buffer(self.chunk)
                 if self.reverse_audio:
                     self.pos -= len(self.chunk)
-                    self.frame_pos -= len(self.chunk._data) // 4
+                    self.frame_pos -= chunk.get_num_frames()
                 else:
                     self.pos += len(self.chunk)
-                    self.frame_pos += len(self.chunk._data) // 4
+                    self.frame_pos += chunk.get_num_frames()
                 # Check current status
                 if self.status == "stopped":
                     break
