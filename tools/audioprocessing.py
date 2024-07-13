@@ -28,7 +28,7 @@ def db_to_amp(db):
     """
     Converts decibels to normalized wave amplitude value
     """
-    if db < -120:
+    if db <= -120:
         return 0
     else:
         return 10**(db / 20) 
@@ -126,11 +126,8 @@ def change_speed(song_data, speed, sos=None, zf=(np.zeros(shape=(15, 2)), np.zer
         # This prevents pops and cracking, sosfilt returns a np.float64 array 
         # which sometimes exceeds the 16 bit signed int limit.
         # This needs to be constrained to fit in our range.
-        y[y > 32767] = 32767
-        y[y < -32768] = -32768
 
-
-        return y.astype(np.int16) , zf
+        return np.clip(y, a_min=-32768, a_max=32767).astype(np.int16) , zf
     
     
     def resample(channel_samples, scale=1.0):

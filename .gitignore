@@ -6,3 +6,4 @@ audio/*
 __pycache__
 config
 *.sh
+release/*
