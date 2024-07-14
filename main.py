@@ -56,6 +56,8 @@ class MainDisplay(Widget):
         self.audioplayer: AudioPlayer = common_vars.audioplayer
 
         self.time_slider = self.ids.audio_position_slider
+        self.volume_slider = self.ids.volume_slider
+        self.volume_slider.value = 100
         self.stop_move = False # Stops gestures from working when grabbing the time slider
         self.update_time_pos = True # Stops time values from updating when grabbing the time slider
         self.song_cover = self.ids.song_cover
@@ -65,6 +67,7 @@ class MainDisplay(Widget):
 
         self.ids.background.texture = Gradient.vertical(get_color_from_hex(self.c1), get_color_from_hex(self.c2))
         self.time_slider_anim = Animation(pos=(0, 0), size=(0, 0))
+        self.volume_slider_anim = Animation(pos=(0, 0), size=(0, 0))
 
     
     def on_parent(self, *args, **kwargs):
@@ -79,8 +82,9 @@ class MainDisplay(Widget):
                 song_file = fp.read(file_len).decode("utf-8")
                 song_pos = int.from_bytes(fp.read(4), "little")
                 total_frames = int.from_bytes(fp.read(8), "little")
-                song_length, speed = struct.unpack("2d", fp.read(16))
                 fade_duration = int.from_bytes(fp.read(2), "little")
+                song_length, speed, volume = struct.unpack("3d", fp.read(24))
+                
         except:
             return
         if os.path.exists(song_file): # make sure song file still exists
@@ -92,6 +96,8 @@ class MainDisplay(Widget):
             self.audioplayer.speed = speed
             self.audioplayer.base_fade_duration = fade_duration
             self.audioplayer.fade_duration = int(fade_duration * speed)
+            self.audioplayer.volume = volume
+            self.volume_slider.value = round(self.audioplayer.volume * 100)
             self.update_song_info(0)
             self.play_music()
     
@@ -159,6 +165,37 @@ class MainDisplay(Widget):
             new_size = (self.height * (5/12), min(1/self.song_cover.image_ratio * self.height * (5/12), self.height * (5/12)))
             anim = Animation(size=new_size, duration=0.25, transition="out_back")
             anim.start(self.song_cover)
+
+    
+    def begin_change_volume(self, touch):
+        if not hasattr(self, "orig_volume_slider_pos"):
+            self.orig_volume_slider_pos = tuple(self.volume_slider.pos) # These fucking variables REFUSE to be initialized within the first couple frames, init them here
+            self.orig_volume_slider_size = tuple(self.volume_slider.size)
+
+        if self.volume_slider.collide_point(*touch.pos) and not self.volume_slider.disabled:
+            self.audioplayer.volume = (self.volume_slider.value / 100)
+
+            new_size = (self.orig_volume_slider_size[0] * 1.05, self.orig_volume_slider_size[1] * 2)
+            new_pos = (self.orig_volume_slider_pos[0] - self.orig_volume_slider_size[0] * .025, self.orig_volume_slider_pos[1] - self.orig_volume_slider_size[1]/2)
+            
+            # Make the song pos bar expand when held
+            self.volume_slider_anim.stop(self.volume_slider)
+            self.volume_slider_anim = Animation(size=new_size, pos=new_pos, duration=0.3, transition="out_expo")
+            self.volume_slider_anim.start(self.volume_slider)
+    
+    def update_volume(self, touch):
+        if touch.grab_current == self.volume_slider:
+            self.audioplayer.volume = (self.volume_slider.value / 100)
+    
+    def end_change_volume(self, touch):
+        if touch.grab_current == self.volume_slider:
+
+            # Revert song pos to original position
+            self.volume_slider_anim.stop(self.volume_slider)
+            self.volume_slider_anim = Animation(size=self.orig_volume_slider_size, pos=self.orig_volume_slider_pos, duration=0.1, transition="linear")
+            self.volume_slider_anim.start(self.volume_slider)
+            
+            self.audioplayer.volume = (self.volume_slider.value / 100)
 
 
     def begin_seek(self, touch):
@@ -414,9 +451,10 @@ class SettingsDisplay(Widget):
 
         if os.path.exists("./config"):
             with open("./config", "rb") as fp:
-                fp.seek(-10, 2)
-                self.speed_slider.value = struct.unpack("d", fp.read(8))[0] * 100
+                fp.seek(-26, 2)
                 self.fade_slider.value = int.from_bytes(fp.read(2), "little")
+                self.speed_slider.value = struct.unpack("2d", fp.read(16))[1] * 100
+                
         else:
             self.speed_slider.value = 100
             self.fade_slider.value = 3000
@@ -471,9 +509,11 @@ if __name__ == '__main__':
         total_frames = int(common_vars.audioplayer.total_frames)
         speed = common_vars.audioplayer.speed
         fade_duration = int(common_vars.audioplayer.base_fade_duration)
+        volume = common_vars.audioplayer.volume
         fp.write(len(song_data).to_bytes(2, "little"))
         fp.write(bytes(song_data, encoding="utf-8"))
         fp.write(song_pos.to_bytes(4, "little"))
         fp.write(total_frames.to_bytes(8, "little"))
-        fp.write(struct.pack("2d", song_length, speed))
         fp.write(fade_duration.to_bytes(2, "little"))
+        fp.write(struct.pack("3d", song_length, speed, volume))
+        

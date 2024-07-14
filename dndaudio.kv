@@ -74,7 +74,7 @@
         id: audio_position_slider
         min: 0
         max: 1000
-        width: root.width * (3/4) - (32/375) * root.width
+        width: root.width * (11/12) - dp(32)
         height: "48dp"
         disabled: True
         background_horizontal: "./assets/buttons/empty.png"
@@ -124,6 +124,81 @@
 
             # Clear the stencil object
             StencilPop
+    
+    Slider:
+        id: volume_slider
+        min: 0
+        max: 100
+        width: root.width * (3/4) - dp(32)
+        height: "48dp"
+        # disabled: False
+        background_horizontal: "./assets/buttons/empty.png"
+        cursor_image: "./assets/buttons/empty.png"
+        background_disabled_horizontal: "./assets/buttons/empty.png"
+        cursor_disabled_image: "./assets/buttons/empty.png"
+        center_x: root.width * (1/2)
+        center_y: root.height * (1/7)
+        padding: 0
+        on_touch_down: root.begin_change_volume(args[1])
+        on_touch_move: root.update_volume(args[1])
+        on_touch_up: root.end_change_volume(args[1])
+        canvas:
+            # Draw background rail for song position
+            Color:
+                rgba: 0.5,0.5,0.5,1
+            RoundedRectangle:
+                pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 16
+                size: self.size[0], self.height / 8
+                radius: self.height / 16,
+
+            # Create mask for active rail for song pos
+            StencilPush 
+            Color:
+                rgba: 0.5,0.5,0.5,1
+            RoundedRectangle:
+                pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 16
+                size: self.size[0], self.height / 8
+                radius: self.height / 16,
+            
+            # Draw active rail
+            StencilUse
+            Color:
+                rgba: 1,1,1,1
+            Rectangle:
+                pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 16
+                size: self.size[0] * self.value_normalized, self.height / 8
+
+            # Remove mask (so that we can draw the rest of the frame)
+            StencilUnUse
+            Color:
+                rgba: 0.5,0.5,0.5,1
+            RoundedRectangle:
+                pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 16
+                size: self.size[0], self.height / 8
+                radius: self.height / 16,
+
+            # Clear the stencil object
+            StencilPop
+    
+    Image:
+        id: volume_min_img
+        source: "./assets/buttons/volume_min.png"
+        #color: 1,1,1,0.5
+        size: dp(16), dp(16)
+        x: volume_slider.x - dp(20)
+        y: volume_slider.center_y - self.height/2
+        fit_mode: "scale-down"
+        #mipmap: True
+    
+    Image:
+        id: volume_max_img
+        source: "./assets/buttons/volume_max.png"
+        #color: 1,1,1,0.5
+        size: dp(16), dp(16)
+        x: volume_slider.x + volume_slider.width + dp(10)
+        y: volume_slider.center_y - self.height/2
+        fit_mode: "scale-down"
+        #mipmap: True
             
 
     
@@ -132,14 +207,14 @@
         bold: True
         color: 1,1,1,1
         x: 0
-        y: root.height * (1/3) - dp(24) - self.height
+        y: audio_position_slider.center_y - dp(12) - self.height
         #center_y: root.height * (13/48)
         halign: "left"
         text: "0:00"
         text_size: root.width/2 - 1, None
         size: self.texture_size
         font_size: root.height/46
-        padding: root.width * 11/64, 0, 0, 0
+        padding: audio_position_slider.x + dp(2), 0, 0, 0
 
     
     Label:
@@ -147,20 +222,20 @@
         bold: True
         color: 1,1,1,1
         x: root.width/2
-        y: root.height * (1/3) - dp(24) - self.height
+        y: audio_position_slider.center_y - dp(12) - self.height
         #center_y: root.height * (13/48)
         halign: "right"
         text: "-0:00"
         text_size: root.width/2, None
         size: self.texture_size
         font_size: root.height/46
-        padding: 0, 0, root.width * 11/64 - 2, 0
+        padding: 0, 0, audio_position_slider.x + dp(2), 0
     
     Label:
         id: song_name
         bold: True
         color: 1,1,1,1
-        x: root.width * (11/64)
+        x: root.width * (1/2) - (root.width * (11/12) - dp(32)) / 2 + dp(2)
         center_y: root.height * (18/48)
         halign: "left"
         text: ""
@@ -174,7 +249,7 @@
         width: root.height * (15/224)
         height: self.width
         x: root.width * (1/4) - self.width / 2
-        y: root.height / 6 - self.height / 2
+        y: (audio_position_slider.center_y + volume_slider.center_y) / 2 - self.height / 2
         disabled: True
         # center_x: root.width * (1/4)
         # center_y: root.height * (1/6)
@@ -192,7 +267,7 @@
         width: root.height * (15/224)
         height: self.width
         x: root.width * (3/4) - self.width / 2
-        y: root.height / 6 - self.height / 2
+        y: (audio_position_slider.center_y + volume_slider.center_y) / 2 - self.height / 2
         disabled: True
         # center_x: root.width * (3/4)
         # center_y: root.height * (1/6)
@@ -210,7 +285,7 @@
         width: root.height * (15/224)
         height: self.width
         x: root.width * (1/2) - self.width / 2
-        y: root.height / 6 - self.height / 2
+        y: (audio_position_slider.center_y + volume_slider.center_y) / 2 - self.height / 2
         # center_x: root.width * (1/2)
         # center_y: root.height * (1/6)
         on_release: root.pause_music()
@@ -226,7 +301,7 @@
         height: self.width
         background_color: 0,1,1,1
         x: root.width * (1/4) - self.width/2
-        center_y: root.height * (1/12)
+        center_y: root.height * (1/18)
         text: "Reverse"
         on_release: root.reverse()
 
