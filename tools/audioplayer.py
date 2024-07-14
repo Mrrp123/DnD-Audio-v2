@@ -128,6 +128,8 @@ class AudioPlayer():
         self.filter_state = (np.zeros(shape=(15, 2)), np.zeros(shape=(15, 2)))
         self.ease_filter = False
 
+        self.volume = 1
+
         self.app_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
         if AUDIO_API == "audiostream":
@@ -559,6 +561,8 @@ class AudioPlayer():
         writes the raw audio byte data to the audio buffer (type of which depends on our audio api), will 
         also deal with speeding up and slowing down the audio.
         """
+        if self.volume < 1:
+            audio = audio + amp_to_db(self.volume)
         data = audio.data
         if self.speed != 1:
             data, self.filter_state = change_speed(data, self.speed, self.sos, zf=self.filter_state)
