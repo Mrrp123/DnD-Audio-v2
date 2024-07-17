@@ -1,15 +1,16 @@
 from kivy.app import App
 from kivy.core.window import Window
 from kivy.uix.widget import Widget
-from kivy.uix.label import Label
 from kivy.uix.button import Button
 from kivy.uix.screenmanager import ScreenManager, Screen, CardTransition, NoTransition, SlideTransition
-from kivy.properties import StringProperty, BooleanProperty, ObjectProperty, ListProperty
+from kivy.uix.effectwidget import EffectWidget
+#from kivy.properties import StringProperty, BooleanProperty, ObjectProperty, ListProperty
 from kivy.clock import Clock
-from kivy.graphics import Color, Rectangle
+#from kivy.graphics import StencilPush, StencilPop, StencilUse, StencilUnUse, Color, Rectangle, Ellipse
 from kivy.animation import Animation
 from kivy.utils import get_color_from_hex, platform
 from tools.kivy_gradient import Gradient
+from tools.shaders import TimeStop
 
 import tools.common_vars as common_vars
 from tools.audioplayer import AudioPlayer
@@ -18,6 +19,8 @@ import os
 import numpy as np
 import time
 import struct
+
+
 
 def start_audio_player():
     common_vars.audioplayer_thread.start()
@@ -45,10 +48,12 @@ class MainScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.add_widget(MainDisplay())
+        self.add_widget(EffectDisplay())
 
 class MainDisplay(Widget):
     next_song_event = None
     previous_song_event = None
+    time_stop_event = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -68,6 +73,16 @@ class MainDisplay(Widget):
         self.ids.background.texture = Gradient.vertical(get_color_from_hex(self.c1), get_color_from_hex(self.c2))
         self.time_slider_anim = Animation(pos=(0, 0), size=(0, 0))
         self.volume_slider_anim = Animation(pos=(0, 0), size=(0, 0))
+
+        Clock.schedule_once(self._get_references, 0)
+    
+    def _get_references(self, dt):
+        # Get a reference to the effect display
+        for widget in self.parent.children:
+            if isinstance(widget, EffectDisplay):
+                self.effect_display = widget
+                break
+        self.effect_widgets = [widget for widget in self.effect_display.children if isinstance(widget, EffectWidget)]
 
     
     def on_parent(self, *args, **kwargs):
@@ -324,6 +339,7 @@ class MainDisplay(Widget):
         
     def _update_background_color(self, dt):
         try:
+            # c1 is the bottom color, c2 is the top color
             c1, c2 = next(self._color_updater)
         except StopIteration:
             Clock.unschedule(self.background_updater)
@@ -357,9 +373,72 @@ class MainDisplay(Widget):
             neg = f"-{length_hour}:{length_min:02d}:{length_sec:02d}"
 
         return pos, neg
-    
+            
+        
     def stop_time(self):
-        self.audioplayer.status = "zawarudo"
+
+        ## DEBUG
+        # self.effect_widgets[0].effects = [TimeStop()]
+        # self._update_foreground_texture(0)
+        # self.update_uniforms(t0=Clock.get_boottime())
+        # self.effect_display.ids.foreground.x = 0
+        # self.effect_display.ids.foreground.size = self.size
+        
+        if self.time_stop_event is None: # Prevent this effect from playing twice in a row
+            self.disabled = True
+            self.time_stop_event = Clock.schedule_interval(self._check_time_effect, 0)
+            self.texture_update_clock = Clock.schedule_interval(self._update_foreground_texture, 0)
+            self.audioplayer.status = "zawarudo"
+
+            self.effect_widgets[0].effects = [TimeStop()]
+    
+    def _check_time_effect(self, dt):
+        """
+        Polls audioplayer until it finds a certain status
+        """
+        if self.audioplayer.status == "time_stop":
+            
+            Clock.unschedule(self.time_stop_event)
+
+            self.update_uniforms(t0=Clock.get_boottime())
+            self.effect_display.ids.foreground.x = 0
+            self.effect_display.ids.foreground.size = self.size
+            Clock.schedule_once(self.resume_time, 11.5)#9.3)
+    
+    def resume_time(self, dt):
+        """
+        Resets various settings when time resumes
+        """
+        self.effect_widgets[0].effects = []
+        self.effect_display.ids.foreground.size = 1,1
+        self.effect_display.ids.foreground.x = -1
+        Clock.unschedule(self.texture_update_clock)
+        self.time_stop_event = None
+        self.disabled = False
+    
+    def get_texture(self):
+        img = self.export_as_image() # For some goofy fuck all reason, this image comes out vertically flipped???
+        img.texture.flip_vertical() # Anyway we just need to flip it before getting the texture object
+        return img.texture
+    
+    def update_uniforms(self, **kwargs):
+        for key, value in kwargs.items():
+            for widget in self.effect_widgets:
+                
+                widget.canvas[key] = value
+                for fbo in widget.fbo_list:
+                    fbo[key] = value
+    
+    def _update_foreground_texture(self, dt):
+        texture = self.get_texture()
+        self.effect_display.ids.foreground_img.texture = texture
+        
+
+class EffectDisplay(Widget):
+    """
+    Simply a widget to hold the effects so that we don't corrupt the main display's texture
+    """
+    pass
 
 class SongsScreen(Screen):
     def __init__(self, **kw):
@@ -413,7 +492,7 @@ class SongsDisplay(Widget):
 class SongButton(Button):
 
     audioplayer = common_vars.audioplayer
-    
+
     def on_parent(self, a, b):
         asset = f"{common_vars.app_folder}/assets/covers/{self.text}"
         if os.path.isfile(f"{asset}.png"):
@@ -426,8 +505,15 @@ class SongButton(Button):
     def on_release(self, **kwargs):
         if self.audioplayer.status == "idle":
             common_vars.audioplayer.song_data = self.audioplayer.playlist.set_song(self.song_filepath)
+            
+            # This should only ever be called once, so it's fine to just leave the for loop
+            # Get a reference to the main display
+            for widget in self.parent.parent.parent.parent.manager.get_screen("main").children: # Truly cursed
+                if isinstance(widget, MainDisplay):
+                    self.main_display = widget
+                    break
             # Counterintuitively, this actually starts the music since audioplayer status is idle
-            self.parent.parent.parent.parent.manager.get_screen("main").children[0].pause_music() # Truly cursed
+            self.main_display.pause_music()
         else:
             change_song(self.song_filepath, transition="fade")
     

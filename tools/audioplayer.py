@@ -97,13 +97,15 @@ class AudioPlayer():
     transition    : The player will crossfade into the next song
     repeat        : The player will crossfade into the beginning of the current song
     seek          : The player will jump to a point in the song defined by a slider on the main window
+    zawarudo      : The player is running the zawarudo function -> time will stop
+    time_stop     : The player is about to play time_stop.wav -> time stop effects will be triggered in main window
     
 
     Known Bugs:
-        None
+        zawarudo WILL break when activated during a transition state (anything in the transitiion function)
     """
 
-    def __init__(self, lock, channels=2, rate=44_100, buffersize=128, encoding=16) -> None:
+    def __init__(self, lock, channels=2, rate=44_100, buffersize=256, encoding=16) -> None:
         self.rate = rate
         self.pos = self.init_pos = 0
         self.frame_pos = 0
@@ -581,7 +583,7 @@ class AudioPlayer():
         """
         Is that a fucking JoJo reference???
         """
-        speed_list = np.linspace(self.speed, 0, 15, endpoint=False)
+        speed_list = np.linspace(self.speed, 0, round(1800 / self.chunk_len), endpoint=False)
         start_pos = self.pos
         data_len = 0
 
@@ -597,7 +599,7 @@ class AudioPlayer():
 
                 min_db = -5
 
-                amp_list = np.linspace(1, db_to_amp(min_db), 5)
+                amp_list = np.linspace(1, db_to_amp(min_db), round(600 / self.chunk_len))
                 
                 db_list = [(amp_to_db(amp_list[index]), amp_to_db(amp_list[index+1])) for index in range(len(amp_list)-1)]
 
@@ -605,18 +607,18 @@ class AudioPlayer():
                 while len(zw) != 0:
                     data = fp.readframes(round(self.chunk_len*self.rate/1000*self.speed))
                     data, _ = change_speed(data, self.speed)
-                    zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2)
-                    if i < 4:
+                    zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2) + + amp_to_db(self.volume)
+                    if i < len(db_list):
                         song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2).fade(
-                            from_gain=db_list[i][0], to_gain=db_list[i][1], start=0, duration=len(data)//4)
+                            from_gain=db_list[i][0], to_gain=db_list[i][1], start=0, duration=len(data)//4) + + amp_to_db(self.volume)
 
                     else:
-                        song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2) + min_db
+                        song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2) + min_db + + amp_to_db(self.volume)
 
                     if len(song_audio) == zw_audio:
-                        self.sample.write((song_audio * zw_audio)._data)
+                        self.sample.write((song_audio * zw_audio).data)
                     else:
-                        self.sample.write((song_audio[0:len(zw_audio)] * zw_audio)._data)
+                        self.sample.write((song_audio[0:len(zw_audio)] * zw_audio).data)
 
                     self.get_debug_info()
                     if self.reverse_audio:
@@ -645,10 +647,11 @@ class AudioPlayer():
                     zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
                     
                     data, _ = change_speed(data, speed)
-                    song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2) + min_db
-                    zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2)
+                    song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2) + (min_db + amp_to_db(self.volume))
+                    zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2) + amp_to_db(self.volume)
 
-                    self.sample.write((song_audio * zw_audio)._data)
+                    self.status = "time_stop"
+                    self.sample.write((song_audio * zw_audio).data)
                     self.get_debug_info()
                     if self.reverse_audio:
                         self.pos -= chunk_len
@@ -659,17 +662,19 @@ class AudioPlayer():
                 
                 zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
                 while len(zw) != 0:
-                    zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2)
-                    self.sample.write(zw_audio._data)
+                    zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2) + amp_to_db(self.volume)
+                    self.sample.write(zw_audio.data)
                     zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
 
             time.sleep(5)
             #self.pause()
 
+            db_list.reverse()
+            
             with wave.open(f"{self.app_folder}/assets/audio/time_resume.wav", "rb") as zwfp:
 
-                speed_list = np.linspace(0.1, self.speed, 15, endpoint=True)
-
+                speed_list = np.linspace(0.1, self.speed, round(1800 / self.chunk_len), endpoint=True)
+                end_offset = (len(speed_list) - len(db_list))
                 for i, speed in enumerate(speed_list):
                     chunk_len = speed * self.chunk_len
                     num_frames = round(self.rate*chunk_len / 1000)
@@ -679,14 +684,13 @@ class AudioPlayer():
                     zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
 
                     data, _ = change_speed(data, speed)
-                    if i >= 11:
+                    if i >= end_offset:
                         song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2).fade(
-                            from_gain=db_list[-(i%11)+1][0], to_gain=db_list[-(i%11)+2][1], start=0, duration=len(data)//4)
+                            from_gain=db_list[i - end_offset][1], to_gain=db_list[i - end_offset][0], start=0, duration=len(data)//4) + amp_to_db(self.volume)
                     else:
-                        song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2) + min_db
-                    zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2)
-                    
-                    self.sample.write((song_audio * zw_audio)._data)
+                        song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2) + (min_db + amp_to_db(self.volume))
+                    zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2) + amp_to_db(self.volume)
+                    self.sample.write((song_audio * zw_audio).data)
                     self.get_debug_info()
                     if self.reverse_audio:
                         self.pos -= chunk_len
