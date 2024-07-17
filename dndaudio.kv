@@ -514,7 +514,7 @@
         text_size: root.width, None
         size: self.texture_size
         font_size: root.height/32
-        padding: "16dp", 0, 0, 0
+        padding: "32dp", 0, 0, 0
     
     Slider:
         id: fade_slider
@@ -524,7 +524,7 @@
         width: root.width * (3/4)
         height: "48dp"
         background_color: 1,1,1,1
-        x: 0
+        x: "16dp"
         center_y: root.height * (38/48)
         on_touch_up: root.change_fade_duration(args[1])
         padding: "16dp"
@@ -553,7 +553,7 @@
         text_size: root.width, None
         size: self.texture_size
         font_size: root.height/32
-        padding: "16dp", 0, 0, 0
+        padding: "32dp", 0, 0, 0
 
     Slider:
         id: speed_slider
@@ -563,7 +563,7 @@
         width: root.width * (3/4)
         height: 35
         #background_color: 1,1,1,1
-        x: 0
+        x: "16dp"
         center_y: root.height * (31/48)
         on_touch_up: root.change_speed(args[1])
         padding: "16dp"
