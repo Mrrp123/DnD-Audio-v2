@@ -1,5 +1,5 @@
 import numpy as np
-from tools.audioprocessing import *
+from tools.audioprocessing import db_to_amp
 
 class AudioSegment():
 
@@ -44,21 +44,31 @@ class AudioSegment():
     def __mul__(self, arg):
         if isinstance(arg, AudioSegment):
 
+            self._data = self._data.astype(np.float64) # Cast to float64 incase we overflow from the sum of the signals
+
+            # data_max = np.max(self._data)
+            # arg_max = np.max(self._data)
+
             try:
-                self._data = np.clip(self._data + arg._data, a_min=self.min_val, a_max=self.max_val).astype(self.dt)
+                self._data = self._data + arg._data
             except ValueError:
                 # If audio samples are close enough, add silence to fill the hole
-                if (frame_diff := self.get_num_frames() - arg.get_num_frames()) < np.ceil(self.frame_rate / 1000 / 2)\
-                    and frame_diff > -np.ceil(self.frame_rate / 1000 / 2):
+                if (frame_diff := self.get_num_frames() - arg.get_num_frames()) < np.ceil(self.frame_rate / 1000)\
+                    and frame_diff > -np.ceil(self.frame_rate / 1000):
                     
                     if frame_diff > 0:
-                        self._data = np.clip(self._data + np.concatenate((arg._data, np.zeros(shape=(frame_diff, arg.channels)))), 
-                                             a_min=self.min_val, a_max=self.max_val).astype(self.dt)
+                        self._data = self._data + np.concatenate((arg._data, np.zeros(shape=(frame_diff, arg.channels))))
                     else:
-                        self._data = np.clip(np.concatenate((self._data, np.zeros(shape=(-frame_diff, self.channels)))) + arg._data, 
-                                             a_min=self.min_val, a_max=self.max_val).astype(self.dt)
+                        self._data = np.concatenate((self._data, np.zeros(shape=(-frame_diff, self.channels)))) + arg._data
                 else:
                     raise
+
+            max_val = np.max(np.abs(self._data))
+            if max_val > self.max_val: # If the sum of our signals would clip, normalize the signal to our dtype range
+                # norm_factor = ((data_max + arg_max)/2) / max_val
+                self._data = self._data * (self.max_val / max_val)
+            
+            self._data = self._data.astype(self.dt)
 
             return self
 
