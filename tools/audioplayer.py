@@ -565,7 +565,7 @@ class AudioPlayer():
             audio = audio + amp_to_db(self.volume)
         data = audio.data
         if self.speed != 1:
-            data, self.filter_state = change_speed(data, self.speed, self.sos, zf=self.filter_state)
+            data, self.filter_state = change_speed(data, self.speed, self.sos, zf=self.filter_state, dt=audio.dt)
         self.get_debug_info()
         if self.pause_flag == True:
             self.pause()

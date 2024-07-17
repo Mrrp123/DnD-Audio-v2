@@ -114,7 +114,7 @@ def step_fade(chunk_gen, next_chunk_gen=None, fade_duration=3000, chunk_len=120,
         x += 1
         yield output_chunk, fade_out_chunk_db, fade_in_chunk_db
 
-def change_speed(song_data, speed, sos=None, zf=(np.zeros(shape=(15, 2)), np.zeros(shape=(15, 2)))):
+def change_speed(song_data, speed, sos=None, zf=(np.zeros(shape=(15, 2)), np.zeros(shape=(15, 2))), dt=np.int16):
     """
     This function manipulates the raw audio data to speed up or slow down a song by averaging audio samples
     or by cutting out audio samples. This process is slow when upsampling
@@ -127,7 +127,7 @@ def change_speed(song_data, speed, sos=None, zf=(np.zeros(shape=(15, 2)), np.zer
         # which sometimes exceeds the 16 bit signed int limit.
         # This needs to be constrained to fit in our range.
 
-        return np.clip(y, a_min=-32768, a_max=32767).astype(np.int16) , zf
+        return np.clip(y, a_min=-32768, a_max=32767).astype(dt) , zf
     
     
     def resample(channel_samples, scale=1.0):
@@ -157,7 +157,7 @@ def change_speed(song_data, speed, sos=None, zf=(np.zeros(shape=(15, 2)), np.zer
             channel_samples, # known data points
             )
     
-    channels = np.fromstring(bytes(song_data), dtype=np.int16) # Convert bytes to numpy array (faster to deal with)
+    channels = np.fromstring(bytes(song_data), dtype=dt) # Convert bytes to numpy array (faster to deal with)
     channels.shape = (len(song_data)//4, 2)
     channels = channels.T
 
