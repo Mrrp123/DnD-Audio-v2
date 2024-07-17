@@ -75,7 +75,7 @@ class MusicPlaylist():
     def set_song(self, file):
         if file is not None:
             for i, data in enumerate(self.playlist):
-                if file == data["file"]:
+                if os.path.samefile(file, data["file"]):
                     self._pos = i
                     return self[i]
 
