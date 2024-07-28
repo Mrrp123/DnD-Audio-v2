@@ -1,7 +1,7 @@
-#from pydub import AudioSegment
 from tools.audiosegment import AudioSegment
 from tools.audioprocessing import *
 import tools.common_vars as common_vars
+
 import numpy as np
 from math import ceil
 import os
@@ -10,74 +10,139 @@ from glob import glob
 from threading import Thread, Lock
 import time
 from scipy.signal import iirfilter
-from kivy import platform
 import pyogg
 import ctypes
+from functools import reduce
 
+from pythonosc.dispatcher import Dispatcher
+from pythonosc.osc_server import ThreadingOSCUDPServer
+from pythonosc.udp_client import SimpleUDPClient
 
-try:
-    from audiostream import get_output, AudioSample
-    AUDIO_API = "audiostream"
-except ImportError:
+from kivy.utils import platform
+
+if platform == "android":
+    from jnius import autoclass
+    AUDIO_API = "audiotrack"
+
+elif platform == "win":
     import pyaudio
     AUDIO_API = "pyaudio"
 
+elif platform in ('linux', 'linux2', 'macos'):
+    from audiostream import get_output, AudioSample
+    AUDIO_API = "audiostream"
 
 
-class MusicPlaylist():
+
+class AudioStreamer():
     """
-    Creates a playlist that keeps track of songs
+    Handles pushing bytes to the speaker depending on which audio api / OS we are using.
     """
 
-    def __init__(self, playlist) -> None:
-        self.playlist = [{"file" : file, 
-                          "song" : os.path.split(file)[-1].split(".")[0],
-                          "cover" : self.get_song_cover(file)} 
-                          for file in playlist]
- 
-        self._pos = 0 # position of the pointer
-    
-    def __getitem__(self, i):
-        return self.playlist[i]
-    
-    def __len__(self):
-        return len(self.playlist)
-    
-    def __lshift__(self, left):
-        self._pos = (self._pos - (left % len(self))) % len(self)
-        return self.playlist[self._pos]
-        
-    def __rshift__(self, right):
-        self._pos = (self._pos + (right % len(self))) % len(self)
-        return self.playlist[self._pos]
-    
-    @staticmethod
-    def get_song_cover(file):
-        asset_folder = f"{common_vars.app_folder}/assets/covers"
-        name = os.path.split(file)[-1].split(".")[0]
+    def __init__(self, channels=2, rate=44_100, buffersize=256, encoding=16):
 
-        if os.path.isfile(f"{asset_folder}/{name}.png"):
-            return f"{asset_folder}/{name}.png"
-        
-        elif os.path.isfile(f"{asset_folder}/{name}.jpg"):
-            return f"{asset_folder}/{name}.jpg"
-        
-        else:
-            return f"{asset_folder}/default_cover.png"
+        self.channels = channels
+        self.rate = rate
+        self.buffersize = buffersize
+        self.encoding = encoding
 
-    def append(self, file, cover=None):
-        self.playlist.append(
-                        {"file" : file, 
-                         "song" : os.path.split(file)[-1].split(".")[0],
-                         "cover" : cover}
-                          )
+        if AUDIO_API == "audiotrack":
+            self._android_init()
+        
+        elif AUDIO_API == "pyaudio":
+            self._pyaudio_init()
+        
+        elif AUDIO_API == "audiostream":
+            self._audiostream_init()
     
-    def set_song(self, file):
-        if file is not None:
-            for i, data in enumerate(self.playlist):
-                if os.path.samefile(file, data["file"]):
-                    self._pos = i
-                    return self[i]
+
+    def _android_init(self):
+        AudioTrack = autoclass("android.media.AudioTrack")
+        self.write_blocking = AudioTrack.WRITE_BLOCKING
+        AudioManager = autoclass("android.media.AudioManager")
+        AudioFormat = autoclass("android.media.AudioFormat")
+        AudioFormatBuilder = autoclass("android.media.AudioFormat$Builder")
+        AudioAttributes = autoclass("android.media.AudioAttributes")
+        AudioAttributesBuilder = autoclass("android.media.AudioAttributes$Builder")
+
+        if self.channels == 2:
+            channel_mask = AudioFormat.CHANNEL_OUT_STEREO
+        elif self.channels == 1:
+            channel_mask = AudioFormat.CHANNEL_OUT_MONO
+        
+        if self.encoding == 16:
+            encoding = AudioFormat.ENCODING_PCM_16BIT
+        elif self.encoding == 8:
+            encoding = AudioFormat.ENCODING_PCM_8BIT
+
+        self.buffer_size = AudioTrack.getMinBufferSize(
+            self.rate,
+            channel_mask,
+            encoding
+        )
+        
+        self.audio_stream = AudioTrack(
+            AudioAttributesBuilder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build(),
+            AudioFormatBuilder().setChannelMask(channel_mask).setEncoding(encoding).setSampleRate(self.rate).build(),
+            self.buffer_size,
+            AudioTrack.MODE_STREAM,
+            AudioManager.AUDIO_SESSION_ID_GENERATE
+            )
+
+        # Fill buffer with empty bytes before calling play
+        self.audio_stream.write(bytes(self.buffer_size), 0, self.buffer_size)
+        self.audio_stream.play()
+
+        self.write = self._android_write
+
+
+    def _pyaudio_init(self):
+        p = pyaudio.PyAudio()
+        self.stream = p.open(format=p.get_format_from_width(self.encoding//8),
+                channels=self.channels,
+                rate=self.rate,
+                output=True)
+        
+        self.write = self._pyaudio_write
+    
+
+    def _audiostream_init(self):
+        self.stream = get_output(channels=self.channels, rate=self.rate, buffersize=self.buffersize, encoding=self.encoding)
+        self.sample = AudioSample()
+        self.stream.add_sample(self.sample)
+        self.sample.play()
+
+        self.write = self._audiostream_write
+    
+
+
+
+    def write(self, data: bytes):
+        pass
+
+    def _pyaudio_write(self, data: bytes):
+        self.stream.write(data)
+    
+    def _audiostream_write(self, data: bytes):
+        self.sample.write(data)
+    
+    def _android_write(self, data: bytes):
+        bytes_written = self.audio_stream.write(data, 0, len(data))
+
+    
+    def stop(self):
+        """
+        Only used for audiostream!!!
+        """
+        self.sample.stop()
+    
+    def play(self):
+        """
+        Only used for audiostream!!!
+        """
+        self.sample.play()
+
+
 
 
 
@@ -98,14 +163,13 @@ class AudioPlayer():
     repeat        : The player will crossfade into the beginning of the current song
     seek          : The player will jump to a point in the song defined by a slider on the main window
     zawarudo      : The player is running the zawarudo function -> time will stop
-    time_stop     : The player is about to play time_stop.wav -> time stop effects will be triggered in main window
     
 
     Known Bugs:
         zawarudo WILL break when activated during a transition state (anything in the transitiion function)
     """
 
-    def __init__(self, lock, channels=2, rate=44_100, buffersize=256, encoding=16) -> None:
+    def __init__(self, lock, default_song_file, channels=2, rate=44_100, buffersize=256, encoding=16) -> None:
         self.rate = rate
         self.pos = self.init_pos = 0
         self.frame_pos = 0
@@ -115,7 +179,7 @@ class AudioPlayer():
         self.reverse_audio = False
 
         self._status = "idle"
-        self._pause_flag = False
+        self._pause_flag = True
         self._speed = 1 # Speed at which the audio plays
 
         self.start = 0 # debug
@@ -134,22 +198,50 @@ class AudioPlayer():
 
         self.app_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
-        if AUDIO_API == "audiostream":
-            self.stream = get_output(channels=channels, rate=rate, buffersize=buffersize, encoding=encoding)
-            self.sample = AudioSample()
-            self.stream.add_sample(self.sample)
-            self.sample.play()
-        elif AUDIO_API == "pyaudio":
-            p = pyaudio.PyAudio()
-            self.stream = p.open(format=p.get_format_from_width(encoding//8),
-                    channels=channels,
-                    rate=rate,
-                    output=True)
-            self.sample = self.stream
+        self.stream = AudioStreamer(channels, rate, buffersize, encoding)
 
-        self.reload_songs()
-        self.song_data = self.playlist[0]
-        self.next_song_data = None
+        self.song_file = default_song_file#self.playlist[0]
+        self.next_song_file = None
+
+        # This will listen and respond to calls from the gui
+        self.dispatcher = Dispatcher()
+        self.dispatcher.map("/read", self.read)
+        self.dispatcher.map("/write", self.write)
+        self.dispatcher.map("/call", self.call_function)
+
+        self.num_reads = 0
+        self.start_read_time = time.time()
+
+        self.osc_server = ThreadingOSCUDPServer(("127.0.0.1", 8001), self.dispatcher)
+        self.osc_client = SimpleUDPClient("127.0.0.1", 8000)
+        Thread(target=self.osc_server.serve_forever, daemon=True).start()
+        self.osc_client.send_message("/return", "ready")
+        
+    
+
+    def read(self, address: str, *args):
+        """
+        Function to get values in the audioplayer
+        """
+        try:
+            self.osc_client.send_message("/return", [getattr(self, attr) for attr in args])
+        except AttributeError:
+            self.osc_client.send_message("/return", None)
+    
+    def write(self, address: str, attr: str, value):
+        """
+        Function to set values in the audioplayer
+        """
+        if address == "/write":
+            setattr(self, attr, value)
+    
+    def call_function(self, address: str, func_name: str, *args):
+        """
+        This function forwards parameters to call functions and returns their values
+        """
+        func = reduce(getattr, func_name.split("."), self)
+        self.osc_client.send_message("/return", func(*args))
+
     
     @property
     def status(self):
@@ -192,19 +284,6 @@ class AudioPlayer():
         self._speed = value
 
     
-    def reload_songs(self):
-        """
-        Updates the currently available audio files in the audio folder. Only looks for .wav files for now
-        """
-        # if platform == "win" or platform == "linux":
-        loaded_songs = glob(f"{self.app_folder}/audio/*.wav") + glob(f"{self.app_folder}/audio/*.ogg")
-        # elif platform == "android":
-        #     loaded_songs = glob(f"sdcard/music/*.wav")
-        self.playlist = MusicPlaylist(loaded_songs)
-
-
-
-    
     def load_chunks(self, file, start_pos=0, end_pos=None, gain=0, chunk_size=None):
         """
         This function will load a portion of a song defined by self.chunk_len (set to 120ms).
@@ -239,6 +318,9 @@ class AudioPlayer():
 
         if start_pos >= 0:
             start_frame = round(start_pos / 1000 * self.rate)
+            # Somehow, if start_frame is longer than the entire file, set start_frame to zero
+            if start_frame > total_frames:
+                start_frame = 0
             if self.reverse_audio:
                 num_frames -= (total_frames - start_frame)
             else:
@@ -354,17 +436,23 @@ class AudioPlayer():
     def get_debug_info(self):
         self.end = time.time_ns()
         sep = "\\"
-        if self.next_song_data is None:
-            next_song_data = {"song" : None}
+
+        if self.song_file is not None:
+            song_file = os.path.split(self.song_file)[-1].split('.')[0]
         else:
-            next_song_data = self.next_song_data
+            song_file = None
+        
+        if self.next_song_file is not None:
+            next_song_file = os.path.split(self.next_song_file)[-1].split('.')[0]
+        else:
+            next_song_file = None
 
         if self.end-self.start < 1_000_000:
             chunk_gen_time = "<1ms"
         else:
             chunk_gen_time = f"{(self.end-self.start)//1_000_000:.0f}ms"
             
-        self.debug_string =  f"\nSong: {self.song_data['song']}\nNext Song: {next_song_data['song']}\n" +\
+        self.debug_string =  f"\nSong: {song_file}\nNext Song: {next_song_file}\n" +\
                         f"Song Pos: {self.pos/1000/self.speed:.3f}/{self.song_length/1000/self.speed:.3f}s " +\
                             f"({self.pos/1000:.3f}/{self.song_length/1000:.3f}s) | " +\
                             f"<{self.frame_pos:,}/{self.total_frames:,}> frames\n" +\
@@ -382,35 +470,35 @@ class AudioPlayer():
         Pauses the audio player. Note: this will block the player from doing anything
         """
         if AUDIO_API == "audiostream":
-            self.sample.stop()
+            self.stream.stop()
         while self.pause_flag == True:
             time.sleep(0.1)
         if AUDIO_API == "audiostream":
-            self.sample.play()
+            self.stream.play()
         return
     
 
 
-    def skip(self, next_song_data):
+    def skip(self, next_song_file):
         """
         Skips to another song, cutting out the crossfade entirely
         """
         del self.chunk_generator
         if self.reverse_audio:
-            next_song_len, next_song_frame_len = self.get_song_length(next_song_data["file"])
-            self.chunk_generator = self.load_chunks(next_song_data["file"], start_pos=next_song_len)
+            next_song_len, next_song_frame_len = self.get_song_length(next_song_file)
+            self.chunk_generator = self.load_chunks(next_song_file, start_pos=next_song_len)
             self.pos = next_song_len
             self.frame_pos = next_song_frame_len
         else:
-            self.chunk_generator = self.load_chunks(next_song_data["file"])
+            self.chunk_generator = self.load_chunks(next_song_file)
             self.pos = 0
             self.frame_pos = 0
         self.seek_pos = 0
-        self.song_data = next_song_data
-        self.next_song_data = None
+        self.song_file = next_song_file
+        self.next_song_file = None
         if AUDIO_API == "audiostream":
-            self.sample.stop()
-            self.sample.play()
+            self.stream.stop()
+            self.stream.play()
 
 
     
@@ -420,18 +508,18 @@ class AudioPlayer():
         """
         del self.chunk_generator
         start_pos = int(start_pos)
-        self.chunk_generator = self.load_chunks(self.song_data["file"], start_pos=start_pos)
+        self.chunk_generator = self.load_chunks(self.song_file, start_pos=start_pos)
         self.pos = start_pos
         self.frame_pos = round(start_pos / 1000 * self.rate)
         if AUDIO_API == "audiostream":
-            self.sample.stop()
-            self.sample.play()
+            self.stream.stop()
+            self.stream.play()
 
 
 
 
 
-    def transition(self, next_song_data=None):
+    def transition(self, next_song_file=None):
         """
         Handles the smooth crossfading between songs or the crossfading for when a song repeats
         Allows for the user to interuppt this process to skip, change songs (again), or to seek to some other point in the current song
@@ -452,8 +540,8 @@ class AudioPlayer():
 
 
 
-        if next_song_data is None: # Repeat currently playing song
-            next_song_data = self.song_data
+        if next_song_file is None: # Repeat currently playing song
+            next_song_file = self.song_file
             self.status = "repeat"
 
         else: # Transition to next song
@@ -474,14 +562,14 @@ class AudioPlayer():
             else:
                 self.pos += len(chunk)
                 self.frame_pos += chunk.get_num_frames()
-            self.chunk_generator = self.load_chunks(self.song_data["file"], start_pos=self.pos)
+            self.chunk_generator = self.load_chunks(self.song_file, start_pos=self.pos)
         
-        next_song_len, next_song_frame_len = self.get_song_length(next_song_data["file"])
+        next_song_len, next_song_frame_len = self.get_song_length(next_song_file)
 
         if self.reverse_audio:
-            next_chunk_generator = self.load_chunks(next_song_data["file"], start_pos=next_song_len)
+            next_chunk_generator = self.load_chunks(next_song_file, start_pos=next_song_len)
         else:
-            next_chunk_generator = self.load_chunks(next_song_data["file"])
+            next_chunk_generator = self.load_chunks(next_song_file)
         
         if time_remaining <= 0 and self.reverse_audio:
             self.seek(int(self.song_length))
@@ -509,24 +597,24 @@ class AudioPlayer():
                 self.status = "override_transition"
 
                 self.chunk_generator = n_generator(min(self.fade_duration, time_remaining), self.chunk_len, 
-                                                   self.load_chunks(self.song_data["file"], start_pos=self.pos, gain=end_chunk_db), 
-                                                   self.load_chunks(next_song_data["file"], start_pos=new_pos, gain=start_chunk_db))
-                self.transition(self.next_song_data)
+                                                   self.load_chunks(self.song_file, start_pos=self.pos, gain=end_chunk_db), 
+                                                   self.load_chunks(next_song_file, start_pos=new_pos, gain=start_chunk_db))
+                self.transition(self.next_song_file)
                 return
             
             elif self.status == "skip": # If we change songs via a skip during a transition, just go to the next song
                 if (self.reverse_audio and next_song_len - new_pos <= fade_duration/2) or (not self.reverse_audio and new_pos <= fade_duration/2):
-                    self.skip(next_song_data)
-                    self.playlist.set_song(next_song_data["file"]) # Resync playlist pointer, otherwise we will be one song ahead/behind
-                elif self.next_song_data is not None:
-                    self.skip(self.next_song_data)
+                    self.skip(next_song_file)
+                    #self.playlist.set_song(next_song_file) # Resync playlist pointer, otherwise we will be one song ahead/behind
+                elif self.next_song_file is not None:
+                    self.skip(self.next_song_file)
                 else:
-                    self.skip(self.song_data)
+                    self.skip(self.song_file)
                 return
             
             elif self.status == "seek": # If we seek during a transition, override the transition and play the currently fading out song as normal
                 self.seek(self.seek_pos)
-                self.next_song_data = None
+                self.next_song_file = None
                 return
 
             self.write_to_buffer(chunk)
@@ -548,11 +636,11 @@ class AudioPlayer():
         self.song_length = self.next_song_length
         self.total_frames = self.next_total_frames
 
-        if next_song_data is not None:
-            self.song_data = next_song_data
-        self.next_song_data = None
+        if next_song_file is not None:
+            self.song_file = next_song_file
+        self.next_song_file = None
 
-        self.chunk_generator = self.load_chunks(next_song_data["file"], start_pos=self.pos)
+        self.chunk_generator = self.load_chunks(next_song_file, start_pos=self.pos)
 
         self.lock_status = True
 
@@ -571,7 +659,7 @@ class AudioPlayer():
         self.get_debug_info()
         if self.pause_flag == True:
             self.pause()
-        self.sample.write(data)
+        self.stream.write(data)
         self.start = time.time_ns()
 
         # with open("./audio/audioplayer_out.raw", "ab") as fp:
@@ -589,7 +677,7 @@ class AudioPlayer():
 
         #print(self.pos, self.pos-start_pos, frames_read, frames_read / 44.1)
 
-        with wave.open(self.song_data["file"], "rb") as fp:
+        with wave.open(self.song_file, "rb") as fp:
 
             with wave.open(f"{self.app_folder}/assets/audio/zawarudo.wav", "rb") as zwfp:
 
@@ -616,9 +704,9 @@ class AudioPlayer():
                         song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2) + min_db + + amp_to_db(self.volume)
 
                     if len(song_audio) == zw_audio:
-                        self.sample.write((song_audio * zw_audio).data)
+                        self.stream.write((song_audio * zw_audio).data)
                     else:
-                        self.sample.write((song_audio[0:len(zw_audio)] * zw_audio).data)
+                        self.stream.write((song_audio[0:len(zw_audio)] * zw_audio).data)
 
                     self.get_debug_info()
                     if self.reverse_audio:
@@ -631,7 +719,7 @@ class AudioPlayer():
 
                     i += 1
         
-        with wave.open(self.song_data["file"], "rb") as fp:
+        with wave.open(self.song_file, "rb") as fp:
 
             fp.setpos(round(self.rate*self.pos / 1000))
 
@@ -650,8 +738,9 @@ class AudioPlayer():
                     song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2) + (min_db + amp_to_db(self.volume))
                     zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2) + amp_to_db(self.volume)
 
-                    self.status = "time_stop"
-                    self.sample.write((song_audio * zw_audio).data)
+                    if i == 0:
+                        self.osc_client.send_message("/call/main/main_display", "_start_time_effect")
+                    self.stream.write((song_audio * zw_audio).data)
                     self.get_debug_info()
                     if self.reverse_audio:
                         self.pos -= chunk_len
@@ -663,7 +752,7 @@ class AudioPlayer():
                 zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
                 while len(zw) != 0:
                     zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2) + amp_to_db(self.volume)
-                    self.sample.write(zw_audio.data)
+                    self.stream.write(zw_audio.data)
                     zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
 
             time.sleep(5)
@@ -690,7 +779,7 @@ class AudioPlayer():
                     else:
                         song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2) + (min_db + amp_to_db(self.volume))
                     zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2) + amp_to_db(self.volume)
-                    self.sample.write((song_audio * zw_audio).data)
+                    self.stream.write((song_audio * zw_audio).data)
                     self.get_debug_info()
                     if self.reverse_audio:
                         self.pos -= chunk_len
@@ -702,17 +791,17 @@ class AudioPlayer():
         
         
 
-        self.chunk_generator = self.load_chunks(self.song_data["file"], start_pos=self.pos)
+        self.chunk_generator = self.load_chunks(self.song_file, start_pos=self.pos)
 
         self.status = "playing"
-
-
 
     
     def run(self):
         """
         Starts the audioplayer program, handles the mainloop of the audio player (playing, repeating and transitioning songs)
         """
+        while self.status == "idle": # Wait for the program to start
+            time.sleep(0.05)
         self.bootup = True
         if self.init_pos:
             start_pos = self.init_pos
@@ -723,7 +812,6 @@ class AudioPlayer():
             start_pos = 0
         self.chunk_generator = None # initial value
         self.seek(start_pos)
-        self.status = "playing"
         while self.status != "stopped":
         
             # Loads next block of audio
@@ -747,15 +835,15 @@ class AudioPlayer():
 
                 # If song needs to change or restart, handle fading/crossfading
                 if (self.pos <= (self.fade_duration + self.chunk_len) or self.status == "change_song") and self.reverse_audio:
-                    self.transition(self.next_song_data)
+                    self.transition(self.next_song_file)
                     break
 
                 elif (self.pos >= (self.song_length - self.fade_duration - self.chunk_len) or self.status == "change_song") and not self.reverse_audio:
-                    self.transition(self.next_song_data) 
+                    self.transition(self.next_song_file) 
                     break
 
                 elif self.status == "skip": # Check if we need to skip to another song
-                    self.skip(self.next_song_data)
+                    self.skip(self.next_song_file)
                     break
 
                 elif self.status == "seek": # Check if we need to seek within current song
@@ -769,3 +857,11 @@ class AudioPlayer():
             if self.status != "stopped":
                 self.lock_status = False
                 self.status = "playing"
+
+if __name__ == "__main__" or __name__ == "<run_path>":
+    songs = glob(f"{common_vars.app_folder}/audio/*.wav") + glob(f"{common_vars.app_folder}/audio/*.ogg")
+
+    audioplayer = AudioPlayer(lock=Lock(), default_song_file=songs[0], rate=44_100)
+    audio_thread = Thread(target=audioplayer.run, daemon=True)
+    audio_thread.start()
+    audio_thread.join()
