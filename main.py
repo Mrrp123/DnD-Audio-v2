@@ -466,14 +466,33 @@ class SongsDisplay(Widget):
 
 
     def on_text(self, widget):
+        """
+        Only do our text searches after the user has stopped typing for 0.5 seconds (or if text field is empty, update immediately)
+        """
 
-        width = widget.width - widget.padding[0] - widget.padding[2]
+        self.widget = widget
 
-        if widget._lines_labels[0].size[0] < width:
-            widget.halign = "left"
-            widget.scroll_x = 0
+        if self.song_search.text == "":
+            dt = 0
         else:
-            widget.halign = "right"
+            dt = 0.5
+
+        if self.update_clock is None:
+            self.update_clock = Clock.schedule_once(self.update_song_list, dt)
+        else:
+            self.update_clock.cancel()
+            self.update_clock = Clock.schedule_once(self.update_song_list, dt)
+
+
+    def update_song_list(self, dt):
+
+        width = self.widget.width - self.widget.padding[0] - self.widget.padding[2]
+
+        if self.widget._lines_labels[0].size[0] < width:
+            self.widget.halign = "left"
+            self.widget.scroll_x = 0
+        else:
+            self.widget.halign = "right"
         
         self.refresh_songs()
         self.song_list.scroll_y = 1
