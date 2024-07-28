@@ -1,5 +1,5 @@
 from kivy.app import App
-from kivy.core.window import Window
+
 from kivy.uix.widget import Widget
 from kivy.uix.button import Button
 from kivy.uix.screenmanager import ScreenManager, Screen, CardTransition, NoTransition, SlideTransition
@@ -13,33 +13,19 @@ from tools.kivy_gradient import Gradient
 from tools.shaders import TimeStop
 
 import tools.common_vars as common_vars
-from tools.audioplayer import AudioPlayer
+from tools.music_playlist import MusicPlaylist
 import sys
 import os
 import numpy as np
 import time
 import struct
+from glob import glob
+from threading import Thread
 
 
-
-def start_audio_player():
-    common_vars.audioplayer_thread.start()
-
-def change_song(file=None, transition="fade", direction="forward"):
-
-    if file is None:
-        if direction == "forward":
-            common_vars.audioplayer.next_song_data = common_vars.audioplayer.playlist >> 1
-        elif direction == "backward":
-            common_vars.audioplayer.next_song_data = common_vars.audioplayer.playlist << 1
-    else:
-        common_vars.audioplayer.next_song_data = common_vars.audioplayer.playlist.set_song(file)
-
-    if transition == "fade":
-        common_vars.audioplayer.status = "change_song"
-
-    elif transition == "skip":
-        common_vars.audioplayer.status = "skip"
+from pythonosc.dispatcher import Dispatcher
+from pythonosc.osc_server import BlockingOSCUDPServer, ThreadingOSCUDPServer
+from pythonosc.udp_client import SimpleUDPClient
 
 
 
@@ -47,22 +33,25 @@ class MainScreen(Screen):
     
     def __init__(self, **kw):
         super().__init__(**kw)
-        self.add_widget(MainDisplay())
-        self.add_widget(EffectDisplay())
+        self.main_display = MainDisplay()
+        self.effects_display = EffectDisplay()
+
+        self.add_widget(self.main_display)
+        self.add_widget(self.effects_display)
 
 class MainDisplay(Widget):
     next_song_event = None
     previous_song_event = None
-    time_stop_event = None
+    time_stop_event = False
+    audio_clock = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.audioplayer: AudioPlayer = common_vars.audioplayer
+        self.app: DndAudio = App.get_running_app()        
 
         self.time_slider = self.ids.audio_position_slider
         self.volume_slider = self.ids.volume_slider
-        self.volume_slider.value = 100
         self.stop_move = False # Stops gestures from working when grabbing the time slider
         self.update_time_pos = True # Stops time values from updating when grabbing the time slider
         self.song_cover = self.ids.song_cover
@@ -74,9 +63,12 @@ class MainDisplay(Widget):
         self.time_slider_anim = Animation(pos=(0, 0), size=(0, 0))
         self.volume_slider_anim = Animation(pos=(0, 0), size=(0, 0))
 
-        Clock.schedule_once(self._get_references, 0)
+        Clock.schedule_once(self._frame_zero_init, 0)
+        Clock.schedule_once(self.update_song_info, 0)
+        Clock.schedule_once(lambda dt : self.play_music(), 0)
+
     
-    def _get_references(self, dt):
+    def _frame_zero_init(self, dt):
         # Get a reference to the effect display
         for widget in self.parent.children:
             if isinstance(widget, EffectDisplay):
@@ -84,46 +76,18 @@ class MainDisplay(Widget):
                 break
         self.effect_widgets = [widget for widget in self.effect_display.children if isinstance(widget, EffectWidget)]
 
-    
-    def on_parent(self, *args, **kwargs):
-        if os.path.exists("./config"):
-            self.load_config()
-    
+        self.volume_slider.value = round(self.app.get_audioplayer_attr("volume") * 100)
 
-    def load_config(self):
-        try:
-            with open("./config", "rb") as fp:
-                file_len = int.from_bytes(fp.read(2), "little")
-                song_file = fp.read(file_len).decode("utf-8")
-                song_pos = int.from_bytes(fp.read(4), "little")
-                total_frames = int.from_bytes(fp.read(8), "little")
-                fade_duration = int.from_bytes(fp.read(2), "little")
-                song_length, speed, volume = struct.unpack("3d", fp.read(24))
-                
-        except:
-            return
-        if os.path.exists(song_file): # make sure song file still exists
-            self.audioplayer.pause_flag = True
-            self.audioplayer.song_data = self.audioplayer.playlist.set_song(song_file)
-            self.audioplayer.init_pos = song_pos
-            self.audioplayer.song_length = song_length
-            self.audioplayer.total_frames = total_frames
-            self.audioplayer.speed = speed
-            self.audioplayer.base_fade_duration = fade_duration
-            self.audioplayer.fade_duration = int(fade_duration * speed)
-            self.audioplayer.volume = volume
-            self.volume_slider.value = round(self.audioplayer.volume * 100)
-            self.update_song_info(0)
-            self.play_music()
     
             
 
     def play_music(self):
-        start_audio_player()
-        self.audio_clock = Clock.schedule_interval(self.update_song_info, 0.05)
-        self.time_slider.disabled = False
-        self.ids.next_song.disabled = False
-        self.ids.previous_song.disabled = False
+        if self.audio_clock is None:
+            self.app.start_audio_player()
+            self.audio_clock = Clock.schedule_interval(self.update_song_info, 0.05)
+            self.time_slider.disabled = False
+            self.ids.next_song.disabled = False
+            self.ids.previous_song.disabled = False
     
 
     def get_tap_type(self, button, touch):
@@ -141,9 +105,9 @@ class MainDisplay(Widget):
 
     def play_next_song(self, touch):
         if touch.is_double_tap:
-            change_song(transition="skip", direction="forward")
+            self.app.change_song(transition="skip", direction="forward")
         else:
-            change_song(transition="fade", direction="forward")
+            self.app.change_song(transition="fade", direction="forward")
 
         Clock.unschedule(self.next_song_event)
         self.next_song_event = None
@@ -151,21 +115,23 @@ class MainDisplay(Widget):
 
     def play_previous_song(self, touch):
         if touch.is_double_tap:
-            change_song(transition="skip", direction="backward")
+            self.app.change_song(transition="skip", direction="backward")
         else:
-            change_song(transition="fade", direction="backward")
+            self.app.change_song(transition="fade", direction="backward")
 
         Clock.unschedule(self.previous_song_event)
         self.previous_song_event = None
     
 
     def pause_music(self):
-        if self.audioplayer.status == "idle":
+        pause_flag, status = self.app.get_audioplayer_attr("pause_flag", "status")
+        if status == "idle":
             self.play_music()
         else:
-            self.audioplayer.pause_flag = not self.audioplayer.pause_flag
+            self.app.set_audioplayer_attr("pause_flag", not pause_flag)
+            pause_flag = not pause_flag
 
-        if self.audioplayer.pause_flag:
+        if pause_flag:
             self.ids.pause.background_normal = "./assets/buttons/play_normal.png"
             self.ids.pause.background_down = "./assets/buttons/play_pressed.png"
             Animation.cancel_all(self.ids.song_cover, "size")
@@ -188,7 +154,7 @@ class MainDisplay(Widget):
             self.orig_volume_slider_size = tuple(self.volume_slider.size)
 
         if self.volume_slider.collide_point(*touch.pos) and not self.volume_slider.disabled:
-            self.audioplayer.volume = (self.volume_slider.value / 100)
+            self.app.set_audioplayer_attr("volume", (self.volume_slider.value / 100))
 
             new_size = (self.orig_volume_slider_size[0] * 1.05, self.orig_volume_slider_size[1] * 2)
             new_pos = (self.orig_volume_slider_pos[0] - self.orig_volume_slider_size[0] * .025, self.orig_volume_slider_pos[1] - self.orig_volume_slider_size[1]/2)
@@ -200,7 +166,7 @@ class MainDisplay(Widget):
     
     def update_volume(self, touch):
         if touch.grab_current == self.volume_slider:
-            self.audioplayer.volume = (self.volume_slider.value / 100)
+            self.app.set_audioplayer_attr("volume", (self.volume_slider.value / 100))
     
     def end_change_volume(self, touch):
         if touch.grab_current == self.volume_slider:
@@ -210,7 +176,7 @@ class MainDisplay(Widget):
             self.volume_slider_anim = Animation(size=self.orig_volume_slider_size, pos=self.orig_volume_slider_pos, duration=0.1, transition="linear")
             self.volume_slider_anim.start(self.volume_slider)
             
-            self.audioplayer.volume = (self.volume_slider.value / 100)
+            self.app.set_audioplayer_attr("volume", (self.volume_slider.value / 100))
 
 
     def begin_seek(self, touch):
@@ -232,8 +198,8 @@ class MainDisplay(Widget):
     def update_seek(self, touch):
         if touch.grab_current == self.time_slider:
             if self.time_slider.value_normalized == 1:
-                self.audioplayer.seek_pos = 0
-            self.update_time_text(int(self.time_slider.value_normalized * self.audioplayer.song_length))
+                self.app.set_audioplayer_attr("seek_pos", 0)
+            self.update_time_text(int(self.time_slider.value_normalized * self.app.get_audioplayer_attr("song_length")))
 
     def end_seek(self, touch):
         if touch.grab_current == self.time_slider:
@@ -244,59 +210,69 @@ class MainDisplay(Widget):
             self.time_slider_anim = Animation(size=self.orig_time_slider_size, pos=self.orig_time_slider_pos, duration=0.1, transition="linear")
             self.time_slider_anim.start(self.time_slider)
             
+            song_length, reverse_audio = self.app.get_audioplayer_attr("song_length", "reverse_audio")
+
             
-            try:
-                self.audioplayer.seek_pos = int(self.time_slider.value_normalized * self.audioplayer.song_length)
-                if self.time_slider.value_normalized == 1 and not self.audioplayer.reverse_audio:
-                    self.audioplayer.seek_pos = 0
-                elif self.time_slider.value_normalized == 0 and self.audioplayer.reverse_audio:
-                    self.audioplayer.seek_pos = self.audioplayer.song_length
-                self.audioplayer.pos = self.audioplayer.seek_pos
-                self.update_time_text(self.audioplayer.pos)
-                self.audioplayer.status = "seek"
-                self.update_time_pos = True
-                # if not self.audio_clock:
-                #     self.audio_clock = Clock.schedule_interval(self.update_song_info, 0.05)
-            except:
-                pass
+            if self.time_slider.value_normalized == 1 and not reverse_audio:
+                pos = 0
+            elif self.time_slider.value_normalized == 0 and reverse_audio:
+                pos = song_length
+            else:
+                pos = int(self.time_slider.value_normalized * song_length)
+            
+            self.app.set_audioplayer_attr("seek_pos", pos)
+            self.app.set_audioplayer_attr("pos", pos)
+            self.update_time_text(pos)
+
+            self.app.set_audioplayer_attr("status", "seek")
+            self.update_time_pos = True
     
     def reverse(self):
-        self.audioplayer.reverse_audio = not self.audioplayer.reverse_audio
-        try:
-            self.audioplayer.seek_pos = int(self.time_slider.value_normalized * self.audioplayer.song_length)
-            self.audioplayer.pos = self.audioplayer.seek_pos
-            self.audioplayer.status = "seek"
-        except:
-            pass
+        reverse_audio, song_length = self.app.get_audioplayer_attr("reverse_audio", "song_length")
+        self.app.set_audioplayer_attr("reverse_audio", not reverse_audio)
+        seek_pos = int(self.time_slider.value_normalized * song_length)
+        self.app.set_audioplayer_attr("seek_pos", seek_pos)
+        self.app.set_audioplayer_attr("pos", seek_pos)
+        self.app.set_audioplayer_attr("status", "seek")
             
 
     def update_time_text(self, pos):
-        pos_time, neg_time = self._format_time(pos/1000/self.audioplayer.speed, self.audioplayer.song_length/1000/self.audioplayer.speed)
+        speed, song_length = self.app.get_audioplayer_attr("speed", "song_length")
+        pos_time, neg_time = self._format_time(pos/1000/speed, song_length/1000/speed)
         self.ids.song_pos.text = pos_time
         self.ids.neg_song_pos.text = neg_time
 
     def update_song_info(self, dt): # Main song info update loop
 
+        # If we get a value error, these values don't exist in the audioplayer, thus skip this update
+        try:
+            status, pos, song_length = self.app.get_audioplayer_attr("status", "pos", "song_length")
+        except ValueError:
+            return
+
         # Update song position
         if self.update_time_pos:
-            self.time_slider.value_normalized = (int(self.audioplayer.pos) / self.audioplayer.song_length)
-            self.update_time_text(self.audioplayer.pos)
+            self.time_slider.value_normalized = (int(pos) / song_length)
+            self.update_time_text(pos)
 
-        
         # Update song name / artist (and position if user is holding the time slider)
-        if self.ids.song_name.text != self.audioplayer.song_data["song"]:
-            self.ids.song_name.text = self.audioplayer.song_data["song"]
+        if self.ids.song_name.text != (song := self.app.playlist.get_song()["song"]) and status in ("playing", "idle"):
+            self.ids.song_name.text = song
             if not self.update_time_pos:
-                self.update_time_text(int(self.time_slider.value_normalized * self.audioplayer.song_length))
+                self.update_time_text(int(self.time_slider.value_normalized * song_length))
         
 
         # Update song cover
-        if self.song_cover.source != self.audioplayer.song_data["cover"]:
-            self.song_cover.source = self.audioplayer.song_data["cover"]
-            Animation.cancel_all(self.song_cover, "size")
-            new_size = (self.height * (5/12), min(1/self.song_cover.image_ratio * self.height * (5/12), self.height * (5/12)))
-            anim = Animation(size=new_size, duration=0, transition="linear")
-            anim.start(self.song_cover)
+        if self.song_cover.source != (cover := self.app.playlist.get_song()["cover"]) and status in ("playing", "idle"):
+            self.song_cover.source = cover
+
+            # Don't do any cover size animations if we're not playing!!! This causes the size to small initially
+            if status == "playing": 
+                Animation.cancel_all(self.song_cover, "size")
+                new_size = (self.height * (5/12), min(1/self.song_cover.image_ratio * self.height * (5/12), self.height * (5/12)))
+                anim = Animation(size=new_size, duration=0, transition="linear")
+                anim.start(self.song_cover)
+
             if self.song_cover.source != f"{common_vars.app_folder}/assets/covers/default_cover.png":
                 new_colors = self.get_average_color()
             else:
@@ -384,26 +360,24 @@ class MainDisplay(Widget):
         # self.effect_display.ids.foreground.x = 0
         # self.effect_display.ids.foreground.size = self.size
         
-        if self.time_stop_event is None: # Prevent this effect from playing twice in a row
+        if not self.time_stop_event: # Prevent this effect from playing twice in a row
             self.disabled = True
-            self.time_stop_event = Clock.schedule_interval(self._check_time_effect, 0)
+            #self.time_stop_event = Clock.schedule_interval(self._check_time_effect, 0)
             self.texture_update_clock = Clock.schedule_interval(self._update_foreground_texture, 0)
-            self.audioplayer.status = "zawarudo"
+            self.app.set_audioplayer_attr("status", "zawarudo")
 
             self.effect_widgets[0].effects = [TimeStop()]
     
-    def _check_time_effect(self, dt):
+    def _start_time_effect(self):
         """
-        Polls audioplayer until it finds a certain status
+        Triggers when audioplayer is about to play the time stop sound
         """
-        if self.audioplayer.status == "time_stop":
-            
-            Clock.unschedule(self.time_stop_event)
-
-            self.update_uniforms(t0=Clock.get_boottime())
-            self.effect_display.ids.foreground.x = 0
-            self.effect_display.ids.foreground.size = self.size
-            Clock.schedule_once(self.resume_time, 11.5)#9.3)
+        self.app.osc_server.handle_request() # Handle this request so we don't break anything
+        self.time_stop_event = True
+        self.update_uniforms(t0=Clock.get_boottime())
+        self.effect_display.ids.foreground.x = 0
+        self.effect_display.ids.foreground.size = self.size
+        Clock.schedule_once(self.resume_time, 11.3)#9.3)
     
     def resume_time(self, dt):
         """
@@ -413,7 +387,7 @@ class MainDisplay(Widget):
         self.effect_display.ids.foreground.size = 1,1
         self.effect_display.ids.foreground.x = -1
         Clock.unschedule(self.texture_update_clock)
-        self.time_stop_event = None
+        self.time_stop_event = False
         self.disabled = False
     
     def get_texture(self):
@@ -458,12 +432,12 @@ class SongsDisplay(Widget):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.audioplayer = common_vars.audioplayer
+        self.app: DndAudio = App.get_running_app()
 
         self.song_list = self.ids.song_list
         self.song_search = self.ids.song_search
-        self.song_list.data = [{"text" : song_data["song"], "song_filepath" : song_data["file"]} for song_data in self.audioplayer.playlist]
-
+        self.song_list.data = [{"text" : song_data["song"], "song_filepath" : song_data["file"]} for song_data in self.app.playlist]
+        self.update_clock = None
 
     def on_text(self, widget):
         """
@@ -496,21 +470,24 @@ class SongsDisplay(Widget):
         
         self.refresh_songs()
         self.song_list.scroll_y = 1
-        
-        
-        #print(self.song_list.data)
     
     def refresh_songs(self):
+
         if self.song_search.text == "":
-            self.song_list.data = [{"text" : song_data["song"], "song_filepath" : song_data["file"]} for song_data in self.audioplayer.playlist]
+            self.song_list.data = [{"text" : song_data["song"], "song_filepath" : song_data["file"]} for song_data in self.app.playlist]
             return
 
         self.song_list.data = [{"text" : song_data["song"], "song_filepath" : song_data["file"]} 
-                               for song_data in self.audioplayer.playlist if self.song_search.text.lower() in song_data["song"].lower()]
+                               for song_data in self.app.playlist if self.song_search.text.lower() in song_data["song"].lower()]
 
 class SongButton(Button):
 
-    audioplayer = common_vars.audioplayer
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Get a reference to the app and main display
+        self.app: DndAudio = App.get_running_app()
+        self.main_display = self.app.root.get_screen("main").main_display 
 
     def on_parent(self, a, b):
         asset = f"{common_vars.app_folder}/assets/covers/{self.text}"
@@ -520,21 +497,25 @@ class SongButton(Button):
             self.ids.song_cover.source = f"{asset}.jpg"
         else:
             self.ids.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover.png"
+        
 
     def on_release(self, **kwargs):
-        if self.audioplayer.status == "idle":
-            common_vars.audioplayer.song_data = self.audioplayer.playlist.set_song(self.song_filepath)
+        status, pause_flag = self.app.get_audioplayer_attr("status", "pause_flag")
+
+        if status == "idle":
+            self.app.playlist.set_song(self.song_filepath)
+            self.app.set_audioplayer_attr("song_file", self.song_filepath)
+
+            # while self.app.get_audioplayer_attr("song_file") != self.song_filepath:
+            #     time.sleep(0.001)
             
-            # This should only ever be called once, so it's fine to just leave the for loop
-            # Get a reference to the main display
-            for widget in self.parent.parent.parent.parent.manager.get_screen("main").children: # Truly cursed
-                if isinstance(widget, MainDisplay):
-                    self.main_display = widget
-                    break
-            # Counterintuitively, this actually starts the music since audioplayer status is idle
+            # Counterintuitively, pause_music() actually starts the music since audioplayer status is idle
             self.main_display.pause_music()
+        elif pause_flag:
+            self.main_display.pause_music()
+            self.app.change_song(self.song_filepath, transition="fade")
         else:
-            change_song(self.song_filepath, transition="fade")
+            self.app.change_song(self.song_filepath, transition="fade")
     
 
 class SettingsScreen(Screen):
@@ -548,31 +529,42 @@ class SettingsDisplay(Widget):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.audioplayer = common_vars.audioplayer
         self.fps_clock = Clock.schedule_interval(self.update_fps, 0.5)
-        self.debug_clock = Clock.schedule_interval(self.get_debug_info, 0.05)
+        self.debug_clock = Clock.schedule_interval(self.get_debug_info, 0.25)
         self.speed_slider = self.ids.speed_slider
         self.fade_slider = self.ids.fade_slider
 
-        if os.path.exists("./config"):
-            with open("./config", "rb") as fp:
-                fp.seek(-26, 2)
-                self.fade_slider.value = int.from_bytes(fp.read(2), "little")
-                self.speed_slider.value = struct.unpack("2d", fp.read(16))[1] * 100
-                
+        self.app: DndAudio = App.get_running_app()
+
+
+        if os.path.exists(f"{common_vars.app_folder}/config"):
+            try:
+                with open(f"{common_vars.app_folder}/config", "rb") as fp:
+                    offset = int.from_bytes(fp.read(2), "little") + 14
+                    fp.seek(offset)
+
+                    fade_duration = int.from_bytes(fp.read(2), "little")
+                    song_length, speed, volume = struct.unpack("3d", fp.read(24))
+
+                    self.fade_slider.value = fade_duration
+                    self.speed_slider.value = speed * 100
+            except (OSError, struct.error):
+                self.speed_slider.value = 100
+                self.fade_slider.value = 3000
         else:
             self.speed_slider.value = 100
             self.fade_slider.value = 3000
     
     def change_speed(self, touch):
         if touch.grab_current == self.speed_slider:
-            self.audioplayer.speed = (self.speed_slider.value / 100)
+            #print(self.speed_slider.value, self.speed_slider.value / 100)
+            self.app.set_audioplayer_attr("speed", np.float64(self.speed_slider.value / 100))
     
 
     def change_fade_duration(self, touch):
         if touch.grab_current == self.fade_slider:
-            self.audioplayer.base_fade_duration = self.fade_slider.value
-            self.audioplayer.fade_duration = int(self.fade_slider.value * (self.speed_slider.value / 100))
+            self.app.set_audioplayer_attr("base_fade_duration", self.fade_slider.value)
+            self.app.set_audioplayer_attr("fade_duration", int(self.fade_slider.value * (self.speed_slider.value / 100)))
 
     def update_fps(self, dt):
         fps = Clock.get_fps()
@@ -580,7 +572,7 @@ class SettingsDisplay(Widget):
     
     def get_debug_info(self, dt):
         try:
-            self.ids.debug_info.text = "Debug Info:" + self.audioplayer.debug_string
+            self.ids.debug_info.text = "Debug Info:" + self.app.get_audioplayer_attr("debug_string")
         except:
             pass
 
@@ -589,9 +581,23 @@ class SettingsDisplay(Widget):
 class DndAudio(App):
 
     def build(self):
+
+        self.osc_returns = None
+
+        self.dispatcher = Dispatcher()
+        self.dispatcher.map("/return", self._return_message)
+        self.dispatcher.map("/call/*", self.call_function)
+
+        self.osc_server = BlockingOSCUDPServer(("127.0.0.1", 8000), self.dispatcher)
+        self.osc_client = SimpleUDPClient("127.0.0.1", 8001)
+
+        self.reload_songs()
+        self.start_service()     
+
+        #Window.bind(on_request_close=self.on_request_close)
         if platform != "android":
             Window.size = (375, 700)
-
+        
         sm = ScreenManager(transition=NoTransition())
         sm.add_widget(SongsScreen(name="songs"))
         sm.add_widget(MainScreen(name="main"))
@@ -600,25 +606,164 @@ class DndAudio(App):
         sm.current = "main"
         sm.transition = SlideTransition()
         return sm
-        # return MainDisplay()
 
 
+
+    def start_audio_player(self):
+        self.set_audioplayer_attr("status", "playing")
+
+
+    def change_song(self, file=None, transition="fade", direction="forward"):
+
+        if file is None:
+            if direction == "forward":
+                self.playlist >> 1
+                self.set_audioplayer_attr("next_song_file", self.playlist.get_song()["file"])
+            elif direction == "backward":
+                self.playlist << 1
+                self.set_audioplayer_attr("next_song_file", self.playlist.get_song()["file"])
+        else:
+            self.playlist.set_song(file)
+            self.set_audioplayer_attr("next_song_file", self.playlist.get_song()["file"])
+
+        if transition == "fade":
+            self.set_audioplayer_attr("status", "change_song")
+
+        elif transition == "skip":
+            self.set_audioplayer_attr("status", "skip")
+
+    
+    def reload_songs(self):
+        """
+        Updates the currently available audio files in the audio folder. Only looks for .wav files for now
+        """
+        loaded_songs = glob(f"{common_vars.app_folder}/audio/*.wav") + glob(f"{common_vars.app_folder}/audio/*.ogg")
+        self.playlist = MusicPlaylist(loaded_songs)
+
+    def start_service(self):
+        if platform == "android":
+            from jnius import autoclass
+            self.audio_service = autoclass('org.zeberle.dndaudioplayer.ServiceAudioplayer')
+            mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
+            argument = ''
+            self.audio_service.start(mActivity, argument)
+
+        elif platform in ('linux', 'linux2', 'macos', 'win'):
+            from runpy import run_path
+            from multiprocessing import Process, set_start_method
+            set_start_method("spawn")
+            self.audio_service = Process(target=run_path, args=(f"{common_vars.app_folder}/tools/audioplayer.py",), daemon=True)
+            self.audio_service.start()
+
+        else:
+            raise NotImplementedError("Platform not supported")
+    
+    def stop_service(self):
+        if platform == "android":
+            from jnius import autoclass
+            service = autoclass('your.service.name.ClassName')
+            mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
+            service.stop(mActivity)
+        
+        else:
+            self.audio_service.kill()
+
+
+    def _return_message(self, address: str, *values):
+        if len(values) == 1:
+            self.osc_returns = values[0]
+        else:
+            self.osc_returns = values
+
+    def call_function(self, address: str, func_name: str, *args):
+        screen, widget_name = address.split("/")[2:]
+        widget = getattr(self.root.get_screen(screen), widget_name)
+        func = getattr(widget, func_name)
+        if len(args) > 0:
+            func(*args)
+        else:
+            func()
+    
+    def get_audioplayer_attr(self, *args):
+        self.osc_client.send_message("/read", args)
+        self.osc_server.handle_request()
+        return self.osc_returns
+    
+    def set_audioplayer_attr(self, attr, value):
+        self.osc_client.send_message("/write", (attr, value))
+    
+    def call_audioplayer_func(self, func_name, *args):
+        self.osc_client.send_message("/call", (func_name, *args))
+        self.osc_server.handle_request()
+        return self.osc_returns
+
+    def save_audioplayer_config(self):
+        try:
+            with open(f"{common_vars.app_folder}/config", "wb") as fp:
+                song_file, song_pos, song_length, total_frames, speed, fade_duration, volume = self.config_vars
+                fp.write(len(song_file).to_bytes(2, "little"))
+                fp.write(bytes(song_file, encoding="utf-8"))
+                fp.write(int(song_pos).to_bytes(4, "little"))
+                fp.write(int(total_frames).to_bytes(8, "little"))
+                fp.write(int(fade_duration).to_bytes(2, "little"))
+                fp.write(struct.pack("3d", song_length, speed, volume))
+        except Exception as err:
+            if os.path.exists(f"{common_vars.app_folder}/config"):
+                os.remove(f"{common_vars.app_folder}/config")
+    
+    def load_audioplayer_config(self):
+        try:
+            with open(f"{common_vars.app_folder}/config", "rb") as fp:
+                file_len = int.from_bytes(fp.read(2), "little")
+                song_file = fp.read(file_len).decode("utf-8")
+                song_pos = int.from_bytes(fp.read(4), "little")
+                total_frames = int.from_bytes(fp.read(8), "little")
+                fade_duration = int.from_bytes(fp.read(2), "little")
+                song_length, speed, volume = struct.unpack("3d", fp.read(24))
+                
+        except Exception as err:
+            return
+        if os.path.exists(song_file): # make sure song file still exists
+            self.set_audioplayer_attr("pause_flag", True)
+            self.playlist.set_song(song_file)
+            self.set_audioplayer_attr("song_file", self.playlist.get_song()["file"])
+            self.set_audioplayer_attr("init_pos", song_pos)
+            self.set_audioplayer_attr("total_frames", total_frames)
+            self.set_audioplayer_attr("speed", speed)
+            self.set_audioplayer_attr("base_fade_duration", fade_duration)
+            self.set_audioplayer_attr("fade_duration", int(fade_duration * speed))
+            self.set_audioplayer_attr("volume", volume)
+            self.set_audioplayer_attr("song_length", song_length)
+
+            # This waits until the audioplayer has fully received all of the config messages
+            while self.get_audioplayer_attr("song_length") == ():
+                time.sleep(0.001)
+
+    def on_pause(self, *args):
+        self.save_audioplayer_config()
+        return True
+    
+    def on_start(self, *args):
+
+        while self.osc_returns != "ready": # Wait for audioplayer to finish its init
+            self.osc_server.timeout = 0.5
+            self.osc_server.handle_request()
+        
+        self.osc_server.timeout = None
+
+        if os.path.exists(f"{common_vars.app_folder}/config"):
+            self.load_audioplayer_config()
+
+        self.config_vars = self._get_config_vars(0)
+        self.config_clock = Clock.schedule_interval(self._get_config_vars, 1)
+    
+    def _get_config_vars(self, dt):
+        self.config_vars = self.get_audioplayer_attr("song_file", "pos", "song_length", "total_frames", "speed", "base_fade_duration", "volume")
+
+    def on_stop(self, *args):
+        self.save_audioplayer_config()
 
 if __name__ == '__main__':
+    from kivy.core.window import Window
     DndAudio().run()
-
-    with open("./config", "wb") as fp:
-        song_data = common_vars.audioplayer.song_data["file"]
-        song_pos = round(common_vars.audioplayer.pos)
-        song_length = common_vars.audioplayer.song_length
-        total_frames = int(common_vars.audioplayer.total_frames)
-        speed = common_vars.audioplayer.speed
-        fade_duration = int(common_vars.audioplayer.base_fade_duration)
-        volume = common_vars.audioplayer.volume
-        fp.write(len(song_data).to_bytes(2, "little"))
-        fp.write(bytes(song_data, encoding="utf-8"))
-        fp.write(song_pos.to_bytes(4, "little"))
-        fp.write(total_frames.to_bytes(8, "little"))
-        fp.write(fade_duration.to_bytes(2, "little"))
-        fp.write(struct.pack("3d", song_length, speed, volume))
         
