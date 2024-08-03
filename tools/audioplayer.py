@@ -169,7 +169,7 @@ class AudioPlayer():
         zawarudo WILL break when activated during a transition state (anything in the transitiion function)
     """
 
-    def __init__(self, lock, default_song_file, channels=2, rate=44_100, buffersize=256, encoding=16) -> None:
+    def __init__(self, lock, channels=2, rate=44_100, buffersize=256, encoding=16) -> None:
         self.rate = rate
         self.pos = self.init_pos = 0
         self.frame_pos = 0
@@ -200,7 +200,7 @@ class AudioPlayer():
 
         self.stream = AudioStreamer(channels, rate, buffersize, encoding)
 
-        self.song_file = default_song_file#self.playlist[0]
+        self.song_file = f"{common_vars.app_folder}/assets/audio/silence.wav"
         self.next_song_file = None
 
         # This will listen and respond to calls from the gui
@@ -883,9 +883,7 @@ class AudioPlayer():
                 self.status = "playing"
 
 if __name__ == "__main__" or __name__ == "<run_path>":
-    songs = glob(f"{common_vars.app_folder}/audio/*.wav") + glob(f"{common_vars.app_folder}/audio/*.ogg")
-
-    audioplayer = AudioPlayer(lock=Lock(), default_song_file=songs[0], rate=44_100)
+    audioplayer = AudioPlayer(lock=Lock(), rate=44_100)
     audio_thread = Thread(target=audioplayer.run, daemon=True)
     audio_thread.start()
     audio_thread.join()
