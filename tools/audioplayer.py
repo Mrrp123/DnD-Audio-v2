@@ -614,7 +614,7 @@ class AudioPlayer():
             elif self.status == "skip": # If we change songs via a skip during a transition, just go to the next song
                 if (self.reverse_audio and next_song_len - new_pos <= fade_duration/2) or (not self.reverse_audio and new_pos <= fade_duration/2):
                     self.skip(next_song_file)
-                    #self.playlist.set_song(next_song_file) # Resync playlist pointer, otherwise we will be one song ahead/behind
+                    self.osc_client.send_message("/call/playlist", ["set_song", next_song_file]) # Resync playlist pointer, otherwise we will be one song ahead/behind
                 elif self.next_song_file is not None:
                     self.skip(self.next_song_file)
                 else:
