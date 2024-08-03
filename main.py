@@ -249,6 +249,11 @@ class MainDisplay(Widget):
             status, pos, song_length = self.app.get_audioplayer_attr("status", "pos", "song_length")
         except ValueError:
             return
+        
+        if len(self.app.playlist) == 0:
+            self.ids.song_name.text = "No songs found!"
+            self.time_slider.disabled = True
+            return
 
         # Update song position
         if self.update_time_pos:
@@ -699,6 +704,8 @@ class DndAudio(App):
         return self.osc_returns
 
     def save_audioplayer_config(self):
+        if len(self.playlist) == 0:
+            return
         try:
             with open(f"{common_vars.app_folder}/config", "wb") as fp:
                 song_file, song_pos, song_length, total_frames, speed, fade_duration, volume = self.config_vars
@@ -754,6 +761,8 @@ class DndAudio(App):
 
         if os.path.exists(f"{common_vars.app_folder}/config"):
             self.load_audioplayer_config()
+        elif len(self.playlist) != 0:
+            self.set_audioplayer_attr("song_file", self.playlist[0]["file"])
 
         self.config_vars = self._get_config_vars(0)
         self.config_clock = Clock.schedule_interval(self._get_config_vars, 1)
