@@ -99,9 +99,9 @@ class AudioSegment():
             start_frame = round(start * self.frame_rate / 1000)
             end_frame = round(end * self.frame_rate / 1000)
 
-            self._data = self._data[start_frame:end_frame]
+            data = self._data[start_frame:end_frame]
 
-            return self
+            return AudioSegment(data.tobytes(), self.frame_rate, self.channels, self.sample_width)
         else:
             raise ValueError("indexing is not supported!")
 
