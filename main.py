@@ -639,10 +639,83 @@ class DndAudio(App):
     
     def reload_songs(self):
         """
-        Updates the currently available audio files in the audio folder. Only looks for .wav files for now
+        Updates the currently available audio files in the audio folder on PC / Music folder on android. Only looks for .wav + .ogg files for now
         """
-        loaded_songs = glob(f"{common_vars.app_folder}/audio/*.wav") + glob(f"{common_vars.app_folder}/audio/*.ogg")
-        self.playlist = MusicPlaylist(loaded_songs)
+        
+        loaded_songs = []
+
+        if platform in ('linux', 'linux2', 'macos', 'win'):
+            loaded_songs = glob(f"{common_vars.app_folder}/audio/*.wav") + glob(f"{common_vars.app_folder}/audio/*.ogg")
+
+        elif platform == "android":
+            from jnius import autoclass, cast
+            from jnius.jnius import JavaException
+            from android.permissions import request_permissions, Permission
+
+            request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
+            
+            # Initialize and get context
+            mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
+            currentActivity = cast('android.app.Activity', mActivity)
+            Context = cast('android.content.ContextWrapper', currentActivity.getApplicationContext())
+
+            # Get MediaStore classes
+            MediaStore = autoclass("android.provider.MediaStore")
+            MediaStoreAudioMedia = autoclass("android.provider.MediaStore$Audio$Media")
+
+            # Get Android version
+            version = autoclass("android.os.Build$VERSION")
+            sdk_int = version.SDK_INT
+            version_codes = autoclass("android.os.Build$VERSION_CODES")
+            Q = version_codes.Q
+
+            loaded_songs = []  # List to store loaded songs
+
+            # Function to query and load songs from a specific folder
+            def query_and_load_songs(content_uri):
+                try:
+                    # Set the selection to filter by the directory path
+                    selection = "_data LIKE ? OR _data LIKE ?"
+                    # Assuming the "Music" folder is located somewhere in the path
+                    selectionArgs = ["%/Music/%%.wav", "%/Music/%%.ogg"]
+
+                    cursor = Context.getContentResolver().query(
+                        content_uri, None, selection, selectionArgs, None
+                    )
+                    if cursor is not None:
+                        #column_names = cursor.getColumnNames()
+                        #print(f"Available columns: {column_names}")
+
+                        while cursor.moveToNext():
+                            try:
+                                # Use '_display_name' to get the name of the file
+                                audioIndex = cursor.getColumnIndex("_data")
+                                if audioIndex != -1:
+                                    song_name = cursor.getString(audioIndex)
+                                    if song_name is not None:
+                                        loaded_songs.append(song_name)
+                                        print(f"Loaded song: {song_name}")
+                                    else:
+                                        print("Song name is null.")
+                                else:
+                                    print("Audio index not found.")
+                            except JavaException as e:
+                                print(f"Error accessing cursor: {e}")
+                        cursor.close()
+                    else:
+                        print("Cursor is null. Content URI might be incorrect or no data available.")
+                except JavaException as e:
+                    print(f"JavaException during query: {e}")
+
+            # Query external storage, assuming music files are generally stored there
+            if sdk_int >= Q:
+                query_and_load_songs(MediaStoreAudioMedia.getContentUri(MediaStore.VOLUME_EXTERNAL))
+            else:
+                query_and_load_songs(MediaStoreAudioMedia.EXTERNAL_CONTENT_URI)
+
+            print(f"Songs loaded from MediaStore: {loaded_songs}")
+
+        self.playlist = MusicPlaylist(loaded_songs)        
 
     def start_service(self):
         if platform == "android":
