@@ -13,7 +13,6 @@ from scipy.signal import iirfilter
 import pyogg
 import ctypes
 from functools import reduce
-import copy
 
 from pythonosc.dispatcher import Dispatcher
 from pythonosc.osc_server import ThreadingOSCUDPServer
@@ -709,7 +708,7 @@ class AudioPlayer():
                 if len(song_audio) == len(zw_audio):
                     self.stream.write((song_audio * zw_audio).data)
                 else:
-                    extra_song_audio = copy.copy(song_audio)[len(zw_audio):]
+                    extra_song_audio = song_audio[len(zw_audio):]
                     self.stream.write((song_audio[0:len(zw_audio)] * zw_audio).data)
 
                 self.get_debug_info()
@@ -736,7 +735,7 @@ class AudioPlayer():
                 else:
                     audio_sum = extra_song_audio
 
-                extra_song_audio = copy.copy(audio_sum)[chunk_len:]
+                extra_song_audio = audio_sum[chunk_len:]
                 data = audio_sum[:chunk_len].data
 
 
@@ -783,7 +782,7 @@ class AudioPlayer():
                 else:
                     audio_sum = extra_song_audio
 
-                extra_song_audio = copy.copy(audio_sum)[chunk_len:]
+                extra_song_audio = audio_sum[chunk_len:]
                 data = audio_sum[:chunk_len].data
 
                 zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
