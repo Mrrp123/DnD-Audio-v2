@@ -534,7 +534,11 @@ class AudioPlayer():
             while i < ceil(audio_len / chunk_len):
                 output_chunk = next(args[0])
                 for audio_generator in args[1:]:
-                    output_chunk *= next(audio_generator)
+                    try:
+                        output_chunk *= next(audio_generator)
+                    except ValueError:
+                        mix_chunk = next(audio_generator)
+                        output_chunk = (output_chunk * mix_chunk[:len(output_chunk)]) + mix_chunk[len(output_chunk):]
                 yield output_chunk
                 i += 1
 
@@ -595,6 +599,11 @@ class AudioPlayer():
 
             if self.status == "change_song": # If we decide to change songs during a transition, crossfade the (already crossfading) audio with the next song
                 self.status = "override_transition"
+
+                if self.reverse_audio:
+                    time_remaining = round(self.pos)
+                else:
+                    time_remaining = round(self.song_length - self.pos) # Remaining time we have left in the song
 
                 self.chunk_generator = n_generator(min(self.fade_duration, time_remaining), self.chunk_len, 
                                                    self.load_chunks(self.song_file, start_pos=self.pos, gain=end_chunk_db), 
