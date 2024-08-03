@@ -372,7 +372,6 @@ class MainDisplay(Widget):
         """
         Triggers when audioplayer is about to play the time stop sound
         """
-        self.app.osc_server.handle_request() # Handle this request so we don't break anything
         self.time_stop_event = True
         self.update_uniforms(t0=Clock.get_boottime())
         self.effect_display.ids.foreground.x = 0
@@ -676,13 +675,15 @@ class DndAudio(App):
             self.osc_returns = values
 
     def call_function(self, address: str, func_name: str, *args):
-        screen, widget_name = address.split("/")[2:]
-        widget = getattr(self.root.get_screen(screen), widget_name)
-        func = getattr(widget, func_name)
-        if len(args) > 0:
-            func(*args)
+        if address == "/call/playlist":
+            func = getattr(self.playlist, func_name)
+            print(func, *args)
         else:
-            func()
+            screen, widget_name = address.split("/")[2:]
+            widget = getattr(self.root.get_screen(screen), widget_name)
+            func = getattr(widget, func_name)
+        func(*args)
+        self.osc_server.handle_request()
     
     def get_audioplayer_attr(self, *args):
         self.osc_client.send_message("/read", args)
