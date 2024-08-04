@@ -594,49 +594,51 @@ class AudioPlayer():
         else:
             new_pos = 0
             new_frame_pos = 0
-        for chunk, end_chunk_db, start_chunk_db in step_fade(self.chunk_generator, next_chunk_generator, 
-                                                             fade_duration=fade_duration, chunk_len=self.chunk_len, fade_type="crossfade"): # Begin crossfade
+        
+        if fade_duration > 0:
+            for chunk, end_chunk_db, start_chunk_db in step_fade(self.chunk_generator, next_chunk_generator, 
+                                                                fade_duration=fade_duration, chunk_len=self.chunk_len, fade_type="crossfade"): # Begin crossfade
 
-            if self.status == "change_song": # If we decide to change songs during a transition, crossfade the (already crossfading) audio with the next song
-                self.status = "override_transition"
+                if self.status == "change_song": # If we decide to change songs during a transition, crossfade the (already crossfading) audio with the next song
+                    self.status = "override_transition"
 
+                    if self.reverse_audio:
+                        time_remaining = round(self.pos)
+                    else:
+                        time_remaining = round(self.song_length - self.pos) # Remaining time we have left in the song
+
+                    self.chunk_generator = n_generator(min(self.fade_duration, time_remaining), self.chunk_len, 
+                                                    self.load_chunks(self.song_file, start_pos=self.pos, gain=end_chunk_db), 
+                                                    self.load_chunks(next_song_file, start_pos=new_pos, gain=start_chunk_db))
+                    self.transition(self.next_song_file)
+                    return
+                
+                elif self.status == "skip": # If we change songs via a skip during a transition, just go to the next song
+                    if (self.reverse_audio and next_song_len - new_pos <= fade_duration/2) or (not self.reverse_audio and new_pos <= fade_duration/2):
+                        self.skip(next_song_file)
+                        self.osc_client.send_message("/call/playlist", ["set_song", next_song_file]) # Resync playlist pointer, otherwise we will be one song ahead/behind
+                    elif self.next_song_file is not None:
+                        self.skip(self.next_song_file)
+                    else:
+                        self.skip(self.song_file)
+                    return
+                
+                elif self.status == "seek": # If we seek during a transition, override the transition and play the currently fading out song as normal
+                    self.seek(self.seek_pos)
+                    self.next_song_file = None
+                    return
+
+                self.write_to_buffer(chunk)
                 if self.reverse_audio:
-                    time_remaining = round(self.pos)
+                    self.pos -= len(chunk)
+                    self.frame_pos -= chunk.get_num_frames()
+                    new_pos -= len(chunk)
+                    new_frame_pos -= chunk.get_num_frames()
                 else:
-                    time_remaining = round(self.song_length - self.pos) # Remaining time we have left in the song
-
-                self.chunk_generator = n_generator(min(self.fade_duration, time_remaining), self.chunk_len, 
-                                                   self.load_chunks(self.song_file, start_pos=self.pos, gain=end_chunk_db), 
-                                                   self.load_chunks(next_song_file, start_pos=new_pos, gain=start_chunk_db))
-                self.transition(self.next_song_file)
-                return
-            
-            elif self.status == "skip": # If we change songs via a skip during a transition, just go to the next song
-                if (self.reverse_audio and next_song_len - new_pos <= fade_duration/2) or (not self.reverse_audio and new_pos <= fade_duration/2):
-                    self.skip(next_song_file)
-                    self.osc_client.send_message("/call/playlist", ["set_song", next_song_file]) # Resync playlist pointer, otherwise we will be one song ahead/behind
-                elif self.next_song_file is not None:
-                    self.skip(self.next_song_file)
-                else:
-                    self.skip(self.song_file)
-                return
-            
-            elif self.status == "seek": # If we seek during a transition, override the transition and play the currently fading out song as normal
-                self.seek(self.seek_pos)
-                self.next_song_file = None
-                return
-
-            self.write_to_buffer(chunk)
-            if self.reverse_audio:
-                self.pos -= len(chunk)
-                self.frame_pos -= chunk.get_num_frames()
-                new_pos -= len(chunk)
-                new_frame_pos -= chunk.get_num_frames()
-            else:
-                self.pos += len(chunk)
-                self.frame_pos += chunk.get_num_frames()
-                new_pos += len(chunk)
-                new_frame_pos += chunk.get_num_frames()
+                    self.pos += len(chunk)
+                    self.frame_pos += chunk.get_num_frames()
+                    new_pos += len(chunk)
+                    new_frame_pos += chunk.get_num_frames()
 
         # Once we are done with crossfades, update various variables
         self.pos = new_pos
