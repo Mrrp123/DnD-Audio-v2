@@ -199,7 +199,8 @@ class MainDisplay(Widget):
         if touch.grab_current == self.time_slider:
             if self.time_slider.value_normalized == 1:
                 self.app.set_audioplayer_attr("seek_pos", 0)
-            self.update_time_text(int(self.time_slider.value_normalized * self.app.get_audioplayer_attr("song_length")))
+            song_length, speed = self.app.get_audioplayer_attr("song_length", "speed")
+            self.update_time_text(int(self.time_slider.value_normalized * song_length), speed, song_length)
 
     def end_seek(self, touch):
         if touch.grab_current == self.time_slider:
@@ -210,7 +211,7 @@ class MainDisplay(Widget):
             self.time_slider_anim = Animation(size=self.orig_time_slider_size, pos=self.orig_time_slider_pos, duration=0.1, transition="linear")
             self.time_slider_anim.start(self.time_slider)
             
-            song_length, reverse_audio = self.app.get_audioplayer_attr("song_length", "reverse_audio")
+            song_length, speed, reverse_audio = self.app.get_audioplayer_attr("song_length", "speed", "reverse_audio")
 
             
             if self.time_slider.value_normalized == 1 and not reverse_audio:
@@ -222,7 +223,7 @@ class MainDisplay(Widget):
             
             self.app.set_audioplayer_attr("seek_pos", pos)
             self.app.set_audioplayer_attr("pos", pos)
-            self.update_time_text(pos)
+            self.update_time_text(pos, speed, song_length)
 
             self.app.set_audioplayer_attr("status", "seek")
             self.update_time_pos = True
@@ -236,8 +237,7 @@ class MainDisplay(Widget):
         self.app.set_audioplayer_attr("status", "seek")
             
 
-    def update_time_text(self, pos):
-        speed, song_length = self.app.get_audioplayer_attr("speed", "song_length")
+    def update_time_text(self, pos, speed, song_length):
         pos_time, neg_time = self._format_time(pos/1000/speed, song_length/1000/speed)
         self.ids.song_pos.text = pos_time
         self.ids.neg_song_pos.text = neg_time
@@ -246,7 +246,7 @@ class MainDisplay(Widget):
 
         # If we get a value error, these values don't exist in the audioplayer, thus skip this update
         try:
-            status, pos, song_length = self.app.get_audioplayer_attr("status", "pos", "song_length")
+            status, pos, song_length, speed = self.app.get_audioplayer_attr("status", "pos", "song_length", "speed")
         except ValueError:
             return
         
@@ -258,13 +258,13 @@ class MainDisplay(Widget):
         # Update song position
         if self.update_time_pos:
             self.time_slider.value_normalized = (int(pos) / song_length)
-            self.update_time_text(pos)
+            self.update_time_text(pos, speed, song_length)
 
         # Update song name / artist (and position if user is holding the time slider)
         if self.ids.song_name.text != (song := self.app.playlist.get_song()["song"]) and status in ("playing", "idle"):
             self.ids.song_name.text = song
             if not self.update_time_pos:
-                self.update_time_text(int(self.time_slider.value_normalized * song_length))
+                self.update_time_text(int(self.time_slider.value_normalized * song_length), speed, song_length)
         
 
         # Update song cover
