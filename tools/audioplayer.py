@@ -690,7 +690,7 @@ class AudioPlayer():
 
         with wave.open(f"{self.app_folder}/assets/audio/zawarudo.wav", "rb") as zwfp:
 
-            zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
+            zw = zwfp.readframes(round(self.chunk_len*self.rate/self.speed/1000))
 
             min_db = -5
 
@@ -729,7 +729,7 @@ class AudioPlayer():
                 else:
                     self.pos += len(zw_audio) * self.speed
                     self.frame_pos += round(self.chunk_len*self.rate/1000)
-                zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
+                zw = zwfp.readframes(round(self.chunk_len*self.rate/self.speed/1000))
 
                 i += 1
 
@@ -741,10 +741,10 @@ class AudioPlayer():
                 chunk_len = speed * self.chunk_len
                 num_frames = round(self.rate*chunk_len / 1000)
 
-                if len(extra_song_audio) < chunk_len:
-                    audio_sum = extra_song_audio + next(self.chunk_generator)
-                else:
-                    audio_sum = extra_song_audio
+                while len(extra_song_audio) < chunk_len:
+                    extra_song_audio = extra_song_audio + next(self.chunk_generator)
+                
+                audio_sum = extra_song_audio
 
                 extra_song_audio = audio_sum[chunk_len:]
                 data = audio_sum[:chunk_len].data
@@ -788,10 +788,10 @@ class AudioPlayer():
                 chunk_len = speed * self.chunk_len
                 num_frames = round(self.rate*chunk_len / 1000)
 
-                if len(extra_song_audio) < chunk_len:
-                    audio_sum = extra_song_audio + next(self.chunk_generator)
-                else:
-                    audio_sum = extra_song_audio
+                while len(extra_song_audio) < chunk_len:
+                    extra_song_audio = extra_song_audio + next(self.chunk_generator)
+                
+                audio_sum = extra_song_audio
 
                 extra_song_audio = audio_sum[chunk_len:]
                 data = audio_sum[:chunk_len].data
