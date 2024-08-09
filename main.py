@@ -257,7 +257,9 @@ class MainDisplay(Widget):
 
         # Update song position
         if self.update_time_pos:
-            self.time_slider.value_normalized = (int(pos) / song_length)
+            # If we aren't changing the size of our rectangle by more than ~1/3 a pixel, don't call an update (this is a surprisingly heavy graphics call)
+            if abs((new_value := (int(pos) / song_length * 1000)) - self.time_slider.value) >= (1000 / self.time_slider.width / 3):
+                self.time_slider.value = new_value
             self.update_time_text(pos, speed, song_length)
 
         # Update song name / artist (and position if user is holding the time slider)
