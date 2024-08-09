@@ -418,6 +418,26 @@ class EffectDisplay(Widget):
     """
     pass
 
+class ToggleableEffectWidget(EffectWidget):
+    """
+    Modified EffectWidget that allows us to disable the updating of uniform
+    variables when the widget is disabled
+    """
+    def _update_glsl(self, *largs):
+        '''(internal) Passes new time and resolution uniform
+        variables to the shader.
+
+        Disabled if widget is disabled
+        '''
+        if not self.disabled:
+            time = Clock.get_boottime()
+            resolution = [float(size) for size in self.size]
+            self.canvas['time'] = time
+            self.canvas['resolution'] = resolution
+            for fbo in self.fbo_list:
+                fbo['time'] = time
+                fbo['resolution'] = resolution
+
 class SongsScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
