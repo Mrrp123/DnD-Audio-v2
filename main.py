@@ -383,6 +383,7 @@ class MainDisplay(Widget):
         self.update_uniforms(t0=Clock.get_boottime())
         self.effect_display.ids.foreground.x = 0
         self.effect_display.ids.foreground.size = self.size
+        self.effect_widgets[0].disabled = False
         Clock.schedule_once(self.resume_time, 11.3)#9.3)
     
     def resume_time(self, dt):
@@ -395,6 +396,7 @@ class MainDisplay(Widget):
         Clock.unschedule(self.texture_update_clock)
         self.time_stop_event = False
         self.disabled = False
+        self.effect_widgets[0].disabled = True
     
     def get_texture(self):
         img = self.export_as_image() # For some goofy fuck all reason, this image comes out vertically flipped???
