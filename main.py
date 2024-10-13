@@ -39,6 +39,13 @@ class MainScreen(Screen):
         self.add_widget(self.main_display)
         self.add_widget(self.effects_display)
 
+        self.initialized = False
+    
+    def on_enter(self):
+        if not self.initialized:
+            self.main_display._frame_one_init()
+            self.initialized = True
+
 class MainDisplay(Widget):
     next_song_event = None
     previous_song_event = None
@@ -64,8 +71,6 @@ class MainDisplay(Widget):
         self.volume_slider_anim = Animation(pos=(0, 0), size=(0, 0))
 
         Clock.schedule_once(self._frame_zero_init, 0)
-        Clock.schedule_once(self.update_song_info, 0)
-        Clock.schedule_once(lambda dt : self.play_music(), 0)
 
     
     def _frame_zero_init(self, dt):
@@ -76,10 +81,31 @@ class MainDisplay(Widget):
                 break
         self.effect_widgets = [widget for widget in self.effect_display.children if isinstance(widget, EffectWidget)]
 
-        self.volume_slider.value = round(self.app.get_audioplayer_attr("volume") * 100)
-
     
+    def _frame_one_init(self):
+        self.orig_time_slider_pos = tuple(self.time_slider.pos) # These variables cannot be initialized before the first frame, init them here
+        self.orig_time_slider_size = tuple(self.time_slider.size)
+
+        self.orig_volume_slider_pos = tuple(self.volume_slider.pos)
+        self.orig_volume_slider_size = tuple(self.volume_slider.size)
+
+        try:
+            pos, song_length, volume, speed = self.app.get_audioplayer_attr("init_pos", "song_length", "volume", "speed")
             
+            self.time_slider.value = int(pos) / song_length * 1000
+            self.volume_slider.value = round(volume * 100)
+
+            self.update_song_info(0)
+
+            # For some reason this doesn't get called properly when doing update_song_info
+            # just call it here again
+            self.update_time_text(pos, speed, song_length)
+
+        except ValueError: # No config file case
+            self.time_slider.value = 0
+            self.volume_slider.value = 100
+        
+
 
     def play_music(self):
         if self.audio_clock is None:
@@ -107,7 +133,7 @@ class MainDisplay(Widget):
         if touch.is_double_tap:
             self.app.change_song(transition="skip", direction="forward")
         else:
-            self.app.change_song(transition="fade", direction="forward")
+            self.app.change_song(transition="crossfade", direction="forward")
 
         Clock.unschedule(self.next_song_event)
         self.next_song_event = None
@@ -117,7 +143,7 @@ class MainDisplay(Widget):
         if touch.is_double_tap:
             self.app.change_song(transition="skip", direction="backward")
         else:
-            self.app.change_song(transition="fade", direction="backward")
+            self.app.change_song(transition="crossfade", direction="backward")
 
         Clock.unschedule(self.previous_song_event)
         self.previous_song_event = None
@@ -149,9 +175,6 @@ class MainDisplay(Widget):
 
     
     def begin_change_volume(self, touch):
-        if not hasattr(self, "orig_volume_slider_pos"):
-            self.orig_volume_slider_pos = tuple(self.volume_slider.pos) # These fucking variables REFUSE to be initialized within the first couple frames, init them here
-            self.orig_volume_slider_size = tuple(self.volume_slider.size)
 
         if self.volume_slider.collide_point(*touch.pos) and not self.volume_slider.disabled:
             self.app.set_audioplayer_attr("volume", (self.volume_slider.value / 100))
@@ -180,9 +203,6 @@ class MainDisplay(Widget):
 
 
     def begin_seek(self, touch):
-        if not hasattr(self, "orig_time_slider_pos"):
-            self.orig_time_slider_pos = tuple(self.time_slider.pos) # These fucking variables REFUSE to be initialized within the first couple frames, init them here
-            self.orig_time_slider_size = tuple(self.time_slider.size) # and DONT FUCKING TOUCH THEM
 
         if self.time_slider.collide_point(*touch.pos) and not self.time_slider.disabled:
             self.stop_move = True
@@ -258,23 +278,23 @@ class MainDisplay(Widget):
         # Update song position
         if self.update_time_pos:
             # If we aren't changing the size of our rectangle by more than ~1/3 a pixel, don't call an update (this is a surprisingly heavy graphics call)
-            if abs((new_value := (int(pos) / song_length * 1000)) - self.time_slider.value) >= (1000 / self.time_slider.width / 3):
+            if abs((new_value := (int(pos) / song_length * 1000)) - self.time_slider.value) >= (1000 / self.time_slider.width / 3) and status != "idle":
                 self.time_slider.value = new_value
             self.update_time_text(pos, speed, song_length)
 
         # Update song name / artist (and position if user is holding the time slider)
-        if self.ids.song_name.text != (song := self.app.playlist.get_song()["song"]) and status in ("playing", "idle"):
+        if self.ids.song_name.text != (song := self.app.playlist.get_song()["song"]) and status in ("playing", "idle", "fade_in"):
             self.ids.song_name.text = song
             if not self.update_time_pos:
                 self.update_time_text(int(self.time_slider.value * song_length / 1000), speed, song_length)
         
 
         # Update song cover
-        if self.song_cover.source != (cover := self.app.playlist.get_song()["cover"]) and status in ("playing", "idle"):
+        if self.song_cover.source != (cover := self.app.playlist.get_song()["cover"]) and status in ("playing", "idle", "fade_in"):
             self.song_cover.source = cover
 
             # Don't do any cover size animations if we're not playing!!! This causes the size to small initially
-            if status == "playing": 
+            if status in ("playing", "fade_in"): 
                 Animation.cancel_all(self.song_cover, "size")
                 new_size = (self.height * (5/12), min(1/self.song_cover.image_ratio * self.height * (5/12), self.height * (5/12)))
                 anim = Animation(size=new_size, duration=0, transition="linear")
@@ -533,17 +553,22 @@ class SongButton(Button):
         if status == "idle":
             self.app.playlist.set_song(self.song_filepath)
             self.app.set_audioplayer_attr("song_file", self.song_filepath)
+            self.app.set_audioplayer_attr("init_pos", 0)
+            self.app.set_audioplayer_attr("pos", 0)
 
             # while self.app.get_audioplayer_attr("song_file") != self.song_filepath:
             #     time.sleep(0.001)
             
             # Counterintuitively, pause_music() actually starts the music since audioplayer status is idle
             self.main_display.pause_music()
-        elif pause_flag:
+
+        elif pause_flag: # If music is paused and we select a new song, fade into the song, skipping the fade out of the current song.
+            self.app.playlist.set_song(self.song_filepath)
+            self.app.set_audioplayer_attr("song_file", self.song_filepath)
             self.main_display.pause_music()
-            self.app.change_song(self.song_filepath, transition="fade")
+            self.app.change_song(self.song_filepath, transition="fade_in")
         else:
-            self.app.change_song(self.song_filepath, transition="fade")
+            self.app.change_song(self.song_filepath, transition="crossfade")
     
 
 class SettingsScreen(Screen):
@@ -641,7 +666,7 @@ class DndAudio(App):
         self.set_audioplayer_attr("status", "playing")
 
 
-    def change_song(self, file=None, transition="fade", direction="forward"):
+    def change_song(self, file=None, transition="crossfade", direction="forward"):
 
         if file is None:
             if direction == "forward":
@@ -654,8 +679,11 @@ class DndAudio(App):
             self.playlist.set_song(file)
             self.set_audioplayer_attr("next_song_file", self.playlist.get_song()["file"])
 
-        if transition == "fade":
+        if transition == "crossfade":
             self.set_audioplayer_attr("status", "change_song")
+        
+        elif transition == "fade_in":
+            self.set_audioplayer_attr("status", "fade_in")
 
         elif transition == "skip":
             self.set_audioplayer_attr("status", "skip")
@@ -829,10 +857,11 @@ class DndAudio(App):
         except Exception as err:
             return
         if os.path.exists(song_file): # make sure song file still exists
-            self.set_audioplayer_attr("pause_flag", True)
+            #self.set_audioplayer_attr("pause_flag", True)
             self.playlist.set_song(song_file)
             self.set_audioplayer_attr("song_file", self.playlist.get_song()["file"])
             self.set_audioplayer_attr("init_pos", song_pos)
+            self.set_audioplayer_attr("pos", song_pos) # This (technically) shouldn't do anything, but it prevents time slider visual glitches on startup
             self.set_audioplayer_attr("total_frames", total_frames)
             self.set_audioplayer_attr("speed", speed)
             self.set_audioplayer_attr("base_fade_duration", fade_duration)
