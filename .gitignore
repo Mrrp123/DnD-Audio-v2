@@ -1,4 +1,5 @@
 assets/covers/*
+!assets/covers/default_cover.png
 assets/buttons/pdn
 *.pdn
 test*.py
