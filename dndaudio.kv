@@ -2,6 +2,7 @@
 
 #:import dp kivy.metrics.dp
 #:import shaders tools.shaders
+#:import app_folder tools.common_vars.app_folder 
 
 <MainDisplay>:
 
@@ -59,7 +60,7 @@
     
     Image:
         id: song_cover
-        source: "./assets/covers/default_cover.png"
+        source: f"{app_folder}/assets/covers/default_cover.png"
         #color: 1,1,1,0.5
         size: root.height * (1/3), min(1/self.image_ratio * root.height * (1/3), root.height * (1/3))
         x: -root.width * 2
@@ -102,10 +103,10 @@
         width: root.width * (11/12) - dp(32)
         height: "48dp"
         disabled: True
-        background_horizontal: "./assets/buttons/empty.png"
-        cursor_image: "./assets/buttons/empty.png"
-        background_disabled_horizontal: "./assets/buttons/empty.png"
-        cursor_disabled_image: "./assets/buttons/empty.png"
+        background_horizontal: f"{app_folder}/assets/buttons/empty.png"
+        cursor_image: f"{app_folder}/assets/buttons/empty.png"
+        background_disabled_horizontal: f"{app_folder}/assets/buttons/empty.png"
+        cursor_disabled_image: f"{app_folder}/assets/buttons/empty.png"
         center_x: root.width * (1/2)
         center_y: root.height * (1/3)
         padding: 0
@@ -157,10 +158,10 @@
         width: root.width * (3/4) - dp(32)
         height: "48dp"
         # disabled: False
-        background_horizontal: "./assets/buttons/empty.png"
-        cursor_image: "./assets/buttons/empty.png"
-        background_disabled_horizontal: "./assets/buttons/empty.png"
-        cursor_disabled_image: "./assets/buttons/empty.png"
+        background_horizontal: f"{app_folder}/assets/buttons/empty.png"
+        cursor_image: f"{app_folder}/assets/buttons/empty.png"
+        background_disabled_horizontal: f"{app_folder}/assets/buttons/empty.png"
+        cursor_disabled_image: f"{app_folder}/assets/buttons/empty.png"
         center_x: root.width * (1/2)
         center_y: root.height * (1/7)
         padding: 0
@@ -207,7 +208,7 @@
     
     Image:
         id: volume_min_img
-        source: "./assets/buttons/volume_min.png"
+        source: f"{app_folder}/assets/buttons/volume_min.png"
         #color: 1,1,1,0.5
         size: dp(16), dp(16)
         x: volume_slider.x - dp(20)
@@ -217,7 +218,7 @@
     
     Image:
         id: volume_max_img
-        source: "./assets/buttons/volume_max.png"
+        source: f"{app_folder}/assets/buttons/volume_max.png"
         #color: 1,1,1,0.5
         size: dp(16), dp(16)
         x: volume_slider.x + volume_slider.width + dp(10)
@@ -283,10 +284,10 @@
         # center_y: root.height * (1/6)
         on_touch_up: root.get_tap_type(self, args[1])
 
-        background_normal: "./assets/buttons/backward_skip_normal.png"
-        background_disabled_normal: "./assets/buttons/backward_skip_normal.png"
-        background_down: "./assets/buttons/backward_skip_pressed.png"
-        background_disabled_down: "./assets/buttons/backward_skip_pressed.png"
+        background_normal: f"{app_folder}/assets/buttons/backward_skip_normal.png"
+        background_disabled_normal: f"{app_folder}/assets/buttons/backward_skip_normal.png"
+        background_down: f"{app_folder}/assets/buttons/backward_skip_pressed.png"
+        background_disabled_down: f"{app_folder}/assets/buttons/backward_skip_pressed.png"
         border: (0,0,0,0)
     
     Button:
@@ -301,10 +302,10 @@
         # center_y: root.height * (1/6)
         on_touch_up: root.get_tap_type(self, args[1])
         
-        background_normal: "./assets/buttons/forward_skip_normal.png"
-        background_disabled_normal: "./assets/buttons/forward_skip_normal.png"
-        background_down: "./assets/buttons/forward_skip_pressed.png"
-        background_disabled_down: "./assets/buttons/forward_skip_pressed.png"
+        background_normal: f"{app_folder}/assets/buttons/forward_skip_normal.png"
+        background_disabled_normal: f"{app_folder}/assets/buttons/forward_skip_normal.png"
+        background_down: f"{app_folder}/assets/buttons/forward_skip_pressed.png"
+        background_disabled_down: f"{app_folder}/assets/buttons/forward_skip_pressed.png"
         border: (0,0,0,0)
     
     Button:
@@ -318,10 +319,10 @@
         # center_y: root.height * (1/6)
         on_release: root.pause_music()
 
-        background_normal: "./assets/buttons/play_normal.png"
-        background_disabled_normal: "./assets/buttons/pause_normal.png"
-        background_down: "./assets/buttons/play_pressed.png"
-        background_disabled_down: "./assets/buttons/pause_pressed.png"
+        background_normal: f"{app_folder}/assets/buttons/play_normal.png"
+        background_disabled_normal: f"{app_folder}/assets/buttons/pause_normal.png"
+        background_down: f"{app_folder}/assets/buttons/play_pressed.png"
+        background_disabled_down: f"{app_folder}/assets/buttons/pause_pressed.png"
         border: (0,0,0,0)
     
     Button:
@@ -378,11 +379,11 @@
     text_size: self.size
     font_size: app.root.children[0].height / 40
     size_hint: 1, None
-    background_normal: "./assets/buttons/song_button_normal.png"
+    background_normal: f"{app_folder}/assets/buttons/song_button_normal.png"
     image: ""
     #background_color: 0,0,0,1
     padding: root.height, 0, root.width / 12, 0
-    background_down: "./assets/buttons/song_button_pressed.png"
+    background_down: f"{app_folder}/assets/buttons/song_button_pressed.png"
     canvas.after:
         Color:
             rgba: 1,1,1,0.5
