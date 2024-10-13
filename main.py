@@ -132,16 +132,16 @@ class MainDisplay(Widget):
             pause_flag = not pause_flag
 
         if pause_flag:
-            self.ids.pause.background_normal = "./assets/buttons/play_normal.png"
-            self.ids.pause.background_down = "./assets/buttons/play_pressed.png"
+            self.ids.pause.background_normal = f"{common_vars.app_folder}/assets/buttons/play_normal.png"
+            self.ids.pause.background_down = f"{common_vars.app_folder}/assets/buttons/play_pressed.png"
             Animation.cancel_all(self.ids.song_cover, "size")
             new_size = (self.height * (1/3), min(1/self.song_cover.image_ratio * self.height * (1/3), self.height * (1/3)))
             anim = Animation(size=new_size, duration=0.25, transition="out_back")
             anim.start(self.song_cover)
 
         else:
-            self.ids.pause.background_normal = "./assets/buttons/pause_normal.png"
-            self.ids.pause.background_down = "./assets/buttons/pause_pressed.png"
+            self.ids.pause.background_normal = f"{common_vars.app_folder}/assets/buttons/pause_normal.png"
+            self.ids.pause.background_down = f"{common_vars.app_folder}/assets/buttons/pause_pressed.png"
             Animation.cancel_all(self.song_cover, "size")
             new_size = (self.height * (5/12), min(1/self.song_cover.image_ratio * self.height * (5/12), self.height * (5/12)))
             anim = Animation(size=new_size, duration=0.25, transition="out_back")
