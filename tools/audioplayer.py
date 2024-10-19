@@ -897,21 +897,13 @@ class AudioPlayer():
                 if self.status == "stopped":
                     break
 
-                # If song needs to change or restart, handle fading/crossfading
-                if (self.pos <= (self.fade_duration + self.chunk_len) or self.status == "change_song") and self.reverse_audio:
-                    self.transition(self.next_song_file)
-                    break
 
-                elif (self.pos >= (self.song_length - self.fade_duration - self.chunk_len) or self.status == "change_song") and not self.reverse_audio:
-                    self.transition(self.next_song_file) 
+                if self.status == "seek": # Check if we need to seek within current song
+                    self.seek(self.seek_pos)
                     break
 
                 elif self.status == "skip": # Check if we need to skip to another song
                     self.skip(self.next_song_file)
-                    break
-
-                elif self.status == "seek": # Check if we need to seek within current song
-                    self.seek(self.seek_pos)
                     break
 
                 elif self.status == "zawarudo":
@@ -920,6 +912,15 @@ class AudioPlayer():
 
                 elif self.status == "fade_in":
                     self.transition(self.next_song_file)
+                    break
+
+                # If song needs to change or restart, handle fading/crossfading
+                elif (self.pos <= (self.fade_duration + self.chunk_len) or self.status == "change_song") and self.reverse_audio:
+                    self.transition(self.next_song_file)
+                    break
+
+                elif (self.pos >= (self.song_length - self.fade_duration - self.chunk_len) or self.status == "change_song") and not self.reverse_audio:
+                    self.transition(self.next_song_file) 
                     break
 
             if self.status != "stopped":
