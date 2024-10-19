@@ -12,6 +12,7 @@ import time
 from scipy.signal import iirfilter
 import pyogg
 import ctypes
+import ffmpeg
 from functools import reduce
 
 from pythonosc.dispatcher import Dispatcher
@@ -346,6 +347,9 @@ class AudioPlayer():
         
         elif file_type == ".ogg":
             audio_generator = self._load_ogg(file, start_frame, gain, num_chunks, chunk_frame_len)
+        
+        elif file_type == ".mp3":
+            audio_generator = self._load_mp3(file, start_frame, gain, num_chunks, chunk_frame_len)
 
         for audio in audio_generator:
             yield audio
@@ -407,6 +411,39 @@ class AudioPlayer():
                     yield audio.reverse()
             else:
                 yield audio
+    
+    def _load_mp3(self, file, start_frame, gain, num_chunks, chunk_frame_len):
+
+        if hasattr(self, "ffmpeg_process"):
+            self.ffmpeg_process.terminate()
+            self.ffmpeg_process = None
+        
+        self.ffmpeg_process = (ffmpeg
+                    .input(file, ss=(start_frame/self.rate))
+                    .output('-', format='s16le', acodec='pcm_s16le', ac=2, ar='44100')
+                    .global_args('-loglevel', 'error')
+                    .global_args('-y')
+                    .run_async(pipe_stdout=True)
+            )
+
+        reverse_audio = self.reverse_audio # set local variable in case we reverse audio during a transition
+        cut = False
+
+        for chunk_index in range(num_chunks):
+        
+            byte_data = self.ffmpeg_process.stdout.read(8820)
+
+            if byte_data is None:
+                break
+
+            audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
+            if reverse_audio:
+                if cut:
+                    yield audio[0:chunk_frame_len].reverse()
+                else:
+                    yield audio.reverse()
+            else:
+                yield audio
 
 
     
@@ -429,6 +466,9 @@ class AudioPlayer():
                         num_frames = int.from_bytes(fp.read(8), "little")
                         break
                     i += 1
+
+        elif file_type == ".mp3":
+            num_frames = 13_894_440
 
         return (num_frames / self.rate * 1000), num_frames
 
@@ -689,7 +729,7 @@ class AudioPlayer():
             self.song_file = next_song_file
         self.next_song_file = None
 
-        self.chunk_generator = self.load_chunks(next_song_file, start_pos=new_pos)
+        self.chunk_generator = next_chunk_generator
 
         self.lock_status = True
 
@@ -855,7 +895,7 @@ class AudioPlayer():
         
         
 
-        self.chunk_generator = self.load_chunks(self.song_file, start_pos=self.pos)
+        #self.chunk_generator = self.load_chunks(self.song_file, start_pos=self.pos)
 
         self.status = "playing"
 

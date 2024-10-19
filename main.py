@@ -697,7 +697,7 @@ class DndAudio(App):
         loaded_songs = []
 
         if platform in ('linux', 'linux2', 'macos', 'win'):
-            loaded_songs = glob(f"{common_vars.app_folder}/audio/*.wav") + glob(f"{common_vars.app_folder}/audio/*.ogg")
+            loaded_songs = glob(f"{common_vars.app_folder}/audio/*.wav") + glob(f"{common_vars.app_folder}/audio/*.ogg") + glob(f"{common_vars.app_folder}/audio/*.mp3")
 
         elif platform == "android":
             from jnius import autoclass, cast
