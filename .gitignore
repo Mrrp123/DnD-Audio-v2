@@ -8,3 +8,5 @@ __pycache__
 config
 *.sh
 release/*
+*.yaml
+*.json

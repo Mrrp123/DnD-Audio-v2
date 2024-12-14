@@ -13,7 +13,7 @@ from tools.kivy_gradient import Gradient
 from tools.shaders import TimeStop
 
 import tools.common_vars as common_vars
-from tools.music_playlist import MusicPlaylist
+from tools.music_playlist import MusicDatabase
 import sys
 import os
 import numpy as np
@@ -270,7 +270,7 @@ class MainDisplay(Widget):
         except ValueError:
             return
         
-        if len(self.app.playlist) == 0:
+        if len(self.app.music_database) == 0:
             self.ids.song_name.text = "No songs found!"
             self.time_slider.disabled = True
             return
@@ -283,14 +283,14 @@ class MainDisplay(Widget):
             self.update_time_text(pos, speed, song_length)
 
         # Update song name / artist (and position if user is holding the time slider)
-        if self.ids.song_name.text != (song := self.app.playlist.get_song()["song"]) and status in ("playing", "idle", "fade_in"):
+        if self.ids.song_name.text != (song := self.app.music_database.get_track()["name"]) and status in ("playing", "idle", "fade_in"):
             self.ids.song_name.text = song
             if not self.update_time_pos:
                 self.update_time_text(int(self.time_slider.value * song_length / 1000), speed, song_length)
         
 
         # Update song cover
-        if self.song_cover.source != (cover := self.app.playlist.get_song()["cover"]) and status in ("playing", "idle", "fade_in"):
+        if self.song_cover.source != (cover := self.app.music_database.get_track()["cover"]) and status in ("playing", "idle", "fade_in"):
             self.song_cover.source = cover
 
             # Don't do any cover size animations if we're not playing!!! This causes the size to small initially
@@ -484,7 +484,9 @@ class SongsDisplay(Widget):
 
         self.song_list = self.ids.song_list
         self.song_search = self.ids.song_search
-        self.song_list.data = [{"text" : song_data["song"], "song_filepath" : song_data["file"]} for song_data in self.app.playlist]
+        self.song_list.data = [{"text" : self.app.music_database.data["tracks"][track]["name"], 
+                                "song_filepath" : self.app.music_database.data["tracks"][track]["file"]} 
+                                for track in self.app.music_database.data["tracks"].keys()]
         self.update_clock = None
 
     def on_text(self, widget):
@@ -522,11 +524,15 @@ class SongsDisplay(Widget):
     def refresh_songs(self):
 
         if self.song_search.text == "":
-            self.song_list.data = [{"text" : song_data["song"], "song_filepath" : song_data["file"]} for song_data in self.app.playlist]
+            self.song_list.data = [{"text" : self.app.music_database.data["tracks"][track]["name"], 
+                                "song_filepath" : self.app.music_database.data["tracks"][track]["file"]} 
+                                for track in self.app.music_database.data["tracks"].keys()]
             return
 
-        self.song_list.data = [{"text" : song_data["song"], "song_filepath" : song_data["file"]} 
-                               for song_data in self.app.playlist if self.song_search.text.lower() in song_data["song"].lower()]
+        self.song_list.data = self.song_list.data = [{"text" : self.app.music_database.data["tracks"][track]["name"], 
+                                "song_filepath" : self.app.music_database.data["tracks"][track]["file"]} 
+                                for track in self.app.music_database.data["tracks"].keys() 
+                                if self.song_search.text.lower() in self.app.music_database.data["tracks"][track]["name"].lower()]
 
 class SongButton(Button):
 
@@ -551,7 +557,7 @@ class SongButton(Button):
         status, pause_flag = self.app.get_audioplayer_attr("status", "pause_flag")
 
         if status == "idle":
-            self.app.playlist.set_song(self.song_filepath)
+            self.app.music_database.set_track(self.song_filepath)
             self.app.set_audioplayer_attr("song_file", self.song_filepath)
             self.app.set_audioplayer_attr("init_pos", 0)
             self.app.set_audioplayer_attr("pos", 0)
@@ -563,7 +569,7 @@ class SongButton(Button):
             self.main_display.pause_music()
 
         elif pause_flag: # If music is paused and we select a new song, fade into the song, skipping the fade out of the current song.
-            self.app.playlist.set_song(self.song_filepath)
+            self.app.music_database.set_track(self.song_filepath)
             self.app.set_audioplayer_attr("song_file", self.song_filepath)
             self.main_display.pause_music()
             self.app.change_song(self.song_filepath, transition="fade_in")
@@ -583,7 +589,7 @@ class SettingsDisplay(Widget):
         super().__init__(**kwargs)
 
         self.fps_clock = Clock.schedule_interval(self.update_fps, 0.5)
-        self.debug_clock = Clock.schedule_interval(self.get_debug_info, 0.25)
+        self.debug_clock = Clock.schedule_interval(self.get_debug_info, 0.05)
         self.speed_slider = self.ids.speed_slider
         self.fade_slider = self.ids.fade_slider
 
@@ -670,14 +676,14 @@ class DndAudio(App):
 
         if file is None:
             if direction == "forward":
-                self.playlist >> 1
-                self.set_audioplayer_attr("next_song_file", self.playlist.get_song()["file"])
+                self.music_database >> 1
+                self.set_audioplayer_attr("next_song_file", self.music_database.get_track()["file"])
             elif direction == "backward":
-                self.playlist << 1
-                self.set_audioplayer_attr("next_song_file", self.playlist.get_song()["file"])
+                self.music_database << 1
+                self.set_audioplayer_attr("next_song_file", self.music_database.get_track()["file"])
         else:
-            self.playlist.set_song(file)
-            self.set_audioplayer_attr("next_song_file", self.playlist.get_song()["file"])
+            self.music_database.set_track(file)
+            self.set_audioplayer_attr("next_song_file", self.music_database.get_track()["file"])
 
         if transition == "crossfade":
             self.set_audioplayer_attr("status", "change_song")
@@ -767,7 +773,11 @@ class DndAudio(App):
 
             print(f"Songs loaded from MediaStore: {loaded_songs}")
 
-        self.playlist = MusicPlaylist(loaded_songs)        
+        self.music_database = MusicDatabase(f"{common_vars.app_folder}/music_data.yaml")
+        for file in loaded_songs:
+            database_files = [self.music_database.data["tracks"][track]["file"] for track in self.music_database.data["tracks"].keys()]
+            if not any([os.path.samefile(file, database_file) for database_file in database_files]):
+                self.music_database.add_track(file)
 
     def start_service(self):
         if platform == "android":
@@ -805,9 +815,8 @@ class DndAudio(App):
             self.osc_returns = values
 
     def call_function(self, address: str, func_name: str, *args):
-        if address == "/call/playlist":
-            func = getattr(self.playlist, func_name)
-            print(func, *args)
+        if address == "/call/music_database":
+            func = getattr(self.music_database, func_name)
         else:
             screen, widget_name = address.split("/")[2:]
             widget = getattr(self.root.get_screen(screen), widget_name)
@@ -829,7 +838,7 @@ class DndAudio(App):
         return self.osc_returns
 
     def save_audioplayer_config(self):
-        if len(self.playlist) == 0:
+        if len(self.music_database) == 0:
             return
         try:
             with open(f"{common_vars.app_folder}/config", "wb") as fp:
@@ -858,8 +867,8 @@ class DndAudio(App):
             return
         if os.path.exists(song_file): # make sure song file still exists
             #self.set_audioplayer_attr("pause_flag", True)
-            self.playlist.set_song(song_file)
-            self.set_audioplayer_attr("song_file", self.playlist.get_song()["file"])
+            self.music_database.set_track(song_file)
+            self.set_audioplayer_attr("song_file", self.music_database.get_track()["file"])
             self.set_audioplayer_attr("init_pos", song_pos)
             self.set_audioplayer_attr("pos", song_pos) # This (technically) shouldn't do anything, but it prevents time slider visual glitches on startup
             self.set_audioplayer_attr("total_frames", total_frames)
@@ -887,8 +896,8 @@ class DndAudio(App):
 
         if os.path.exists(f"{common_vars.app_folder}/config"):
             self.load_audioplayer_config()
-        elif len(self.playlist) != 0:
-            self.set_audioplayer_attr("song_file", self.playlist[0]["file"])
+        elif len(self.music_database) != 0:
+            self.set_audioplayer_attr("song_file", self.music_database.data["tracks"][self.music_database.track_pointer]["file"])
 
         self.config_vars = self._get_config_vars(0)
         self.config_clock = Clock.schedule_interval(self._get_config_vars, 1)
