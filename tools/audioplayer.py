@@ -14,6 +14,7 @@ import pyogg
 import ctypes
 import ffmpeg
 from functools import reduce
+import yaml
 
 from pythonosc.dispatcher import Dispatcher
 from pythonosc.osc_server import ThreadingOSCUDPServer
@@ -168,6 +169,8 @@ class AudioPlayer():
 
     Known Bugs:
         zawarudo WILL break when activated during a transition state (anything in the transitiion function)
+
+        Fade in doesn't transition correctly when player goes from paused -> song select (from song list)
     """
 
     def __init__(self, lock, channels=2, rate=44_100, buffersize=256, encoding=16) -> None:
@@ -217,6 +220,15 @@ class AudioPlayer():
         self.osc_client = SimpleUDPClient("127.0.0.1", 8000)
         Thread(target=self.osc_server.serve_forever, daemon=True).start()
         self.osc_client.send_message("/return", "ready")
+
+        with open(f"{self.app_folder}/music_data.yaml") as fp:
+            music_data = yaml.safe_load(fp)
+
+        # Create file -> track length LUT
+        # Only information we care about, really
+        self.track_data = {music_data["tracks"][track]["file"] : music_data["tracks"][track]["length"] 
+                           for track in music_data["tracks"].keys()}
+
         
     
 
@@ -303,7 +315,7 @@ class AudioPlayer():
 
         _, file_type = os.path.splitext(file)
 
-        num_frames = total_frames = self.get_song_length(file)[1]
+        num_frames = total_frames = self.get_track_length(file)[1]
         self.next_song_length = (total_frames / self.rate)*1000
         self.next_total_frames = total_frames
         if self.bootup:
@@ -448,28 +460,8 @@ class AudioPlayer():
 
     
 
-    def get_song_length(self, song):
-        _, file_type = os.path.splitext(song)
-
-        if file_type == ".wav":
-            with wave.open(song, "rb") as fp:
-                num_frames = fp.getnframes()
-
-        elif file_type == ".ogg":
-            with open(song, "rb") as fp:
-                i = 0
-                while True:
-                    fp.seek(-4-i, 2)
-                    data = fp.read(4)
-                    if data == bytes([79, 103, 103, 83]):
-                        fp.read(2)
-                        num_frames = int.from_bytes(fp.read(8), "little")
-                        break
-                    i += 1
-
-        elif file_type == ".mp3":
-            num_frames = 13_894_440
-
+    def get_track_length(self, file):
+        num_frames = self.track_data[file]
         return (num_frames / self.rate * 1000), num_frames
 
     
@@ -536,7 +528,7 @@ class AudioPlayer():
         """
         del self.chunk_generator
         if self.reverse_audio:
-            next_song_len, next_song_frame_len = self.get_song_length(next_song_file)
+            next_song_len, next_song_frame_len = self.get_track_length(next_song_file)
             self.chunk_generator = self.load_chunks(next_song_file, start_pos=next_song_len)
             self.pos = next_song_len
             self.frame_pos = next_song_frame_len
@@ -593,7 +585,10 @@ class AudioPlayer():
                 yield output_chunk
                 i += 1
 
-
+        if self.status == "playing":
+            add_playcount = True
+        else:
+            add_playcount = False
 
         if next_song_file is None: # Repeat currently playing song
             next_song_file = self.song_file
@@ -602,7 +597,7 @@ class AudioPlayer():
         elif self.status != "fade_in": # Transition to next song
             self.status = "transition"
         
-        next_song_len, next_song_frame_len = self.get_song_length(next_song_file)
+        next_song_len, next_song_frame_len = self.get_track_length(next_song_file)
         
         if self.status != "fade_in":
 
@@ -677,6 +672,7 @@ class AudioPlayer():
         if fade_duration > 0:
             for chunk, end_chunk_db, start_chunk_db in step_fade(self.chunk_generator, next_chunk_generator, 
                                                                 fade_duration=fade_duration, chunk_len=self.chunk_len, fade_type=fade_type): # Begin crossfade
+                chunk: AudioSegment
                 if self.status == "change_song": # If we decide to change songs during a transition, crossfade the (already crossfading) audio with the next song
                     self.status = "override_transition"
 
@@ -694,7 +690,7 @@ class AudioPlayer():
                 elif self.status == "skip": # If we change songs via a skip during a transition, just go to the next song
                     if (self.reverse_audio and next_song_len - new_pos <= fade_duration/2) or (not self.reverse_audio and new_pos <= fade_duration/2):
                         self.skip(next_song_file)
-                        self.osc_client.send_message("/call/playlist", ["set_song", next_song_file]) # Resync playlist pointer, otherwise we will be one song ahead/behind
+                        self.osc_client.send_message("/call/music_database", ["set_song", next_song_file]) # Resync music_database pointer, otherwise we will be one song ahead/behind
                     elif self.next_song_file is not None:
                         self.skip(self.next_song_file)
                     else:
@@ -728,6 +724,9 @@ class AudioPlayer():
         if next_song_file is not None:
             self.song_file = next_song_file
         self.next_song_file = None
+
+        if add_playcount:
+            self.osc_client.send_message("/call/music_database", ["__add__", 1])
 
         self.chunk_generator = next_chunk_generator
 
@@ -937,21 +936,13 @@ class AudioPlayer():
                 if self.status == "stopped":
                     break
 
-                # If song needs to change or restart, handle fading/crossfading
-                if (self.pos <= (self.fade_duration + self.chunk_len) or self.status == "change_song") and self.reverse_audio:
-                    self.transition(self.next_song_file)
-                    break
 
-                elif (self.pos >= (self.song_length - self.fade_duration - self.chunk_len) or self.status == "change_song") and not self.reverse_audio:
-                    self.transition(self.next_song_file) 
+                if self.status == "seek": # Check if we need to seek within current song
+                    self.seek(self.seek_pos)
                     break
 
                 elif self.status == "skip": # Check if we need to skip to another song
                     self.skip(self.next_song_file)
-                    break
-
-                elif self.status == "seek": # Check if we need to seek within current song
-                    self.seek(self.seek_pos)
                     break
 
                 elif self.status == "zawarudo":
@@ -962,12 +953,22 @@ class AudioPlayer():
                     self.transition(self.next_song_file)
                     break
 
+                # If song needs to change or restart, handle fading/crossfading
+                elif (self.pos <= (self.fade_duration + self.chunk_len) or self.status == "change_song") and self.reverse_audio:
+                    self.transition(self.next_song_file)
+                    break
+
+                elif (self.pos >= (self.song_length - self.fade_duration - self.chunk_len) or self.status == "change_song") and not self.reverse_audio:
+                    self.transition(self.next_song_file) 
+                    break
+
             if self.status != "stopped":
                 self.lock_status = False
                 self.status = "playing"
 
 if __name__ == "__main__" or __name__ == "<run_path>":
     audioplayer = AudioPlayer(lock=Lock(), rate=44_100)
-    audio_thread = Thread(target=audioplayer.run, daemon=True)
-    audio_thread.start()
-    audio_thread.join()
+    audioplayer.run()
+    # audio_thread = Thread(target=audioplayer.run, daemon=True)
+    # audio_thread.start()
+    # audio_thread.join()
