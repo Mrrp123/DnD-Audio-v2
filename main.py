@@ -280,6 +280,8 @@ class MainDisplay(Widget):
         # Disable reversing with mp3 files for the time being until I figure out how to make it work
         if os.path.splitext(self.app.music_database.get_track()["file"])[1] == ".mp3":
             self.ids.reverse.disabled = True
+        else:
+            self.ids.reverse.disabled = False
 
         # Update song position
         if self.update_time_pos:
