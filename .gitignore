@@ -10,3 +10,4 @@ config
 release/*
 *.yaml
 *.json
+cache/*

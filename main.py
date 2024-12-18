@@ -23,6 +23,7 @@ from glob import glob
 from threading import Thread
 
 
+
 from pythonosc.dispatcher import Dispatcher
 from pythonosc.osc_server import BlockingOSCUDPServer, ThreadingOSCUDPServer
 from pythonosc.udp_client import SimpleUDPClient
@@ -62,6 +63,7 @@ class MainDisplay(Widget):
         self.stop_move = False # Stops gestures from working when grabbing the time slider
         self.update_time_pos = True # Stops time values from updating when grabbing the time slider
         self.song_cover = self.ids.song_cover
+        self.song_cover_path = None
 
         self.c1 = "060606"
         self.c2 = "111111"
@@ -294,8 +296,12 @@ class MainDisplay(Widget):
         
 
         # Update song cover
-        if self.song_cover.source != (cover := self.app.music_database.get_track()["cover"]) and status in ("playing", "idle", "fade_in"):
-            self.song_cover.source = cover
+        if self.song_cover_path != (cover := self.app.music_database.get_track()["cover"]) and status in ("playing", "idle", "fade_in"):
+            if os.path.isfile(source := f"{common_vars.app_folder}/cache/covers/{self.app.music_database.get_track()['id']}.jpg"):
+                self.song_cover.source = source
+            else:
+                self.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover.png"
+            self.song_cover_path = cover
 
             # Don't do any cover size animations if we're not playing!!! This causes the size to small initially
             if status in ("playing", "fade_in"): 
@@ -488,8 +494,11 @@ class SongsDisplay(Widget):
 
         self.song_list = self.ids.song_list
         self.song_search = self.ids.song_search
-        self.song_list.data = [{"text" : self.app.music_database.data["tracks"][track]["name"], 
-                                "song_filepath" : self.app.music_database.data["tracks"][track]["file"]} 
+        self.song_list.data = [{"name" : self.app.music_database.data["tracks"][track]["name"],
+                                 "artist" : self.app.music_database.data["tracks"][track]["artist"],
+                                 "track_id" : self.app.music_database.data["tracks"][track]["id"], 
+                                "song_filepath" : self.app.music_database.data["tracks"][track]["file"],
+                                "cover" : self.app.music_database.data["tracks"][track]["cover"]} 
                                 for track in self.app.music_database.data["tracks"].keys()]
         self.update_clock = None
 
@@ -528,14 +537,22 @@ class SongsDisplay(Widget):
     def refresh_songs(self):
 
         if self.song_search.text == "":
-            self.song_list.data = [{"text" : self.app.music_database.data["tracks"][track]["name"], 
-                                "song_filepath" : self.app.music_database.data["tracks"][track]["file"]} 
-                                for track in self.app.music_database.data["tracks"].keys()]
+            self.song_list.data = [
+                                {"name" : self.app.music_database.data["tracks"][track]["name"],
+                                 "artist" : self.app.music_database.data["tracks"][track]["artist"],
+                                 "track_id" : self.app.music_database.data["tracks"][track]["id"], 
+                                "song_filepath" : self.app.music_database.data["tracks"][track]["file"],
+                                "cover" : self.app.music_database.data["tracks"][track]["cover"]} 
+                                 for track in self.app.music_database.data["tracks"].keys()]
             return
 
-        self.song_list.data = self.song_list.data = [{"text" : self.app.music_database.data["tracks"][track]["name"], 
-                                "song_filepath" : self.app.music_database.data["tracks"][track]["file"]} 
-                                for track in self.app.music_database.data["tracks"].keys() 
+        self.song_list.data = self.song_list.data = [
+                                {"name" : self.app.music_database.data["tracks"][track]["name"],
+                                 "artist" : self.app.music_database.data["tracks"][track]["artist"],
+                                 "track_id" : self.app.music_database.data["tracks"][track]["id"], 
+                                "song_filepath" : self.app.music_database.data["tracks"][track]["file"],
+                                "cover" : self.app.music_database.data["tracks"][track]["cover"]} 
+                                for track in self.app.music_database.data["tracks"].keys()
                                 if self.song_search.text.lower() in self.app.music_database.data["tracks"][track]["name"].lower()]
 
 class SongButton(Button):
@@ -547,12 +564,10 @@ class SongButton(Button):
         self.app: DndAudio = App.get_running_app()
         self.main_display = self.app.root.get_screen("main").main_display 
 
-    def on_parent(self, a, b):
-        asset = f"{common_vars.app_folder}/assets/covers/{self.text}"
-        if os.path.isfile(f"{asset}.png"):
-            self.ids.song_cover.source = f"{asset}.png"
-        elif os.path.isfile(f"{asset}.jpg"):
-            self.ids.song_cover.source = f"{asset}.jpg"
+    def on_parent(self, *args):
+        self.text = f"{self.name}\n{self.artist}"
+        if os.path.isfile(f"{common_vars.app_folder}/cache/small_covers/{self.track_id}.jpg"):
+            self.ids.song_cover.source = f"{common_vars.app_folder}/cache/small_covers/{self.track_id}.jpg"
         else:
             self.ids.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover.png"
         
@@ -782,6 +797,42 @@ class DndAudio(App):
             database_files = [self.music_database.data["tracks"][track]["file"] for track in self.music_database.data["tracks"].keys()]
             if not any([os.path.samefile(file, database_file) for database_file in database_files]):
                 self.music_database.add_track(file)
+        # This won't work on android
+        if platform in ('linux', 'linux2', 'macos', 'win'):
+            from PIL import Image, ImageOps
+            from mutagen.id3 import ID3
+            from mutagen.id3._util import ID3NoHeaderError
+            from io import BytesIO
+
+            # Create cache folder if it doesn't exist
+            os.makedirs("./cache/covers", exist_ok=True)
+            os.makedirs("./cache/small_covers", exist_ok=True)
+            for track in self.music_database.data["tracks"].keys():
+                cover = self.music_database.data["tracks"][track]["cover"]
+                if not os.path.isfile(cached_img := f"{common_vars.app_folder}/cache/covers/{track}.jpg"):
+                    img_data = None
+                    with open(cached_img, "wb") as fp:
+                        try:
+                            metadata = ID3(cover)
+                            if (apic := metadata.getall("APIC")) != []:
+                                img_data = apic[0].data
+                                fp.write(img_data)
+                        except ID3NoHeaderError:
+                            try:
+                                with open(cover, "rb") as fp2:
+                                    img_data = fp2.read()
+                                    fp.write(img_data)
+                            except FileNotFoundError:
+                                print(f"Failed to find image for track {track}!")
+                    if img_data is not None:
+                        try:
+                            img = Image.open(BytesIO(img_data))
+                            img = ImageOps.contain(img, (128,128), Image.Resampling.LANCZOS)
+                            img = img.convert("RGB")
+                            img.save(f"{common_vars.app_folder}/cache/small_covers/{track}.jpg", "JPEG", quality=100)
+                        except OSError:
+                            print(f"Failed to save image for track {track}!")
+
 
     def start_service(self):
         if platform == "android":
