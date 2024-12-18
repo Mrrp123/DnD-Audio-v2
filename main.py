@@ -830,7 +830,7 @@ class DndAudio(App):
                         try:
                             img = Image.open(BytesIO(img_data))
                             img = ImageOps.contain(img, (128,128), Image.Resampling.LANCZOS)
-                            img = img.convert("RGB")
+                            if img.mode in ("RGBA", "P"): img = img.convert("RGB")
                             img.save(f"{common_vars.app_folder}/cache/small_covers/{track}.jpg", "JPEG", quality=100)
                         except OSError:
                             print(f"Failed to save image for track {track}!")
