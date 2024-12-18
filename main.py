@@ -275,6 +275,10 @@ class MainDisplay(Widget):
             self.time_slider.disabled = True
             return
 
+        # Disable reversing with mp3 files for the time being until I figure out how to make it work
+        if os.path.splitext(self.app.music_database.get_track()["file"])[1] == ".mp3":
+            self.ids.reverse.disabled = True
+
         # Update song position
         if self.update_time_pos:
             # If we aren't changing the size of our rectangle by more than ~1/3 a pixel, don't call an update (this is a surprisingly heavy graphics call)
