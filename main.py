@@ -900,7 +900,7 @@ class DndAudio(App):
         try:
             with open(f"{common_vars.app_folder}/config", "wb") as fp:
                 song_file, song_pos, song_length, total_frames, speed, fade_duration, volume = self.config_vars
-                fp.write(len(song_file).to_bytes(2, "little"))
+                fp.write(len(bytes(song_file, encoding="utf-8")).to_bytes(2, "little"))
                 fp.write(bytes(song_file, encoding="utf-8"))
                 fp.write(int(song_pos).to_bytes(4, "little"))
                 fp.write(int(total_frames).to_bytes(8, "little"))
