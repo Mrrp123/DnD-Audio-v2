@@ -4,6 +4,9 @@ import json
 import yaml
 import wave
 from datetime import datetime
+import ffmpeg
+from mutagen.id3 import ID3
+from mutagen.id3._util import ID3NoHeaderError
 from ast import literal_eval
 
 import tools.common_vars as common_vars
@@ -33,12 +36,15 @@ class UpdatingDict(dict):
         self.setup = False
 
     def __setitem__(self, key, value):
-        super().__setitem__(key, value)
-        if not self.setup:
-            if isinstance(self.parent, UpdatingDict):
-                self.parent.__setitem__(self.parent_key, self)
-            else:
-                Thread(target=self.update(), daemon=False).start()
+        if value:
+            super().__setitem__(key, value)
+            if not self.setup:
+                if isinstance(self.parent, UpdatingDict):
+                    self.parent.__setitem__(self.parent_key, self)
+                else:
+                    Thread(target=self.update(), daemon=False).start()
+        else:
+            raise ValueError("Value is empty!")
             
     def update(self):
         with open("music_data.yaml", "w") as fp:
@@ -152,6 +158,12 @@ class MusicDatabase():
     def get_song_cover(file):
         asset_folder = f"{common_vars.app_folder}/assets/covers"
         name = os.path.split(file)[-1].split(".")[0]
+        try:
+            metadata = ID3(file)
+            if metadata.getall("APIC") != []:
+                return file
+        except ID3NoHeaderError:
+            pass
 
         if os.path.isfile(f"{asset_folder}/{name}.png"):
             return f"{asset_folder}/{name}.png"
@@ -230,6 +242,24 @@ class MusicDatabase():
                     i += 1
         
         elif file_type == ".mp3":
-            num_frames = 13_894_440
+            ffmpeg_process = (ffmpeg
+                    .input(song)
+                    .output("-", format="s16le", acodec="pcm_s16le", ac=2, ar="44100")
+                    .global_args('-loglevel', 'error')
+                    .global_args('-y')
+                    .run_async(pipe_stdout=True)
+            )
+            bytes_read = 0
+            eof = False
+            while not eof:
+                byte_data = ffmpeg_process.stdout.read(8820)
+                if byte_data == bytes(0):
+                    eof = True
+                    break
+                bytes_read += len(byte_data)
+
+            num_frames = bytes_read // 4
+            if num_frames % 4 != 0:
+                raise ValueError(f"Incorrect format for audio data for {song}")
 
         return (num_frames / 44100 * 1000), num_frames

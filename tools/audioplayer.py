@@ -145,7 +145,17 @@ class AudioStreamer():
         self.sample.play()
 
 
+class FFMPEGProcessHandler():
+    """
+    Ensure ffmpeg processes are "gracefully" killed and don't throw any errors
+    on their way out
+    """
 
+    def __init__(self, ffmpeg_obj: ffmpeg):
+        self.ffmpeg_process = ffmpeg_obj.run_async(pipe_stdout=True, pipe_stderr=True)
+
+    def __del__(self, *args, **kwargs):
+        self.ffmpeg_process.terminate()
 
 
 class AudioPlayer():
@@ -426,26 +436,19 @@ class AudioPlayer():
     
     def _load_mp3(self, file, start_frame, gain, num_chunks, chunk_frame_len):
 
-        if hasattr(self, "ffmpeg_process"):
-            self.ffmpeg_process.terminate()
-            self.ffmpeg_process = None
-        
-        self.ffmpeg_process = (ffmpeg
+        ffmpeg_handler = FFMPEGProcessHandler(ffmpeg
                     .input(file, ss=(start_frame/self.rate))
-                    .output('-', format='s16le', acodec='pcm_s16le', ac=2, ar='44100')
-                    .global_args('-loglevel', 'error')
-                    .global_args('-y')
-                    .run_async(pipe_stdout=True)
-            )
+                    .output("-", format="s16le", acodec="pcm_s16le", ac=2, ar="44100")
+                    .global_args("-loglevel", "error", "-y"))
 
         reverse_audio = self.reverse_audio # set local variable in case we reverse audio during a transition
         cut = False
 
         for chunk_index in range(num_chunks):
         
-            byte_data = self.ffmpeg_process.stdout.read(8820)
+            byte_data = ffmpeg_handler.ffmpeg_process.stdout.read(8820)
 
-            if byte_data is None:
+            if byte_data == bytes(0):
                 break
 
             audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
@@ -584,8 +587,18 @@ class AudioPlayer():
                         output_chunk = (output_chunk * mix_chunk[:len(output_chunk)]) + mix_chunk[len(output_chunk):]
                 yield output_chunk
                 i += 1
+        
+        def prepend_chunk_generator(chunk_generator, *chunks):
+            """
+            Instead of calling load_chunks whenever we read a partial chunk,
+            we can just prepend it to the existing chunk generator
+            """
+            for chunk in chunks:
+                yield chunk
+            yield from chunk_generator
 
-        if self.status == "playing":
+        # Don't add playcounts for anything in the assets (ie /assets/audio/silence.wav)
+        if self.status == "playing" and not os.path.samefile(os.path.split(self.song_file)[0], f"{self.app_folder}/assets/audio/"):
             add_playcount = True
         else:
             add_playcount = False
@@ -610,7 +623,8 @@ class AudioPlayer():
 
             if time_remaining > self.fade_duration and self.status == "repeat": # If we aren't exactly fade_duration away from end, play last remaining bit of song
 
-                chunk = next(self.chunk_generator)[0:time_remaining-self.fade_duration]
+                chunk = next(self.chunk_generator)
+                chunk, extra_chunk = chunk[0:time_remaining-self.fade_duration], chunk[time_remaining-self.fade_duration:]
                 self.write_to_buffer(chunk)
                 if self.reverse_audio:
                     self.pos -= len(chunk)
@@ -618,7 +632,7 @@ class AudioPlayer():
                 else:
                     self.pos += len(chunk)
                     self.frame_pos += chunk.get_num_frames()
-                self.chunk_generator = self.load_chunks(self.song_file, start_pos=self.pos)
+                self.chunk_generator = prepend_chunk_generator(self.chunk_generator, extra_chunk)
             
 
             if self.reverse_audio:
