@@ -632,7 +632,8 @@ class AudioPlayer():
                 else:
                     self.pos += len(chunk)
                     self.frame_pos += chunk.get_num_frames()
-                self.chunk_generator = prepend_chunk_generator(self.chunk_generator, extra_chunk)
+                if len(extra_chunk) != 0: # Sometimes lengths match up perfectly and extra chunk ends up being a zero len chunk
+                    self.chunk_generator = prepend_chunk_generator(self.chunk_generator, extra_chunk)
             
 
             if self.reverse_audio:
