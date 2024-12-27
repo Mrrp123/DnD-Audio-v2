@@ -31,8 +31,8 @@ elif platform == "win":
     AUDIO_API = "pyaudio"
 
 elif platform in ('linux', 'linux2', 'macos'):
-    from audiostream import get_output, AudioSample
-    AUDIO_API = "audiostream"
+    import miniaudio
+    AUDIO_API = "miniaudio"
 
 
 
@@ -41,11 +41,11 @@ class AudioStreamer():
     Handles pushing bytes to the speaker depending on which audio api / OS we are using.
     """
 
-    def __init__(self, channels=2, rate=44_100, buffersize=256, encoding=16):
+    def __init__(self, channels=2, rate=44_100, buffersize_ms=50, encoding=16):
 
         self.channels = channels
         self.rate = rate
-        self.buffersize = buffersize
+        self.buffersize_ms = buffersize_ms
         self.encoding = encoding
 
         if AUDIO_API == "audiotrack":
@@ -53,9 +53,9 @@ class AudioStreamer():
         
         elif AUDIO_API == "pyaudio":
             self._pyaudio_init()
-        
-        elif AUDIO_API == "audiostream":
-            self._audiostream_init()
+
+        elif AUDIO_API == "miniaudio":
+            self._miniaudio_init()
     
 
     def _android_init(self):
@@ -108,15 +108,30 @@ class AudioStreamer():
         self.write = self._pyaudio_write
     
 
-    def _audiostream_init(self):
-        self.stream = get_output(channels=self.channels, rate=self.rate, buffersize=self.buffersize, encoding=self.encoding)
-        self.sample = AudioSample()
-        self.stream.add_sample(self.sample)
-        self.sample.play()
+    def _miniaudio_init(self):
+        if self.encoding == 16:
+            self.playback_device = miniaudio.PlaybackDevice(
+                miniaudio.SampleFormat.SIGNED16,
+                self.channels,
+                self.rate,
+                self.buffersize_ms
+                )
+        else:
+            raise ValueError("8 bit encoding not supported for miniaudio!")
+        
+        def miniaudio_generator():
+            yield b""
+            while self.miniaudio_running:
+                data = self.audio_buffer[0:self.req_audio_buffer_size]
+                del self.audio_buffer[0:self.req_audio_buffer_size]
+                yield data
+        
+        self.req_audio_buffer_size = (self.channels * self.rate * self.encoding//8) // round(1000/self.buffersize_ms)
+        self.audio_buffer = bytearray(self.req_audio_buffer_size)
+        self.miniaudio_running = False
+        self.data_generator = miniaudio_generator()
 
-        self.write = self._audiostream_write
-    
-
+        self.write = self._miniaudio_write
 
 
     def write(self, data: bytes):
@@ -125,25 +140,21 @@ class AudioStreamer():
     def _pyaudio_write(self, data: bytes):
         self.stream.write(data)
     
-    def _audiostream_write(self, data: bytes):
-        self.sample.write(data)
-    
     def _android_write(self, data: bytes):
         bytes_written = self.audio_stream.write(data, 0, len(data))
-
     
-    def stop(self):
-        """
-        Only used for audiostream!!!
-        """
-        self.sample.stop()
-    
-    def play(self):
-        """
-        Only used for audiostream!!!
-        """
-        self.sample.play()
-
+    def _miniaudio_write(self, data: bytes):
+        if not self.miniaudio_running:
+            self.miniaudio_running = True
+            next(self.data_generator)
+            self.playback_device.start(self.data_generator)
+        while data:
+            if len(self.audio_buffer) < self.req_audio_buffer_size:
+                self.audio_buffer.extend(data)
+                data = bytes(0)
+                break
+            else:
+                time.sleep(0.01)
 
 class FFMPEGProcessHandler():
     """
@@ -183,7 +194,7 @@ class AudioPlayer():
         Fade in doesn't transition correctly when player goes from paused -> song select (from song list)
     """
 
-    def __init__(self, lock, channels=2, rate=44_100, buffersize=256, encoding=16) -> None:
+    def __init__(self, lock, channels=2, rate=44_100, buffersize_ms=50, encoding=16) -> None:
         self.rate = rate
         self.pos = self.init_pos = 0
         self.frame_pos = 0
@@ -212,7 +223,7 @@ class AudioPlayer():
 
         self.app_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
-        self.stream = AudioStreamer(channels, rate, buffersize, encoding)
+        self.stream = AudioStreamer(channels, rate, buffersize_ms, encoding)
 
         self.song_file = f"{common_vars.app_folder}/assets/audio/silence.wav"
         self.next_song_file = None
