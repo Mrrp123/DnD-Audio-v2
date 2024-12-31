@@ -586,18 +586,28 @@ class AudioPlayer():
             """
             If we override the transition with another fade, combine all the generators that would have
             been used to play the music into a single object.
+            args are of the form (audio_generator1, gain1), (audio_generator2, gain2), ...
             """
-            i = 0
-            while i < ceil(audio_len / chunk_len):
-                output_chunk = next(args[0])
-                for audio_generator in args[1:]:
+            for i in range(ceil(audio_len / chunk_len)):
+                for j in range(len(args)):
                     try:
-                        output_chunk *= next(audio_generator)
-                    except ValueError:
-                        mix_chunk = next(audio_generator)
-                        output_chunk = (output_chunk * mix_chunk[:len(output_chunk)]) + mix_chunk[len(output_chunk):]
+                        output_chunk = next(args[j][0]) + args[j][1]
+                        break
+                    except StopIteration: # Ignore generators that are empty
+                        pass
+                try:
+                    for (audio_generator, gain) in args[j+1:]:
+                        try:
+                            mix_chunk = next(audio_generator) + gain
+                            output_chunk *= mix_chunk + gain
+                        except ValueError:
+                            #mix_chunk = next(audio_generator) + gain
+                            output_chunk = (output_chunk * mix_chunk[:len(output_chunk)]) + mix_chunk[len(output_chunk):]
+                        except StopIteration:
+                            pass
+                except IndexError: # Handles case if args[j+1] doesn't exist (all but 1 generator empty)
+                    pass
                 yield output_chunk
-                i += 1
         
         def prepend_chunk_generator(chunk_generator, *chunks):
             """
@@ -708,8 +718,8 @@ class AudioPlayer():
                         time_remaining = round(self.song_length - self.pos) # Remaining time we have left in the song
 
                     self.chunk_generator = n_generator(min(self.fade_duration, time_remaining), self.chunk_len, 
-                                                    self.load_chunks(self.song_file, start_pos=self.pos, gain=end_chunk_db), 
-                                                    self.load_chunks(next_song_file, start_pos=new_pos, gain=start_chunk_db))
+                                                    (self.chunk_generator, end_chunk_db), 
+                                                    (next_chunk_generator, start_chunk_db))
                     self.transition(self.next_song_file)
                     return
                 
