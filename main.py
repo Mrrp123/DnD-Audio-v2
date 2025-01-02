@@ -388,12 +388,15 @@ class MainDisplay(Widget):
         # self.effect_display.ids.foreground.size = self.size
         
         if not self.time_stop_event: # Prevent this effect from playing twice in a row
-            self.disabled = True
-            #self.time_stop_event = Clock.schedule_interval(self._check_time_effect, 0)
-            self.texture_update_clock = Clock.schedule_interval(self._update_foreground_texture, 0)
-            self.app.set_audioplayer_attr("status", "zawarudo")
-
-            self.effect_widgets[0].effects = [TimeStop()]
+            status, pos, song_length, speed, reverse_audio = self.app.get_audioplayer_attr("status", "pos", "song_length", "speed", "reverse_audio")
+            if (status == "playing" and # Prevent this from playing during transitions and within 7 sec from end of song
+            (not reverse_audio and (song_length - pos)/1000/speed > 7) or (reverse_audio and pos/1000/speed > 7)):
+            
+                self.disabled = True
+                #self.time_stop_event = Clock.schedule_interval(self._check_time_effect, 0)
+                self.texture_update_clock = Clock.schedule_interval(self._update_foreground_texture, 0)
+                self.app.set_audioplayer_attr("status", "zawarudo")
+                self.effect_widgets[0].effects = [TimeStop()]
     
     def _start_time_effect(self):
         """

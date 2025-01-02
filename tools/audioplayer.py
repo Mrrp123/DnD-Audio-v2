@@ -167,8 +167,6 @@ class AudioPlayer():
     
 
     Known Bugs:
-        zawarudo WILL break when activated during a transition state (anything in the transitiion function)
-
         Fade in doesn't transition correctly when player goes from paused -> song select (from song list)
     """
 
