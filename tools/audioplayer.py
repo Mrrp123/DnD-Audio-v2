@@ -12,7 +12,7 @@ import time
 from scipy.signal import iirfilter
 import pyogg
 import ctypes
-import ffmpeg
+import miniaudio
 from functools import reduce
 import yaml
 
@@ -31,7 +31,6 @@ elif platform == "win":
     AUDIO_API = "pyaudio"
 
 elif platform in ('linux', 'linux2', 'macos'):
-    import miniaudio
     AUDIO_API = "miniaudio"
 
 
@@ -156,17 +155,17 @@ class AudioStreamer():
             else:
                 time.sleep(0.01)
 
-class FFMPEGProcessHandler():
-    """
-    Ensure ffmpeg processes are "gracefully" killed and don't throw any errors
-    on their way out
-    """
+# class FFMPEGProcessHandler():
+#     """
+#     Ensure ffmpeg processes are "gracefully" killed and don't throw any errors
+#     on their way out
+#     """
 
-    def __init__(self, ffmpeg_obj: ffmpeg):
-        self.ffmpeg_process = ffmpeg_obj.run_async(pipe_stdout=True, pipe_stderr=True)
+#     def __init__(self, ffmpeg_obj: ffmpeg):
+#         self.ffmpeg_process = ffmpeg_obj.run_async(pipe_stdout=True, pipe_stderr=True)
 
-    def __del__(self, *args, **kwargs):
-        self.ffmpeg_process.terminate()
+#     def __del__(self, *args, **kwargs):
+#         self.ffmpeg_process.terminate()
 
 
 class AudioPlayer():
@@ -447,29 +446,14 @@ class AudioPlayer():
     
     def _load_mp3(self, file, start_frame, gain, num_chunks, chunk_frame_len):
 
-        ffmpeg_handler = FFMPEGProcessHandler(ffmpeg
-                    .input(file, ss=(start_frame/self.rate))
-                    .output("-", format="s16le", acodec="pcm_s16le", ac=2, ar="44100")
-                    .global_args("-loglevel", "error", "-y"))
+        miniaudio_stream = miniaudio.mp3_stream_file(file, frames_to_read=chunk_frame_len, seek_frame=start_frame)
 
-        reverse_audio = self.reverse_audio # set local variable in case we reverse audio during a transition
-        cut = False
+        for samples in miniaudio_stream:
 
-        for chunk_index in range(num_chunks):
-        
-            byte_data = ffmpeg_handler.ffmpeg_process.stdout.read(8820)
-
-            if byte_data == bytes(0):
-                break
-
+            byte_data = samples.tobytes()
             audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
-            if reverse_audio:
-                if cut:
-                    yield audio[0:chunk_frame_len].reverse()
-                else:
-                    yield audio.reverse()
-            else:
-                yield audio
+
+            yield audio
 
 
     

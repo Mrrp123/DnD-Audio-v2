@@ -4,7 +4,7 @@ import json
 import yaml
 import wave
 from datetime import datetime
-import ffmpeg
+import miniaudio
 from mutagen.id3 import ID3
 from mutagen.id3._util import ID3NoHeaderError
 from ast import literal_eval
@@ -242,24 +242,9 @@ class MusicDatabase():
                     i += 1
         
         elif file_type == ".mp3":
-            ffmpeg_process = (ffmpeg
-                    .input(song)
-                    .output("-", format="s16le", acodec="pcm_s16le", ac=2, ar="44100")
-                    .global_args('-loglevel', 'error')
-                    .global_args('-y')
-                    .run_async(pipe_stdout=True)
-            )
-            bytes_read = 0
-            eof = False
-            while not eof:
-                byte_data = ffmpeg_process.stdout.read(8820)
-                if byte_data == bytes(0):
-                    eof = True
-                    break
-                bytes_read += len(byte_data)
-
-            num_frames = bytes_read // 4
-            if num_frames % 4 != 0:
-                raise ValueError(f"Incorrect format for audio data for {song}")
+            file_stream = miniaudio.mp3_stream_file(song)
+            num_frames = 0
+            for samples in file_stream:
+                num_frames += len(samples)//2
 
         return (num_frames / 44100 * 1000), num_frames
