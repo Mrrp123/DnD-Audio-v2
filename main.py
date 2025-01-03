@@ -602,7 +602,7 @@ class SettingsDisplay(Widget):
         if os.path.exists(f"{common_vars.app_folder}/config"):
             try:
                 with open(f"{common_vars.app_folder}/config", "rb") as fp:
-                    offset = int.from_bytes(fp.read(2), "little") + 14
+                    offset = int.from_bytes(fp.read(2), "little") + 15
                     fp.seek(offset)
 
                     fade_duration = int.from_bytes(fp.read(2), "little")
@@ -845,11 +845,13 @@ class DndAudio(App):
             return
         try:
             with open(f"{common_vars.app_folder}/config", "wb") as fp:
-                song_file, song_pos, song_length, total_frames, speed, fade_duration, volume = self.config_vars
-                fp.write(len(song_file).to_bytes(2, "little"))
+                (song_file, song_pos, song_length, total_frames, 
+                 speed, fade_duration, volume, reverse_audio) = self.config_vars
+                fp.write(len(bytes(song_file, encoding="utf-8")).to_bytes(2, "little"))
                 fp.write(bytes(song_file, encoding="utf-8"))
                 fp.write(int(song_pos).to_bytes(4, "little"))
                 fp.write(int(total_frames).to_bytes(8, "little"))
+                fp.write(int(reverse_audio).to_bytes(1, "little"))
                 fp.write(int(fade_duration).to_bytes(2, "little"))
                 fp.write(struct.pack("3d", song_length, speed, volume))
         except Exception as err:
@@ -863,6 +865,7 @@ class DndAudio(App):
                 song_file = fp.read(file_len).decode("utf-8")
                 song_pos = int.from_bytes(fp.read(4), "little")
                 total_frames = int.from_bytes(fp.read(8), "little")
+                reverse_audio = int.from_bytes(fp.read(1), "little")
                 fade_duration = int.from_bytes(fp.read(2), "little")
                 song_length, speed, volume = struct.unpack("3d", fp.read(24))
                 
@@ -880,6 +883,7 @@ class DndAudio(App):
             self.set_audioplayer_attr("fade_duration", int(fade_duration * speed))
             self.set_audioplayer_attr("volume", volume)
             self.set_audioplayer_attr("song_length", song_length)
+            self.set_audioplayer_attr("reverse_audio", reverse_audio)
 
             # This waits until the audioplayer has fully received all of the config messages
             while self.get_audioplayer_attr("song_length") == ():
@@ -906,7 +910,8 @@ class DndAudio(App):
         self.config_clock = Clock.schedule_interval(self._get_config_vars, 1)
     
     def _get_config_vars(self, dt):
-        self.config_vars = self.get_audioplayer_attr("song_file", "pos", "song_length", "total_frames", "speed", "base_fade_duration", "volume")
+        self.config_vars = self.get_audioplayer_attr("song_file", "pos", "song_length", "total_frames", 
+                                                     "speed", "base_fade_duration", "volume", "reverse_audio")
 
     def on_stop(self, *args):
         self.save_audioplayer_config()
