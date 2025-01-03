@@ -242,7 +242,7 @@ class AudioPlayer():
         Thread(target=self.osc_server.serve_forever, daemon=True).start()
         self.osc_client.send_message("/return", "ready")
 
-        with open(f"{self.app_folder}/music_data.yaml") as fp:
+        with open(common_vars.music_database_path) as fp:
             music_data = yaml.safe_load(fp)
 
         # Create file -> track length LUT

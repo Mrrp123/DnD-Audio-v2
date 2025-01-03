@@ -794,7 +794,7 @@ class DndAudio(App):
 
             print(f"Songs loaded from MediaStore: {loaded_songs}")
 
-        self.music_database = MusicDatabase(f"{common_vars.app_folder}/music_data.yaml")
+        self.music_database = MusicDatabase(common_vars.music_database_path)
         for file in loaded_songs:
             database_files = [self.music_database.data["tracks"][track]["file"] for track in self.music_database.data["tracks"].keys()]
             if not any([os.path.samefile(file, database_file) for database_file in database_files]):
