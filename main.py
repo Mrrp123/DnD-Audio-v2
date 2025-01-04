@@ -509,10 +509,7 @@ class SongsDisplay(Widget):
         else:
             self.update_clock.cancel()
             self.update_clock = Clock.schedule_once(self.update_song_list, dt)
-
-
-    def update_song_list(self, dt):
-
+        
         width = self.widget.width - self.widget.padding[0] - self.widget.padding[2]
 
         if self.widget._lines_labels[0].size[0] < width:
@@ -520,6 +517,9 @@ class SongsDisplay(Widget):
             self.widget.scroll_x = 0
         else:
             self.widget.halign = "right"
+
+
+    def update_song_list(self, dt):
         
         self.refresh_songs()
         self.song_list.scroll_y = 1
