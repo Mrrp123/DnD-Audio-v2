@@ -246,13 +246,8 @@ class AudioPlayer():
 
         # Create file -> track length LUT
         # Only information we care about, really
-        self.track_data = {music_data["tracks"][track]["file"] : music_data["tracks"][track]["length"] 
+        self.track_data = {music_data["tracks"][track]["file"] : (music_data["tracks"][track]["length"], music_data["tracks"][track]["id"]) 
                            for track in music_data["tracks"].keys()}
-        # Add length info for reversed tracks if we need to make them
-        self.track_data.update(
-            {f"{self.app_folder}/cache/audio/{music_data["tracks"][track]["id"]}.wav" : music_data["tracks"][track]["length"]
-             for track in music_data["tracks"].keys()}
-            )
 
         
     
@@ -497,7 +492,7 @@ class AudioPlayer():
     
 
     def get_track_length(self, file):
-        num_frames = self.track_data[file]
+        num_frames = self.track_data[file][0]
         return (num_frames / self.rate * 1000), num_frames
 
     
