@@ -278,10 +278,10 @@ class MainDisplay(Widget):
             return
 
         # Disable reversing with mp3 files for the time being until I figure out how to make it work
-        if os.path.splitext(self.app.music_database.get_track()["file"])[1] == ".mp3":
-            self.ids.reverse.disabled = True
-        else:
-            self.ids.reverse.disabled = False
+        # if os.path.splitext(self.app.music_database.get_track()["file"])[1] == ".mp3":
+        #     self.ids.reverse.disabled = True
+        # else:
+        #     self.ids.reverse.disabled = False
 
         # Update song position
         if self.update_time_pos:
@@ -809,6 +809,7 @@ class DndAudio(App):
             # Create cache folder if it doesn't exist
             os.makedirs("./cache/covers", exist_ok=True)
             os.makedirs("./cache/small_covers", exist_ok=True)
+            os.makedirs("./cache/audio", exist_ok=True)
             for track in self.music_database.data["tracks"].keys():
                 cover = self.music_database.data["tracks"][track]["cover"]
                 if not os.path.isfile(cached_img := f"{common_vars.app_folder}/cache/covers/{track}.jpg"):

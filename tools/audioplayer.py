@@ -248,6 +248,11 @@ class AudioPlayer():
         # Only information we care about, really
         self.track_data = {music_data["tracks"][track]["file"] : music_data["tracks"][track]["length"] 
                            for track in music_data["tracks"].keys()}
+        # Add length info for reversed tracks if we need to make them
+        self.track_data.update(
+            {f"{self.app_folder}/cache/audio/{music_data["tracks"][track]["id"]}.wav" : music_data["tracks"][track]["length"]
+             for track in music_data["tracks"].keys()}
+            )
 
         
     
@@ -381,7 +386,15 @@ class AudioPlayer():
             audio_generator = self._load_ogg(file, start_frame, gain, num_chunks, chunk_frame_len)
         
         elif file_type == ".mp3":
-            audio_generator = self._load_mp3(file, start_frame, gain, num_chunks, chunk_frame_len)
+            # Streaming an mp3 in reverse is impossible, so we will instead create a wav file from the mp3 and read that instead
+            if self.reverse_audio:
+                track_id = self.track_data[file][1]
+                if not os.path.exists(f"{self.app_folder}/cache/audio/{track_id}.wav"):
+                    self._mp3_to_wav(file, track_id)
+                file = f"{self.app_folder}/cache/audio/{track_id}.wav"
+                audio_generator = self._load_wav(file, start_frame, gain, num_chunks, chunk_frame_len)
+            else:
+                audio_generator = self._load_mp3(file, start_frame, gain, num_chunks, chunk_frame_len)
 
         for audio in audio_generator:
             yield audio
@@ -454,6 +467,31 @@ class AudioPlayer():
             audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
 
             yield audio
+    
+
+    def _mp3_to_wav(self, file, track_id):
+
+        # Try to delete files if there are too many (>3) in the cache
+        current_cached_files = glob(f"{self.app_folder}/cache/audio/*.wav")
+        if len(current_cached_files) > 3:
+            num_to_delete = len(current_cached_files) - 3
+            # Sort everything by when they were last modfied to choose deletion order
+            current_cached_files.sort(key=lambda path: os.path.getmtime(path))
+            for wav_file in current_cached_files[0:num_to_delete]:
+                try:
+                    os.remove(wav_file)
+                except OSError:
+                    # If we encounter an OSError, then it's likely the file is still open
+                    # Just leave it alone in this case
+                    pass
+
+        file_stream = miniaudio.mp3_stream_file(file)
+        with wave.open(f"{self.app_folder}/cache/audio/{track_id}.wav", "wb") as fp:
+            fp.setparams((2, 2, self.rate, 0, "NONE", "NONE"))
+            for samples in file_stream:
+                fp.writeframes(samples)
+        
+        
 
 
     
