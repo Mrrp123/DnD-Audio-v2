@@ -1,0 +1,6 @@
+*.py	    text eol=crlf
+*.md        text eol=crlf
+*.txt       text eol=crlf
+*.kv        text eol=crlf
+.gitignore  text eol=crlf
+*.json      text eol=crlf

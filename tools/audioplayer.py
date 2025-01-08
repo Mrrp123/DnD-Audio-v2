@@ -12,6 +12,7 @@ import time
 from scipy.signal import iirfilter
 import pyogg
 import ctypes
+import miniaudio
 from functools import reduce
 import yaml
 
@@ -30,8 +31,7 @@ elif platform == "win":
     AUDIO_API = "pyaudio"
 
 elif platform in ('linux', 'linux2', 'macos'):
-    from audiostream import get_output, AudioSample
-    AUDIO_API = "audiostream"
+    AUDIO_API = "miniaudio"
 
 
 
@@ -40,11 +40,11 @@ class AudioStreamer():
     Handles pushing bytes to the speaker depending on which audio api / OS we are using.
     """
 
-    def __init__(self, channels=2, rate=44_100, buffersize=256, encoding=16):
+    def __init__(self, channels=2, rate=44_100, buffersize_ms=50, encoding=16):
 
         self.channels = channels
         self.rate = rate
-        self.buffersize = buffersize
+        self.buffersize_ms = buffersize_ms
         self.encoding = encoding
 
         if AUDIO_API == "audiotrack":
@@ -52,9 +52,9 @@ class AudioStreamer():
         
         elif AUDIO_API == "pyaudio":
             self._pyaudio_init()
-        
-        elif AUDIO_API == "audiostream":
-            self._audiostream_init()
+
+        elif AUDIO_API == "miniaudio":
+            self._miniaudio_init()
     
 
     def _android_init(self):
@@ -107,15 +107,30 @@ class AudioStreamer():
         self.write = self._pyaudio_write
     
 
-    def _audiostream_init(self):
-        self.stream = get_output(channels=self.channels, rate=self.rate, buffersize=self.buffersize, encoding=self.encoding)
-        self.sample = AudioSample()
-        self.stream.add_sample(self.sample)
-        self.sample.play()
+    def _miniaudio_init(self):
+        if self.encoding == 16:
+            self.playback_device = miniaudio.PlaybackDevice(
+                miniaudio.SampleFormat.SIGNED16,
+                self.channels,
+                self.rate,
+                self.buffersize_ms
+                )
+        else:
+            raise ValueError("8 bit encoding not supported for miniaudio!")
+        
+        def miniaudio_generator():
+            yield b""
+            while self.miniaudio_running:
+                data = self.audio_buffer[0:self.req_audio_buffer_size]
+                del self.audio_buffer[0:self.req_audio_buffer_size]
+                yield data
+        
+        self.req_audio_buffer_size = (self.channels * self.rate * self.encoding//8) // round(1000/self.buffersize_ms)
+        self.audio_buffer = bytearray(self.req_audio_buffer_size)
+        self.miniaudio_running = False
+        self.data_generator = miniaudio_generator()
 
-        self.write = self._audiostream_write
-    
-
+        self.write = self._miniaudio_write
 
 
     def write(self, data: bytes):
@@ -124,27 +139,33 @@ class AudioStreamer():
     def _pyaudio_write(self, data: bytes):
         self.stream.write(data)
     
-    def _audiostream_write(self, data: bytes):
-        self.sample.write(data)
-    
     def _android_write(self, data: bytes):
         bytes_written = self.audio_stream.write(data, 0, len(data))
-
     
-    def stop(self):
-        """
-        Only used for audiostream!!!
-        """
-        self.sample.stop()
-    
-    def play(self):
-        """
-        Only used for audiostream!!!
-        """
-        self.sample.play()
+    def _miniaudio_write(self, data: bytes):
+        if not self.miniaudio_running:
+            self.miniaudio_running = True
+            next(self.data_generator)
+            self.playback_device.start(self.data_generator)
+        while data:
+            if len(self.audio_buffer) < self.req_audio_buffer_size:
+                self.audio_buffer.extend(data)
+                data = bytes(0)
+                break
+            else:
+                time.sleep(0.01)
 
+# class FFMPEGProcessHandler():
+#     """
+#     Ensure ffmpeg processes are "gracefully" killed and don't throw any errors
+#     on their way out
+#     """
 
+#     def __init__(self, ffmpeg_obj: ffmpeg):
+#         self.ffmpeg_process = ffmpeg_obj.run_async(pipe_stdout=True, pipe_stderr=True)
 
+#     def __del__(self, *args, **kwargs):
+#         self.ffmpeg_process.terminate()
 
 
 class AudioPlayer():
@@ -170,7 +191,7 @@ class AudioPlayer():
         Fade in doesn't transition correctly when player goes from paused -> song select (from song list)
     """
 
-    def __init__(self, lock, channels=2, rate=44_100, buffersize=256, encoding=16) -> None:
+    def __init__(self, lock, channels=2, rate=44_100, buffersize_ms=50, encoding=16) -> None:
         self.rate = rate
         self.pos = self.init_pos = 0
         self.frame_pos = 0
@@ -199,7 +220,7 @@ class AudioPlayer():
 
         self.app_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
-        self.stream = AudioStreamer(channels, rate, buffersize, encoding)
+        self.stream = AudioStreamer(channels, rate, buffersize_ms, encoding)
 
         self.song_file = f"{common_vars.app_folder}/assets/audio/silence.wav"
         self.next_song_file = None
@@ -218,12 +239,12 @@ class AudioPlayer():
         Thread(target=self.osc_server.serve_forever, daemon=True).start()
         self.osc_client.send_message("/return", "ready")
 
-        with open(f"{self.app_folder}/music_data.yaml") as fp:
+        with open(common_vars.music_database_path) as fp:
             music_data = yaml.safe_load(fp)
 
         # Create file -> track length LUT
         # Only information we care about, really
-        self.track_data = {music_data["tracks"][track]["file"] : music_data["tracks"][track]["length"] 
+        self.track_data = {music_data["tracks"][track]["file"] : (music_data["tracks"][track]["length"], music_data["tracks"][track]["id"]) 
                            for track in music_data["tracks"].keys()}
 
         
@@ -356,6 +377,17 @@ class AudioPlayer():
         
         elif file_type == ".ogg":
             audio_generator = self._load_ogg(file, start_frame, gain, num_chunks, chunk_frame_len)
+        
+        elif file_type == ".mp3":
+            # Streaming an mp3 in reverse is impossible, so we will instead create a wav file from the mp3 and read that instead
+            if self.reverse_audio:
+                track_id = self.track_data[file][1]
+                if not os.path.exists(f"{self.app_folder}/cache/audio/{track_id}.wav"):
+                    self._mp3_to_wav(file, track_id)
+                file = f"{self.app_folder}/cache/audio/{track_id}.wav"
+                audio_generator = self._load_wav(file, start_frame, gain, num_chunks, chunk_frame_len)
+            else:
+                audio_generator = self._load_mp3(file, start_frame, gain, num_chunks, chunk_frame_len)
 
         for audio in audio_generator:
             yield audio
@@ -417,12 +449,48 @@ class AudioPlayer():
                     yield audio.reverse()
             else:
                 yield audio
+    
+    def _load_mp3(self, file, start_frame, gain, num_chunks, chunk_frame_len):
+
+        miniaudio_stream = miniaudio.mp3_stream_file(file, frames_to_read=chunk_frame_len, seek_frame=start_frame)
+
+        for samples in miniaudio_stream:
+
+            byte_data = samples.tobytes()
+            audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
+
+            yield audio
+    
+
+    def _mp3_to_wav(self, file, track_id):
+
+        # Try to delete files if there are too many (>3) in the cache
+        current_cached_files = glob(f"{self.app_folder}/cache/audio/*.wav")
+        if len(current_cached_files) > 3:
+            num_to_delete = len(current_cached_files) - 3
+            # Sort everything by when they were last modfied to choose deletion order
+            current_cached_files.sort(key=lambda path: os.path.getmtime(path))
+            for wav_file in current_cached_files[0:num_to_delete]:
+                try:
+                    os.remove(wav_file)
+                except OSError:
+                    # If we encounter an OSError, then it's likely the file is still open
+                    # Just leave it alone in this case
+                    pass
+
+        file_stream = miniaudio.mp3_stream_file(file)
+        with wave.open(f"{self.app_folder}/cache/audio/{track_id}.wav", "wb") as fp:
+            fp.setparams((2, 2, self.rate, 0, "NONE", "NONE"))
+            for samples in file_stream:
+                fp.writeframes(samples)
+        
+        
 
 
     
 
     def get_track_length(self, file):
-        num_frames = self.track_data[file]
+        num_frames = self.track_data[file][0]
         return (num_frames / self.rate * 1000), num_frames
 
     
@@ -533,20 +601,40 @@ class AudioPlayer():
             """
             If we override the transition with another fade, combine all the generators that would have
             been used to play the music into a single object.
+            args are of the form (audio_generator1, gain1), (audio_generator2, gain2), ...
             """
-            i = 0
-            while i < ceil(audio_len / chunk_len):
-                output_chunk = next(args[0])
-                for audio_generator in args[1:]:
+            for i in range(ceil(audio_len / chunk_len)):
+                for j in range(len(args)):
                     try:
-                        output_chunk *= next(audio_generator)
-                    except ValueError:
-                        mix_chunk = next(audio_generator)
-                        output_chunk = (output_chunk * mix_chunk[:len(output_chunk)]) + mix_chunk[len(output_chunk):]
+                        output_chunk = next(args[j][0]) + args[j][1]
+                        break
+                    except StopIteration: # Ignore generators that are empty
+                        pass
+                try:
+                    for (audio_generator, gain) in args[j+1:]:
+                        try:
+                            mix_chunk = next(audio_generator) + gain
+                            output_chunk *= mix_chunk + gain
+                        except ValueError:
+                            #mix_chunk = next(audio_generator) + gain
+                            output_chunk = (output_chunk * mix_chunk[:len(output_chunk)]) + mix_chunk[len(output_chunk):]
+                        except StopIteration:
+                            pass
+                except IndexError: # Handles case if args[j+1] doesn't exist (all but 1 generator empty)
+                    pass
                 yield output_chunk
-                i += 1
+        
+        def prepend_chunk_generator(chunk_generator, *chunks):
+            """
+            Instead of calling load_chunks whenever we read a partial chunk,
+            we can just prepend it to the existing chunk generator
+            """
+            for chunk in chunks:
+                yield chunk
+            yield from chunk_generator
 
-        if self.status == "playing":
+        # Don't add playcounts for anything in the assets (ie /assets/audio/silence.wav)
+        if self.status == "playing" and not os.path.samefile(os.path.split(self.song_file)[0], f"{self.app_folder}/assets/audio/"):
             add_playcount = True
         else:
             add_playcount = False
@@ -571,7 +659,8 @@ class AudioPlayer():
 
             if time_remaining > self.fade_duration and self.status == "repeat": # If we aren't exactly fade_duration away from end, play last remaining bit of song
 
-                chunk = next(self.chunk_generator)[0:time_remaining-self.fade_duration]
+                chunk = next(self.chunk_generator)
+                chunk, extra_chunk = chunk[0:time_remaining-self.fade_duration], chunk[time_remaining-self.fade_duration:]
                 self.write_to_buffer(chunk)
                 if self.reverse_audio:
                     self.pos -= len(chunk)
@@ -579,7 +668,8 @@ class AudioPlayer():
                 else:
                     self.pos += len(chunk)
                     self.frame_pos += chunk.get_num_frames()
-                self.chunk_generator = self.load_chunks(self.song_file, start_pos=self.pos)
+                if len(extra_chunk) != 0: # Sometimes lengths match up perfectly and extra chunk ends up being a zero len chunk
+                    self.chunk_generator = prepend_chunk_generator(self.chunk_generator, extra_chunk)
             
 
             if self.reverse_audio:
@@ -643,15 +733,15 @@ class AudioPlayer():
                         time_remaining = round(self.song_length - self.pos) # Remaining time we have left in the song
 
                     self.chunk_generator = n_generator(min(self.fade_duration, time_remaining), self.chunk_len, 
-                                                    self.load_chunks(self.song_file, start_pos=self.pos, gain=end_chunk_db), 
-                                                    self.load_chunks(next_song_file, start_pos=new_pos, gain=start_chunk_db))
+                                                    (self.chunk_generator, end_chunk_db), 
+                                                    (next_chunk_generator, start_chunk_db))
                     self.transition(self.next_song_file)
                     return
                 
                 elif self.status == "skip": # If we change songs via a skip during a transition, just go to the next song
                     if (self.reverse_audio and next_song_len - new_pos <= fade_duration/2) or (not self.reverse_audio and new_pos <= fade_duration/2):
                         self.skip(next_song_file)
-                        self.osc_client.send_message("/call/music_database", ["set_song", next_song_file]) # Resync music_database pointer, otherwise we will be one song ahead/behind
+                        self.osc_client.send_message("/call/music_database", ["set_track", next_song_file]) # Resync music_database pointer, otherwise we will be one song ahead/behind
                     elif self.next_song_file is not None:
                         self.skip(self.next_song_file)
                     else:
@@ -689,7 +779,7 @@ class AudioPlayer():
         if add_playcount:
             self.osc_client.send_message("/call/music_database", ["__add__", 1])
 
-        self.chunk_generator = self.load_chunks(next_song_file, start_pos=new_pos)
+        self.chunk_generator = next_chunk_generator
 
         self.lock_status = True
 
@@ -855,7 +945,7 @@ class AudioPlayer():
         
         
 
-        self.chunk_generator = self.load_chunks(self.song_file, start_pos=self.pos)
+        #self.chunk_generator = self.load_chunks(self.song_file, start_pos=self.pos)
 
         self.status = "playing"
 

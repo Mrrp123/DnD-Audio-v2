@@ -4,6 +4,9 @@ import json
 import yaml
 import wave
 from datetime import datetime
+import miniaudio
+from mutagen.id3 import ID3
+from mutagen.id3._util import ID3NoHeaderError
 from ast import literal_eval
 
 import tools.common_vars as common_vars
@@ -33,15 +36,18 @@ class UpdatingDict(dict):
         self.setup = False
 
     def __setitem__(self, key, value):
-        super().__setitem__(key, value)
-        if not self.setup:
-            if isinstance(self.parent, UpdatingDict):
-                self.parent.__setitem__(self.parent_key, self)
-            else:
-                Thread(target=self.update(), daemon=False).start()
+        if value:
+            super().__setitem__(key, value)
+            if not self.setup:
+                if isinstance(self.parent, UpdatingDict):
+                    self.parent.__setitem__(self.parent_key, self)
+                else:
+                    Thread(target=self.update(), daemon=False).start()
+        else:
+            raise ValueError("Value is empty!")
             
     def update(self):
-        with open("music_data.yaml", "w") as fp:
+        with open(common_vars.music_database_path, "w") as fp:
             fp.write(yaml.safe_dump(literal_eval(str(self)), sort_keys=False))
 
 class MusicDatabase():
@@ -152,6 +158,12 @@ class MusicDatabase():
     def get_song_cover(file):
         asset_folder = f"{common_vars.app_folder}/assets/covers"
         name = os.path.split(file)[-1].split(".")[0]
+        try:
+            metadata = ID3(file)
+            if metadata.getall("APIC") != []:
+                return file
+        except ID3NoHeaderError:
+            pass
 
         if os.path.isfile(f"{asset_folder}/{name}.png"):
             return f"{asset_folder}/{name}.png"
@@ -228,5 +240,11 @@ class MusicDatabase():
                         num_frames = int.from_bytes(fp.read(8), "little")
                         break
                     i += 1
+        
+        elif file_type == ".mp3":
+            file_stream = miniaudio.mp3_stream_file(song)
+            num_frames = 0
+            for samples in file_stream:
+                num_frames += len(samples)//2
 
         return (num_frames / 44100 * 1000), num_frames
