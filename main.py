@@ -560,45 +560,53 @@ class SongsDisplay(Widget):
                                 for track in self.app.music_database.data["tracks"].keys()
                                 if self.song_search.text.lower() in self.app.music_database.data["tracks"][track]["name"].lower()]
 
-class SongButton(Button):
-
+class SongButton(Widget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         # Get a reference to the app and main display
         self.app: DndAudio = App.get_running_app()
-        self.main_display = self.app.root.get_screen("main").main_display 
+        self.main_display = self.app.root.get_screen("main").main_display
+        self.touch_down_called = False
 
     def on_parent(self, *args):
-        self.text = f"{self.name}\n{self.artist}"
+        self.ids.name_label.text = self.name
+        self.ids.artist_label.text = self.artist
         if os.path.isfile(f"{common_vars.app_folder}/cache/small_covers/{self.track_id}.jpg"):
             self.ids.song_cover.source = f"{common_vars.app_folder}/cache/small_covers/{self.track_id}.jpg"
         else:
             self.ids.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover.png"
-        
+    
+    def on_touch_down(self, touch):
+        if self.y < touch.y < self.y + self.height:
+            self.touch_down_called = True
+            self.background_color = 0.52941176, 0.52941176, 0.52941176, 0.71372549 # hex 878787B6
 
-    def on_release(self, **kwargs):
-        status, pause_flag = self.app.get_audioplayer_attr("status", "pause_flag")
+    def on_touch_up(self, touch):
+        self.background_color = 0, 0, 0, 1
+        if self.y < touch.y < self.y + self.height and self.touch_down_called:
+            status, pause_flag = self.app.get_audioplayer_attr("status", "pause_flag")
 
-        if status == "idle":
-            self.app.music_database.set_track(self.song_filepath)
-            self.app.set_audioplayer_attr("song_file", self.song_filepath)
-            self.app.set_audioplayer_attr("init_pos", 0)
-            self.app.set_audioplayer_attr("pos", 0)
+            if status == "idle":
+                self.app.music_database.set_track(self.song_filepath)
+                self.app.set_audioplayer_attr("song_file", self.song_filepath)
+                self.app.set_audioplayer_attr("init_pos", 0)
+                self.app.set_audioplayer_attr("pos", 0)
 
-            # while self.app.get_audioplayer_attr("song_file") != self.song_filepath:
-            #     time.sleep(0.001)
-            
-            # Counterintuitively, pause_music() actually starts the music since audioplayer status is idle
-            self.main_display.pause_music()
+                # while self.app.get_audioplayer_attr("song_file") != self.song_filepath:
+                #     time.sleep(0.001)
+                
+                # Counterintuitively, pause_music() actually starts the music since audioplayer status is idle
+                self.main_display.pause_music()
 
-        elif pause_flag: # If music is paused and we select a new song, fade into the song, skipping the fade out of the current song.
-            self.app.music_database.set_track(self.song_filepath)
-            self.app.set_audioplayer_attr("song_file", self.song_filepath)
-            self.main_display.pause_music()
-            self.app.change_song(self.song_filepath, transition="fade_in")
-        else:
-            self.app.change_song(self.song_filepath, transition="crossfade")
+            elif pause_flag: # If music is paused and we select a new song, fade into the song, skipping the fade out of the current song.
+                self.app.music_database.set_track(self.song_filepath)
+                self.app.set_audioplayer_attr("song_file", self.song_filepath)
+                self.main_display.pause_music()
+                self.app.change_song(self.song_filepath, transition="fade_in")
+            else:
+                self.app.change_song(self.song_filepath, transition="crossfade")
+        self.touch_down_called = False
     
 
 class SettingsScreen(Screen):

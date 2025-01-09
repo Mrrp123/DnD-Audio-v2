@@ -371,25 +371,50 @@
     
 
 <SongButton>:
-    bold: True
-    # width: (root.width/3 - root.width/12) / 2
-    # height: self.width
-    halign: "left"
-    valign: "center"
-    text_size: self.size
-    font_size: app.root.children[0].height / 40
-    size_hint: 1, None
-    background_normal: f"{app_folder}/assets/buttons/song_button_normal.png"
     image: ""
-    #background_color: 0,0,0,1
-    padding: root.height, 0, root.width / 12, 0
-    background_down: f"{app_folder}/assets/buttons/song_button_pressed.png"
+    background_color: 0,0,0,1
+    canvas.before:
+        Color:
+            rgba: self.background_color
+        Rectangle:
+            pos: self.pos
+            size: self.size
     canvas.after:
         Color:
             rgba: 1,1,1,0.5
         Line:
             width: 1
             points: (root.height, self.y, root.width, self.y)
+
+    Label:
+        id: name_label
+        pos: 0, root.y + root.height/2
+        size: root.size[0], root.size[1]/2
+        bold: True
+        halign: "left"
+        valign: "bottom"
+        text_size: self.size
+        font_size: app.root.children[0].height / 40
+        shorten: True
+        shorten_from: "right"
+        size_hint: 1, None
+        padding: root.height, 0, root.width / 12, 0
+
+    Label:
+        id: artist_label
+        pos: 0, root.y
+        size: root.size[0], root.size[1]/2
+        bold: True
+        halign: "left"
+        valign: "top"
+        text_size: self.size
+        font_size: app.root.children[0].height / 50
+        color: 2/3, 2/3, 2/3, 1
+        shorten: True
+        shorten_from: "right"
+        size_hint: 1, None
+        padding: root.height, root.height / 24, root.width / 12, 0
+
     Image:
         id: song_cover
         source: root.image#"./assets/covers/default_cover.png"
