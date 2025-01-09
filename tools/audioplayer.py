@@ -188,7 +188,7 @@ class AudioPlayer():
     
 
     Known Bugs:
-        Fade in doesn't transition correctly when player goes from paused -> song select (from song list)
+        None
     """
 
     def __init__(self, lock, channels=2, rate=44_100, buffersize_ms=50, encoding=16) -> None:
@@ -732,9 +732,13 @@ class AudioPlayer():
                     else:
                         time_remaining = round(self.song_length - self.pos) # Remaining time we have left in the song
 
-                    self.chunk_generator = n_generator(min(self.fade_duration, time_remaining), self.chunk_len, 
-                                                    (self.chunk_generator, end_chunk_db), 
-                                                    (next_chunk_generator, start_chunk_db))
+                    if next_chunk_generator is not None:
+                        self.chunk_generator = n_generator(min(self.fade_duration, time_remaining), self.chunk_len, 
+                                                        (self.chunk_generator, end_chunk_db), 
+                                                        (next_chunk_generator, start_chunk_db))
+                    else:
+                        self.chunk_generator = n_generator(min(self.fade_duration, time_remaining), self.chunk_len, 
+                                                        (self.chunk_generator, end_chunk_db))
                     self.transition(self.next_song_file)
                     return
                 
@@ -779,7 +783,8 @@ class AudioPlayer():
         if add_playcount:
             self.osc_client.send_message("/call/music_database", ["__add__", 1])
 
-        self.chunk_generator = next_chunk_generator
+        if next_chunk_generator is not None:
+            self.chunk_generator = next_chunk_generator
 
         self.lock_status = True
 

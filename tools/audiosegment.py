@@ -73,7 +73,9 @@ class AudioSegment():
             return self
 
         elif isinstance(arg, int | np.integer):
-            self._data = np.asarray([self._data]*arg).astype(self.dt)
+            if arg == 1:
+                return self
+            self._data = np.tile(self._data, (arg, 1))
             return self
         
         else:
