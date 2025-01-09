@@ -558,7 +558,8 @@ class SongsDisplay(Widget):
                                 "song_filepath" : self.app.music_database.data["tracks"][track]["file"],
                                 "cover" : self.app.music_database.data["tracks"][track]["cover"]} 
                                 for track in self.app.music_database.data["tracks"].keys()
-                                if self.song_search.text.lower() in self.app.music_database.data["tracks"][track]["name"].lower()]
+                                if self.song_search.text.lower() in self.app.music_database.data["tracks"][track]["name"].lower()
+                                or self.song_search.text.lower() in self.app.music_database.data["tracks"][track]["artist"].lower()]
 
 class SongButton(Widget):
     def __init__(self, *args, **kwargs):
