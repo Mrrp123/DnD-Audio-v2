@@ -276,12 +276,8 @@ class MainDisplay(Widget):
             self.ids.song_name.text = "No songs found!"
             self.time_slider.disabled = True
             return
-
-        # Disable reversing with mp3 files for the time being until I figure out how to make it work
-        # if os.path.splitext(self.app.music_database.get_track()["file"])[1] == ".mp3":
-        #     self.ids.reverse.disabled = True
-        # else:
-        #     self.ids.reverse.disabled = False
+        
+        track = self.app.music_database.get_track() # Currently playing track
 
         # Update song position
         if self.update_time_pos:
@@ -291,19 +287,23 @@ class MainDisplay(Widget):
             self.update_time_text(pos, speed, song_length)
 
         # Update song name / artist (and position if user is holding the time slider)
-        if self.ids.song_name.text != (song := self.app.music_database.get_track()["name"]) and status in ("playing", "idle", "fade_in"):
-            self.ids.song_name.text = song
+        if ((self.ids.song_name.text   != track["name"] 
+        or   self.ids.song_artist.text != track["artist"]) 
+        and  status in ("playing", "idle", "fade_in")):
+            
+            self.ids.song_name.text = track["name"]
+            self.ids.song_artist.text = track["artist"]
             if not self.update_time_pos:
                 self.update_time_text(int(self.time_slider.value * song_length / 1000), speed, song_length)
         
 
         # Update song cover
-        if self.song_cover_path != (cover := self.app.music_database.get_track()["cover"]) and status in ("playing", "idle", "fade_in"):
-            if os.path.isfile(source := f"{common_vars.app_folder}/cache/covers/{self.app.music_database.get_track()['id']}.jpg"):
+        if self.song_cover_path != track["cover"] and status in ("playing", "idle", "fade_in"):
+            if os.path.isfile(source := f"{common_vars.app_folder}/cache/covers/{track['id']}.jpg"):
                 self.song_cover.source = source
             else:
                 self.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover.png"
-            self.song_cover_path = cover
+            self.song_cover_path = track["cover"]
 
             # Don't do any cover size animations if we're not playing!!! This causes the size to small initially
             if status in ("playing", "fade_in"): 

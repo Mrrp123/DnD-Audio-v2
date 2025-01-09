@@ -260,17 +260,34 @@
         padding: 0, 0, audio_position_slider.x + dp(2), 0
     
     Label:
+        id: song_artist
+        bold: True
+        color: 0.9, 0.9, 0.9, 0.6
+        disabled_color: 0.9, 0.9, 0.9, 0.6
+        x: root.width * (1/2) - (root.width * (11/12) - dp(32)) / 2 + dp(2)
+        center_y: root.height * (18/48)
+        halign: "left"
+        text: ""
+        text_size: self.size
+        size: root.width - 2 * (root.width * (1/2) - (root.width * (11/12) - dp(32)) / 2 + dp(2)), root.height/35
+        font_size: root.height/35
+        shorten: True
+        shorten_from: "right"
+
+    Label:
         id: song_name
         bold: True
         color: 1,1,1,1
         disabled_color: 1,1,1,1
         x: root.width * (1/2) - (root.width * (11/12) - dp(32)) / 2 + dp(2)
-        center_y: root.height * (18/48)
+        center_y: root.height * (18/48) + root.height/30
         halign: "left"
         text: ""
-        text_size: root.width - root.width/4, None
-        size: self.texture_size
-        font_size: root.height/40
+        text_size: self.size
+        size: root.width - 2 * (root.width * (1/2) - (root.width * (11/12) - dp(32)) / 2 + dp(2)), root.height/35
+        font_size: root.height/35
+        shorten: True
+        shorten_from: "right"
 
     Button:
         id: previous_song
