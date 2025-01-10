@@ -26,11 +26,8 @@ if platform == "android":
     from jnius import autoclass
     AUDIO_API = "audiotrack"
 
-elif platform == "win":
-    import pyaudio
-    AUDIO_API = "pyaudio"
 
-elif platform in ('linux', 'linux2', 'macos'):
+if platform in ('win', 'linux', 'linux2', 'macos'):
     AUDIO_API = "miniaudio"
 
 
@@ -50,8 +47,6 @@ class AudioStreamer():
         if AUDIO_API == "audiotrack":
             self._android_init()
         
-        elif AUDIO_API == "pyaudio":
-            self._pyaudio_init()
 
         elif AUDIO_API == "miniaudio":
             self._miniaudio_init()
@@ -95,16 +90,6 @@ class AudioStreamer():
         self.audio_stream.play()
 
         self.write = self._android_write
-
-
-    def _pyaudio_init(self):
-        p = pyaudio.PyAudio()
-        self.stream = p.open(format=p.get_format_from_width(self.encoding//8),
-                channels=self.channels,
-                rate=self.rate,
-                output=True)
-        
-        self.write = self._pyaudio_write
     
 
     def _miniaudio_init(self):
@@ -556,12 +541,8 @@ class AudioPlayer():
         """
         self.stream.write( # This helps clear out any remaining data in the audio buffer (prevents popping sounds)
             bytes(round(self.rate * self.stream.channels * self.stream.encoding // 8 * self.chunk_len / 1000))) 
-        if AUDIO_API == "audiostream":
-            self.stream.stop()
         while self.pause_flag == True:
             time.sleep(0.05)
-        if AUDIO_API == "audiostream":
-            self.stream.play()
         return
     
 
@@ -583,9 +564,6 @@ class AudioPlayer():
         self.seek_pos = 0
         self.song_file = next_song_file
         self.next_song_file = None
-        if AUDIO_API == "audiostream":
-            self.stream.stop()
-            self.stream.play()
 
 
     
@@ -598,9 +576,6 @@ class AudioPlayer():
         self.chunk_generator = self.load_chunks(self.song_file, start_pos=start_pos)
         self.pos = start_pos
         self.frame_pos = round(start_pos / 1000 * self.rate)
-        if AUDIO_API == "audiostream":
-            self.stream.stop()
-            self.stream.play()
 
 
 
