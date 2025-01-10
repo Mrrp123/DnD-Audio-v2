@@ -242,9 +242,19 @@ class MusicDatabase():
                     i += 1
         
         elif file_type == ".mp3":
-            file_stream = miniaudio.mp3_stream_file(song)
             num_frames = 0
-            for samples in file_stream:
-                num_frames += len(samples)//2
+            try:
+                file_stream = miniaudio.mp3_stream_file(song)
+                for samples in file_stream:
+                    num_frames += len(samples)//2
+            except miniaudio.DecodeError:
+                hard_link_path = f"{common_vars.app_folder}/cache/audio/temp.mp3"
+                if os.path.exists(hard_link_path):
+                    os.remove(hard_link_path)
+                os.link(song, hard_link_path)
+                file_stream = miniaudio.mp3_stream_file(hard_link_path)
+                for samples in file_stream:
+                    num_frames += len(samples)//2
+                os.remove(hard_link_path)
 
         return (num_frames / 44100 * 1000), num_frames

@@ -452,14 +452,29 @@ class AudioPlayer():
     
     def _load_mp3(self, file, start_frame, gain, num_chunks, chunk_frame_len):
 
-        miniaudio_stream = miniaudio.mp3_stream_file(file, frames_to_read=chunk_frame_len, seek_frame=start_frame)
+        try:
+            miniaudio_stream = miniaudio.mp3_stream_file(file, frames_to_read=chunk_frame_len, seek_frame=start_frame)
+            for samples in miniaudio_stream:
 
-        for samples in miniaudio_stream:
+                byte_data = samples.tobytes()
+                audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
 
-            byte_data = samples.tobytes()
-            audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
+                yield audio
 
-            yield audio
+        except miniaudio.DecodeError:
+            # Miniaudio on windows is fucking stupid and can't resolve file names with non-ascii characters
+            # Create a hard link here with a set (ASCII) name that we can read from instead
+            hard_link_path = f"{self.app_folder}/cache/audio/{self.track_data[file][1]}.mp3"
+            if not os.path.exists(hard_link_path):
+                os.link(file, hard_link_path)
+
+            miniaudio_stream = miniaudio.mp3_stream_file(hard_link_path, frames_to_read=chunk_frame_len, seek_frame=start_frame)
+            for samples in miniaudio_stream:
+
+                byte_data = samples.tobytes()
+                audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
+
+                yield audio
     
 
     def _mp3_to_wav(self, file, track_id):
