@@ -44,7 +44,7 @@ class AudioSegment():
     def __mul__(self, arg):
         if isinstance(arg, AudioSegment):
 
-            self._data = self._data.astype(np.float64) # Cast to float64 incase we overflow from the sum of the signals
+            self._data = self._data.astype(np.float32) # Cast to float32 incase we overflow from the sum of the signals
 
             # data_max = np.max(self._data)
             # arg_max = np.max(self._data)
