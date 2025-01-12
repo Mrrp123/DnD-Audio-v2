@@ -198,7 +198,7 @@ class AudioPlayer():
         pyogg.pyoggSetStreamBufferSize(round(self.rate * encoding//8 * self.chunk_len / 1000))
 
         self.sos = None
-        self.filter_state = (np.zeros(shape=(15, 2)), np.zeros(shape=(15, 2)))
+        self.filter_state = np.zeros(shape=(15, 2, 2))
         self.ease_filter = False
 
         self.volume = 1
@@ -293,7 +293,7 @@ class AudioPlayer():
     def speed(self, value):
         if value < 1:
             self.sos = iirfilter(30, round(value*self.rate/2), fs=self.rate, btype="lowpass", analog=False, ftype="butter", output="sos")
-            self.filter_state = (np.zeros(shape=(15, 2)), np.zeros(shape=(15, 2)))
+            self.filter_state = np.zeros(shape=(15, 2, 2))
         else:
             self.sos = None
         self.fade_duration = int(self.base_fade_duration * value)

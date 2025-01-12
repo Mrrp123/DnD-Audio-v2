@@ -114,23 +114,7 @@ def step_fade(chunk_gen, next_chunk_gen=None, fade_duration=3000, chunk_len=120,
         x += 1
         yield output_chunk, fade_out_chunk_db, fade_in_chunk_db
 
-def change_speed(song_data, speed, sos=None, zf=(np.zeros(shape=(15, 2)), np.zeros(shape=(15, 2))), dt=np.int16):
-    """
-    This function manipulates the raw audio data to speed up or slow down a song by averaging audio samples
-    or by cutting out audio samples. This process is slow when upsampling
-    """
-    
-    def filter_signal(data, sos, zf):
-        y, zf = sosfilt(sos, data, axis=0, zi=zf)
-
-        # This prevents pops and cracking, sosfilt returns a np.float64 array 
-        # which sometimes exceeds the 16 bit signed int limit.
-        # This needs to be constrained to fit in our range.
-
-        return np.clip(y, a_min=-32768, a_max=32767).astype(dt) , zf
-    
-    
-    def resample(channel_samples, scale=1.0):
+def resample(channel_samples, scale=1.0):
         """
         Written by Nathan Whitehead
         Resample a sound to be a different length
@@ -156,22 +140,29 @@ def change_speed(song_data, speed, sos=None, zf=(np.zeros(shape=(15, 2)), np.zer
             np.linspace(0.0, 1.0, len(channel_samples), endpoint=False), # known positions
             channel_samples, # known data points
             )
+
+def change_speed(song_data, speed, sos=None, zf=np.zeros(shape=(15, 2, 2)), dt=np.int16):
+    """
+    This function manipulates the raw audio data to speed up or slow down a song by averaging audio samples
+    or by cutting out audio samples. This process is slow when upsampling
+    """
+    
+    def filter_signal(data, sos, zf):
+        y, zf = sosfilt(sos, data, axis=0, zi=zf)
+
+        # This prevents pops and cracking, sosfilt returns a np.float64 array 
+        # which sometimes exceeds the 16 bit signed int limit.
+        # This needs to be constrained to fit in our range.
+
+        return np.clip(y, a_min=-32768, a_max=32767), zf
     
     channels = np.fromstring(bytes(song_data), dtype=dt) # Convert bytes to numpy array (faster to deal with)
     channels.shape = (len(song_data)//4, 2)
-    channels = channels.T
 
-    chan1 = resample(channels[0], 1/speed)
-    chan2 = resample(channels[1], 1/speed)
+    channels = np.apply_along_axis(resample, axis=0, arr=channels, scale=1/speed)
 
     if sos is not None and speed < 1: # If we're slowing down, we need to apply a low pass filter to the outgoing audio
-        chan1, zf1 = filter_signal(chan1, sos, zf[0])
-        chan2, zf2 = filter_signal(chan2, sos, zf[1])
+        channels, zf = filter_signal(channels, sos, zf)
 
-        zf = (zf1, zf2)
 
-    output = np.zeros((len(chan1)*2,), dtype=np.int16) # interweave channels together
-    output[0::2] = chan1 
-    output[1::2] = chan2
-
-    return output.tobytes(), zf # return as bytes and get last filter state
+    return channels.astype(dt).tobytes(), zf # return as bytes and get last filter state
