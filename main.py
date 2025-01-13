@@ -576,7 +576,7 @@ class SongButton(Widget):
         if os.path.isfile(f"{common_vars.app_folder}/cache/small_covers/{self.track_id}.jpg"):
             self.ids.song_cover.source = f"{common_vars.app_folder}/cache/small_covers/{self.track_id}.jpg"
         else:
-            self.ids.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover.png"
+            self.ids.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover_small.png"
     
     def on_touch_down(self, touch):
         if self.y < touch.y < self.y + self.height:
@@ -813,7 +813,7 @@ class DndAudio(App):
                 self.music_database.add_track(file)
         # This won't work on android
         if platform in ('linux', 'linux2', 'macos', 'win'):
-            from PIL import Image, ImageOps
+            from PIL import Image, ImageOps, UnidentifiedImageError
             from mutagen.id3 import ID3
             from mutagen.id3._util import ID3NoHeaderError
             from io import BytesIO
@@ -824,29 +824,34 @@ class DndAudio(App):
             os.makedirs("./cache/audio", exist_ok=True)
             for track in self.music_database.data["tracks"].keys():
                 cover = self.music_database.data["tracks"][track]["cover"]
-                if not os.path.isfile(cached_img := f"{common_vars.app_folder}/cache/covers/{track}.jpg"):
-                    img_data = None
-                    with open(cached_img, "wb") as fp:
+                if os.path.samefile(cover, f"{common_vars.app_folder}/assets/covers/default_cover.png"):
+                    continue
+                elif (not os.path.isfile(cached_img := f"{common_vars.app_folder}/cache/covers/{track}.jpg")
+                    and os.path.isfile(cover)):
+                    try:
+                        metadata = ID3(cover)
+                        if (apic := metadata.getall("APIC")) != []:
+                            img_data = apic[0].data
+                    except ID3NoHeaderError:
                         try:
-                            metadata = ID3(cover)
-                            if (apic := metadata.getall("APIC")) != []:
-                                img_data = apic[0].data
-                                fp.write(img_data)
-                        except ID3NoHeaderError:
-                            try:
-                                with open(cover, "rb") as fp2:
-                                    img_data = fp2.read()
-                                    fp.write(img_data)
-                            except FileNotFoundError:
-                                print(f"Failed to find image for track {track}!")
-                    if img_data is not None:
-                        try:
-                            img = Image.open(BytesIO(img_data))
-                            img = ImageOps.contain(img, (128,128), Image.Resampling.LANCZOS)
-                            if img.mode in ("RGBA", "P"): img = img.convert("RGB")
-                            img.save(f"{common_vars.app_folder}/cache/small_covers/{track}.jpg", "JPEG", quality=100)
+                            with open(cover, "rb") as fp:
+                                img_data = fp.read()
                         except OSError:
-                            print(f"Failed to save image for track {track}!")
+                            print(f"Failed to read image for track {track}!")
+                            continue
+                    try:
+                        img = Image.open(BytesIO(img_data))
+                    except UnidentifiedImageError:
+                        print(f"Cannot identify image file: {cover}")
+                        continue
+                    try:
+                        with open(cached_img, "wb") as fp:
+                            fp.write(img_data)
+                        if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+                        img = ImageOps.contain(img, (128,128), Image.Resampling.LANCZOS)
+                        img.save(f"{common_vars.app_folder}/cache/small_covers/{track}.jpg", "JPEG", quality=100)
+                    except OSError:
+                        print(f"Failed to save image for track {track}!")
 
 
     def start_service(self):
