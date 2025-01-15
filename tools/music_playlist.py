@@ -2,7 +2,6 @@ import os
 from threading import Thread
 import json
 import yaml
-import wave
 from datetime import datetime
 import miniaudio
 from mutagen.id3 import ID3
@@ -186,6 +185,7 @@ class MusicDatabase():
             bpm=None,
             ):
         new_id = max(self.valid_pointers) + 1
+        track_info = self.get_track_info(file)
 
         if name == "":
             name = os.path.split(file)[-1].split(".")[0]
@@ -195,12 +195,12 @@ class MusicDatabase():
         self.data["tracks"][new_id] = {
             "id" : new_id,
             "file" : os.path.normpath(file),
-            "length" : self.get_track_length(file)[1],
+            "length" : track_info.num_frames,
             "size" : os.path.getsize(file),
-            "rate" : 44_100,
+            "rate" : track_info.sample_rate,
             "date_added" : datetime.now().timestamp(),
             "date_modified" : datetime.now().timestamp(),
-            "bit_rate" : round((os.path.getsize(file)-44) * 8 / (self.get_track_length(file)[1] / 44_100) / 1000),
+            "bit_rate" : round((os.path.getsize(file)-44) * 8 / (track_info.num_frames / track_info.sample_rate) / 1000),
             "name" : name,
             "artist" : artist,
             "cover" : cover,
@@ -222,39 +222,34 @@ class MusicDatabase():
         return self.data["tracks"][self.track_pointer]
 
     @staticmethod
-    def get_track_length(song):
-        _, file_type = os.path.splitext(song)
+    def get_track_info(file: str):
+        file_ext = os.path.splitext(file)[1].lower()
 
-        if file_type == ".wav":
-            with wave.open(song, "rb") as fp:
-                num_frames = fp.getnframes()
-
-        elif file_type == ".ogg":
-            with open(song, "rb") as fp:
-                i = 0
-                while True:
-                    fp.seek(-4-i, 2)
-                    data = fp.read(4)
-                    if data == bytes([79, 103, 103, 83]):
-                        fp.read(2)
-                        num_frames = int.from_bytes(fp.read(8), "little")
-                        break
-                    i += 1
-        
-        elif file_type == ".mp3":
-            num_frames = 0
-            try:
-                file_stream = miniaudio.mp3_stream_file(song)
-                for samples in file_stream:
-                    num_frames += len(samples)//2
-            except miniaudio.DecodeError:
-                hard_link_path = f"{common_vars.app_folder}/cache/audio/temp.mp3"
-                if os.path.exists(hard_link_path):
-                    os.remove(hard_link_path)
-                os.link(song, hard_link_path)
-                file_stream = miniaudio.mp3_stream_file(hard_link_path)
-                for samples in file_stream:
-                    num_frames += len(samples)//2
+        if not file.isascii():
+            hard_link_path = "./cache/audio/temp"
+            if os.path.exists(hard_link_path):
                 os.remove(hard_link_path)
+            os.link(file, hard_link_path)
+            file = hard_link_path
 
-        return (num_frames / 44100 * 1000), num_frames
+        try:
+            if file_ext.lower() == ".wav":
+                info = miniaudio.wav_get_file_info(file)
+
+            elif file_ext.lower() == ".ogg":
+                info = miniaudio.vorbis_get_file_info(file)
+            
+            elif file_ext.lower() == ".mp3":
+                info = miniaudio.mp3_get_file_info(file)
+            
+            else:
+                raise ValueError("Unsupported file type!")
+            
+        except miniaudio.DecodeError:
+            raise miniaudio.DecodeError(f"Failed to get frame count for {file}")
+        
+        finally:
+            if os.path.exists(hard_link_path):
+                os.remove(hard_link_path)
+        
+        return info
