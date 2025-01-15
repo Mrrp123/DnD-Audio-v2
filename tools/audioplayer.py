@@ -429,9 +429,8 @@ class AudioPlayer():
             audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
             if reverse_audio:
                 if cut:
-                    yield audio[0:chunk_frame_len].reverse()
-                else:
-                    yield audio.reverse()
+                    audio._data = audio._data[:chunk_frame_len]
+                yield audio.reverse()
             else:
                 yield audio
     
