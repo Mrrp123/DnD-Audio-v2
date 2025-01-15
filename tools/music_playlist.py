@@ -1,6 +1,5 @@
 import os
 from threading import Thread
-import json
 import yaml
 from datetime import datetime
 import miniaudio
@@ -101,46 +100,6 @@ class MusicDatabase():
     def __add__(self, value):
         if isinstance(value, int):
             self.data["tracks"][self.track_pointer]["play_count"] += 1
-
-    def load_json(self, database_file):
-        """
-        Loads the json database into the playlist
-        """
-        try:
-            with open(database_file, "r") as fp:
-                json_object = json.load(fp)
-                # yaml_object = yaml.safe_load(fp)
-        except FileNotFoundError:
-            pass
-
-        # a = datetime.now().timestamp()
-        # print(a, type(a))
-        # exit()
-
-        new_obj = {"tracks" : {i : 
-                   {"id" : i,
-                    "file" : os.path.normpath(dict_obj["file"]),
-                    "length" : self.get_song_length(dict_obj["file"])[1],
-                    "size" : os.path.getsize(dict_obj["file"]),
-                    "rate" : 44_100,
-                    "date_added" : datetime.now().timestamp(),
-                    "date_modified" : datetime.now().timestamp(),
-                    "bit_rate" : round((os.path.getsize(dict_obj["file"])-44) * 8 / (self.get_song_length(dict_obj["file"])[1] / 44_100) / 1000),
-                    "name" : dict_obj["song"],
-                    "artist" : "",
-                    "cover" : dict_obj["cover"],
-                    "album" : "",
-                    "genre" : "",
-                    "year" : None,
-                    "bpm" : None,
-                    "play_count" : 0,
-                    "play_date" : datetime.now().timestamp()
-                    } 
-                   for i, dict_obj in enumerate(json_object)}}
-        with open("test_music_data.yaml", "w") as fp:
-            fp.write(yaml.safe_dump(new_obj, sort_keys=False))
-        print(json_object[0])
-        return json_object
     
     def load_yaml(self, database_file):
         with open(database_file, "r") as fp:
