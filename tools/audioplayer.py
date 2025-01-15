@@ -10,9 +10,8 @@ from glob import glob
 from threading import Thread, Lock
 import time
 from scipy.signal import iirfilter
-import pyogg
-import ctypes
 import miniaudio
+from miniaudio import lib, ffi, _get_filename_bytes
 from functools import reduce
 import yaml
 
@@ -152,6 +151,46 @@ class AudioStreamer():
 #     def __del__(self, *args, **kwargs):
 #         self.ffmpeg_process.terminate()
 
+# The generator for a vorbis file provided by miniaudio:
+#   a) Doesn't allow us to set a fixed chunk length
+#   b) Doesn't expose the actual stb_vorbis* pointer, which doesn't allow us to seek (for reversing)
+# Therefore, I made my own class that acts a lot like the pyogg variant to decode bytes and seek
+class VorbisFileStream():
+
+    def __init__(self, file, start_frame=0, frames_to_read=1024):
+        filenamebytes = _get_filename_bytes(file)
+        with ffi.new("int *") as error:
+            self.vorbis = lib.stb_vorbis_open_filename(filenamebytes, error, ffi.NULL)
+            if not self.vorbis:
+                raise miniaudio.DecodeError("Could not open/decode file")
+        self.info = lib.stb_vorbis_get_info(self.vorbis)
+        self.decode_buffer = ffi.new("short[]", frames_to_read * self.info.channels)
+        self.decodebuf_ptr = ffi.cast("short *", self.decode_buffer)
+        self.bytes_per_sample = 2 * self.info.channels
+        if start_frame > 0:
+            self.seek(start_frame)
+        self.frames_to_read = frames_to_read
+    
+    def get_buffer(self):
+        num_samples = lib.stb_vorbis_get_samples_short_interleaved(self.vorbis, self.info.channels, self.decodebuf_ptr,
+                                                                            self.frames_to_read * self.info.channels)
+        if num_samples <= 0:
+            return bytes(0)
+                
+        buffer = ffi.buffer(self.decode_buffer, num_samples * self.bytes_per_sample)
+        return bytes(buffer)
+    
+    def seek(self, seek_frame):
+        result = lib.stb_vorbis_seek(self.vorbis, seek_frame)
+        if result <= 0:
+            raise miniaudio.DecodeError(f"Can't seek to frame {seek_frame}")
+        
+    def close(self):
+        self.__exit__()
+
+    def __exit__(self):
+        ffi.release(self.decode_buffer)
+        lib.stb_vorbis_close(self.vorbis)
 
 class AudioPlayer():
     """
@@ -195,7 +234,6 @@ class AudioPlayer():
         self.base_fade_duration = 3000 # Keep original value for when we change speeds and need to adjust this
         self.fade_duration = self.base_fade_duration
         self.chunk_len = 50 # sets a size for how large audio chunks are (ms)
-        pyogg.pyoggSetStreamBufferSize(round(self.rate * encoding//8 * self.chunk_len / 1000))
 
         self.sos = None
         self.filter_state = np.zeros(shape=(15, 2, 2))
@@ -402,12 +440,7 @@ class AudioPlayer():
     
     def _load_ogg(self, file, start_frame, gain, num_chunks, chunk_frame_len):
 
-        data_stream = pyogg.VorbisFileStream(file)
-        
-        if start_frame != 0:
-            pyogg.vorbis.ov_pcm_seek(ctypes.byref(data_stream.vf), start_frame)
-
-        byte_data = bytes([0])
+        miniaudio_stream = VorbisFileStream(file, start_frame, frames_to_read=chunk_frame_len)
 
         reverse_audio = self.reverse_audio # set local variable in case we reverse audio during a transition
         cut = False
@@ -419,11 +452,11 @@ class AudioPlayer():
                     chunk_frame_len += frame_pos # frame pos is negative here, so we're subtracting from chunk_frame_len
                     cut = True # Set flag indicating that we have to cut out a part of the AudioSegment
                     frame_pos = 0
-                pyogg.vorbis.ov_pcm_seek(ctypes.byref(data_stream.vf), frame_pos)
+                miniaudio_stream.seek(frame_pos)
 
-            byte_data, _ = data_stream.get_buffer()
+            byte_data = miniaudio_stream.get_buffer()
 
-            if byte_data is None:
+            if not byte_data:
                 break
 
             audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
