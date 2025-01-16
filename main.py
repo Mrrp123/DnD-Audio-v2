@@ -824,7 +824,7 @@ class DndAudio(App):
             os.makedirs("./cache/audio", exist_ok=True)
             for track in self.music_database.data["tracks"].keys():
                 cover = self.music_database.data["tracks"][track]["cover"]
-                if os.path.samefile(cover, f"{common_vars.app_folder}/assets/covers/default_cover.png"):
+                if os.path.isfile(cover) and os.path.samefile(cover, f"{common_vars.app_folder}/assets/covers/default_cover.png"):
                     continue
                 elif (not os.path.isfile(cached_img := f"{common_vars.app_folder}/cache/covers/{track}.jpg")
                     and os.path.isfile(cover)):
