@@ -1,8 +1,11 @@
 # Necessary Modules
-```bash
-kivy
+```text
+kivy >= 2.2.0
+pyyaml
+miniaudio
+mutagen
 numpy
 scipy
-audiostream OR pyaudio
-pyogg
+python-osc
+pillow
 ```
