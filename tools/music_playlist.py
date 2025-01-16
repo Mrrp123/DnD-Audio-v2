@@ -104,7 +104,40 @@ class MusicDatabase():
     def load_yaml(self, database_file):
         with open(database_file, "r") as fp:
             yaml_object = yaml.safe_load(fp)
+
+        if yaml_object is None:
+            raise OSError(f"No yaml data in {database_file}")
+        if (err := self._verify_format(yaml_object)):
+            raise ValueError(f"Incorrectly formatted MusicDatabase: {err}")
+        
         return yaml_object
+    
+    @staticmethod
+    def _verify_format(yaml_object):
+
+        required_base_keys = ("tracks",)
+
+        required_track_keys = ("id", "file", "length", "size", "rate", 
+                               "date_added", "date_modified", "bit_rate",
+                               "name", "artist", "cover", "album", "genre", 
+                               "year", "bpm", "play_count", "play_date")
+
+        if not isinstance(yaml_object, dict):
+            return "MusicDatabase is not a dictionary at the tree level"
+        
+        for key in yaml_object.keys():
+            if key not in required_base_keys:
+                return f"MusicDatabase is missing required tree level key: {key}"
+            if not isinstance(yaml_object[key], dict):
+                return f"MusicDatabase['tracks'][{key}] is not a dictionary"
+            
+        for track_id in yaml_object["tracks"].keys():
+            if not isinstance(track_id, int):
+                return f"MusicDatabase['tracks'] key: {track_id} is not an integer"
+            if not all(key in yaml_object["tracks"][track_id].keys() for key in required_track_keys):
+                return f"MusicDatabase is missing required track_id level key: {key}"
+            
+        return False # no errors
 
     def next(self):
         return self >> 1
