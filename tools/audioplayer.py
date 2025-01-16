@@ -265,9 +265,8 @@ class AudioPlayer():
         with open(common_vars.music_database_path) as fp:
             music_data = yaml.safe_load(fp)
 
-        # Create file -> track length LUT
-        # Only information we care about, really
-        self.track_data = {music_data["tracks"][track]["file"] : (music_data["tracks"][track]["length"], music_data["tracks"][track]["id"]) 
+        # Create file -> database LUT since it's more convienient to use the file as the key
+        self.track_data = {music_data["tracks"][track]["file"] : music_data["tracks"][track]
                            for track in music_data["tracks"].keys()}
 
         
@@ -357,7 +356,7 @@ class AudioPlayer():
         _, file_type = os.path.splitext(file)
 
         num_frames = total_frames = self.get_track_length(file)[1]
-        self.next_song_length = (total_frames / self.rate)*1000
+        self.next_song_length = (total_frames / self.track_data[file]["rate"])*1000
         self.next_total_frames = total_frames
         if self.bootup:
             self.song_length = self.next_song_length
@@ -366,12 +365,12 @@ class AudioPlayer():
                 self.pos = self.song_length
                 self.frame_pos = self.total_frames
 
-        if end_pos is not None and end_pos / 1000 * self.rate < num_frames:
+        if end_pos is not None and end_pos / 1000 * self.track_data[file]["rate"] < num_frames:
             num_frames -= (num_frames - end_pos)
-            end_frame = round(end_pos / 1000 * self.rate)
+            end_frame = round(end_pos / 1000 * self.track_data[file]["rate"])
 
         if start_pos >= 0:
-            start_frame = round(start_pos / 1000 * self.rate)
+            start_frame = round(start_pos / 1000 * self.track_data[file]["rate"])
             # Somehow, if start_frame is longer than the entire file, set start_frame to zero
             if start_frame > total_frames:
                 start_frame = 0
@@ -391,9 +390,9 @@ class AudioPlayer():
         #     num_frames -= start_frame
             
             
-        num_chunks = ceil(num_frames / (self.rate/1000*self.chunk_len))
+        num_chunks = ceil(num_frames / (self.track_data[file]["rate"]/1000*self.chunk_len))
         self.num_chunks = num_chunks
-        chunk_frame_len = round(self.rate * (self.chunk_len / 1000))
+        chunk_frame_len = round(self.track_data[file]["rate"] * (self.chunk_len / 1000))
 
         if file_type == ".wav":
             audio_generator = self._load_wav(file, start_frame, gain, num_chunks, chunk_frame_len)
@@ -404,7 +403,7 @@ class AudioPlayer():
         elif file_type == ".mp3":
             # Streaming an mp3 in reverse is impossible, so we will instead create a wav file from the mp3 and read that instead
             if self.reverse_audio:
-                track_id = self.track_data[file][1]
+                track_id = self.track_data[file]["id"]
                 if not os.path.exists(f"{self.app_folder}/cache/audio/{track_id}.wav"):
                     self._mp3_to_wav(file, track_id)
                 file = f"{self.app_folder}/cache/audio/{track_id}.wav"
@@ -432,7 +431,11 @@ class AudioPlayer():
                 else:
                     fp.setpos(chunk_frame_len*chunk_index + start_frame)
                 byte_data = fp.readframes(chunk_frame_len)
-                audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
+                try:
+                    frame_rate = self.track_data[file]["rate"]
+                except KeyError: # This is meant to handle cases for cached and reversed mp3 audio
+                    frame_rate = fp.getframerate()
+                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2) + gain
                 if reverse_audio:
                     yield audio.reverse()
                 else:
@@ -459,7 +462,7 @@ class AudioPlayer():
             if not byte_data:
                 break
 
-            audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
+            audio = AudioSegment(data=byte_data, frame_rate=self.track_data[file]["rate"], channels=2, sample_width=2) + gain
             if reverse_audio:
                 if cut:
                     audio._data = audio._data[:chunk_frame_len]
@@ -474,14 +477,14 @@ class AudioPlayer():
             for samples in miniaudio_stream:
 
                 byte_data = samples.tobytes()
-                audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
+                audio = AudioSegment(data=byte_data, frame_rate=self.track_data[file]["rate"], channels=2, sample_width=2) + gain
 
                 yield audio
 
         except miniaudio.DecodeError:
             # Miniaudio on windows is fucking stupid and can't resolve file names with non-ascii characters
             # Create a hard link here with a set (ASCII) name that we can read from instead
-            hard_link_path = f"{self.app_folder}/cache/audio/{self.track_data[file][1]}.mp3"
+            hard_link_path = f"{self.app_folder}/cache/audio/{self.track_data[file]['id']}.mp3"
             if not os.path.exists(hard_link_path):
                 os.link(file, hard_link_path)
 
@@ -489,7 +492,7 @@ class AudioPlayer():
             for samples in miniaudio_stream:
 
                 byte_data = samples.tobytes()
-                audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=2) + gain
+                audio = AudioSegment(data=byte_data, frame_rate=self.track_data[file]["rate"], channels=2, sample_width=2) + gain
 
                 yield audio
     
@@ -512,7 +515,7 @@ class AudioPlayer():
 
         file_stream = miniaudio.mp3_stream_file(file)
         with wave.open(f"{self.app_folder}/cache/audio/{track_id}.wav", "wb") as fp:
-            fp.setparams((2, 2, self.rate, 0, "NONE", "NONE"))
+            fp.setparams((2, 2, self.track_data[file]["rate"], 0, "NONE", "NONE"))
             for samples in file_stream:
                 fp.writeframes(samples)
         
@@ -522,8 +525,8 @@ class AudioPlayer():
     
 
     def get_track_length(self, file):
-        num_frames = self.track_data[file][0]
-        return (num_frames / self.rate * 1000), num_frames
+        num_frames = self.track_data[file]["length"]
+        return (num_frames / self.track_data[file]["rate"] * 1000), num_frames
 
     
     def get_debug_info(self):
@@ -561,7 +564,8 @@ class AudioPlayer():
                         f"Seek Pos: {self.seek_pos/1000/self.speed:.3f}s\n" +\
                         f"Audio Player Speed: {self.speed:.3g}x, Fade Duration: {self.base_fade_duration//1000}s\n" +\
                         f"Audio Player Status: {self.status}\n" +\
-                        f"Chunk Index: {chunk_index}/{num_chunks-1}, Chunk Length: {len(chunk)/self.speed:.3f}ms\n" +\
+                        f"Chunk Index: {chunk_index}/{num_chunks-1}, Chunk Length: {len(chunk)/self.speed:.3f}ms, " +\
+                        f"Chunk Frame Length: {round(len(chunk._data)/self.speed)} frames\n" +\
                         f"Audio chunk generation time: {chunk_gen_time}"
             #print(self.debug_string)
 
@@ -607,7 +611,7 @@ class AudioPlayer():
         start_pos = int(start_pos)
         self.chunk_generator = self.load_chunks(self.song_file, start_pos=start_pos)
         self.pos = start_pos
-        self.frame_pos = round(start_pos / 1000 * self.rate)
+        self.frame_pos = round(start_pos / 1000 * self.track_data[self.song_file]["rate"])
 
 
 
@@ -820,8 +824,8 @@ class AudioPlayer():
         if self.volume < 1:
             audio = audio + amp_to_db(self.volume)
         data = audio.data
-        if self.speed != 1:
-            data, self.filter_state = change_speed(data, self.speed, self.sos, zf=self.filter_state, dt=audio.dt)
+        if self.speed != 1 or audio.frame_rate != self.rate:
+            data, self.filter_state = change_speed(data, self.speed * audio.frame_rate/self.rate, self.sos, zf=self.filter_state, dt=audio.dt)
         self.get_debug_info()
         self.stream.write(data)
         if self.pause_flag == True:
@@ -838,14 +842,12 @@ class AudioPlayer():
         Is that a fucking JoJo reference???
         """
         speed_list = np.linspace(self.speed, 0, round(1800 / self.chunk_len), endpoint=False)
-        start_pos = self.pos
-        data_len = 0
 
-        #print(self.pos, self.pos-start_pos, frames_read, frames_read / 44.1)
+        extra_song_audio = None # set this for later
 
         with wave.open(f"{self.app_folder}/assets/audio/zawarudo.wav", "rb") as zwfp:
 
-            zw = zwfp.readframes(round(self.chunk_len*self.rate/self.speed/1000))
+            zw = zwfp.readframes(round(self.chunk_len*44_100/self.speed/1000)) # Read 50 ms of audio from zawarudo.wav
 
             min_db = -5
 
@@ -853,69 +855,81 @@ class AudioPlayer():
             
             db_list = [(amp_to_db(amp_list[index]), amp_to_db(amp_list[index+1])) for index in range(len(amp_list)-1)]
 
-            extra_song_audio = AudioSegment(data=bytes(0), frame_rate=self.rate, channels=2, sample_width=2)
-
             i = 0
             while len(zw) != 0:
 
-                data = next(self.chunk_generator).data
+                data = next(self.chunk_generator).data # Get song data bytes
 
-                #data = fp.readframes(round(self.chunk_len*self.rate/1000*self.speed))
-                data, _ = change_speed(data, self.speed)
-                zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2) + + amp_to_db(self.volume)
+                # Change the speed of the audio to whatever the user has set, taking into account the sampling rate of the output data
+                data, _ = change_speed(data, self.speed * self.track_data[self.song_file]["rate"]/self.rate)
+
+                # Frame rate is 44.1 kHz because the audio we use in the assets is 44.1 kHz, not necessaryily self.rate
+                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume)
+
+                # Even though song_audio could be any sampling rate, the above change_speed function will have resampled it to self.rate (44.1 kHz)
+                song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2)
+
+                # For the first few chunks, we want to fade down to the desired ducking volume (5 dB)
                 if i < len(db_list):
-                    song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2).fade(
-                        from_gain=db_list[i][0], to_gain=db_list[i][1], start=0, duration=len(data)//4) + + amp_to_db(self.volume)
-
+                    song_audio = song_audio.fade(from_gain=db_list[i][0], to_gain=db_list[i][1], 
+                                                 start=0, duration=len(data)//4) + amp_to_db(self.volume)
                 else:
-                    song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2) + min_db + + amp_to_db(self.volume)
+                    song_audio = song_audio + min_db + amp_to_db(self.volume)
 
-
+                # If chunk lengths match, mix together and play, otherwise cut off remaining zw audio and add extra audio data to extra_song_audio
                 if len(song_audio) == len(zw_audio):
                     self.stream.write((song_audio * zw_audio).data)
                 else:
-                    extra_song_audio = song_audio[len(zw_audio):]
+                    extra_song_audio = song_audio[len(zw_audio):] # Note, this has already been resampled to self.rate
                     self.stream.write((song_audio[0:len(zw_audio)] * zw_audio).data)
 
                 self.get_debug_info()
+                # Change frame_pos by how many frames *would have* been read before accounting for resampling rather than self.rate
                 if self.reverse_audio:
                     self.pos -= len(zw_audio) * self.speed
-                    self.frame_pos -= round(self.chunk_len*self.rate/1000)
+                    self.frame_pos -= round(self.chunk_len*self.track_data[self.song_file]["rate"]/1000)
                 else:
                     self.pos += len(zw_audio) * self.speed
-                    self.frame_pos += round(self.chunk_len*self.rate/1000)
-                zw = zwfp.readframes(round(self.chunk_len*self.rate/self.speed/1000))
+                    self.frame_pos += round(self.chunk_len*self.track_data[self.song_file]["rate"]/1000)
+                
+                # Read in more zawarudo.wav audio
+                zw = zwfp.readframes(round(self.chunk_len*44_100/self.speed/1000))
 
                 i += 1
 
         with wave.open(f"{self.app_folder}/assets/audio/time_stop.wav", "rb") as zwfp:
 
-            zwfp.setpos(21_563) # Set
+            zwfp.setpos(21_563) # Set position to a specific point in the file
+
+            if extra_song_audio is None:
+                extra_song_audio = AudioSegment(data=bytes(0), frame_rate=self.rate, channels=2, sample_width=2)
 
             for i, speed in enumerate(speed_list):
                 chunk_len = speed * self.chunk_len
-                num_frames = round(self.rate*chunk_len / 1000)
+                # Change frame_pos by how many frames *would have* been read before accounting for resampling rather than self.rate
+                num_frames = round(self.track_data[self.song_file]["rate"]*chunk_len / 1000)
 
                 while len(extra_song_audio) < chunk_len:
-                    extra_song_audio = extra_song_audio + next(self.chunk_generator)
+                    extra_song_audio = extra_song_audio + next(self.chunk_generator) # This action will automatically resample the audio to self.rate
+
+                data = extra_song_audio[:chunk_len].data # We cut based on milliseconds here, so sample rate shouldn't affect these
+                extra_song_audio = extra_song_audio[chunk_len:]
                 
-                audio_sum = extra_song_audio
+                data, _ = change_speed(data, speed) # No need to resample here since extra_song_audio will have done that automatically
 
-                extra_song_audio = audio_sum[chunk_len:]
-                data = audio_sum[:chunk_len].data
-
-
-                data, _ = change_speed(data, speed)
-
-                zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
+                zw = zwfp.readframes(round(self.chunk_len*44_100/1000))
                 
-                
+                # Again, resampling for song_audio should already be handled by the above code; set it to self.rate
                 song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2) + (min_db + amp_to_db(self.volume))
-                zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2) + amp_to_db(self.volume)
+                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume)
 
+                # This should always be the same length
+                self.stream.write((song_audio * zw_audio).data)
+
+                # Tell the main display to run the shaders to do the time stop effect
                 if i == 0:
                     self.osc_client.send_message("/call/main/main_display", "_start_time_effect")
-                self.stream.write((song_audio * zw_audio).data)
+
                 self.get_debug_info()
                 if self.reverse_audio:
                     self.pos -= chunk_len
@@ -925,14 +939,17 @@ class AudioPlayer():
                     self.frame_pos += num_frames
             
             zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
+
+            # After the slow down effect has been done, read the rest of the time_stop.wav
             while len(zw) != 0:
-                zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2) + amp_to_db(self.volume)
+                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume)
                 self.stream.write(zw_audio.data)
                 zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
 
         time.sleep(5)
         #self.pause()
 
+        # Reverse our volume list to undo the previous ducking
         db_list.reverse()
         
         with wave.open(f"{self.app_folder}/assets/audio/time_resume.wav", "rb") as zwfp:
@@ -941,25 +958,31 @@ class AudioPlayer():
             end_offset = (len(speed_list) - len(db_list))
             for i, speed in enumerate(speed_list):
                 chunk_len = speed * self.chunk_len
-                num_frames = round(self.rate*chunk_len / 1000)
+                # Change frame_pos by how many frames *would have* been read before accounting for resampling rather than self.rate
+                num_frames = round(self.track_data[self.song_file]["rate"]*chunk_len / 1000)
 
                 while len(extra_song_audio) < chunk_len:
-                    extra_song_audio = extra_song_audio + next(self.chunk_generator)
+                    extra_song_audio = extra_song_audio + next(self.chunk_generator) # This action will automatically resample the audio to self.rate
                 
-                audio_sum = extra_song_audio
+                data = extra_song_audio[:chunk_len].data # We cut based on milliseconds here, so sample rate shouldn't affect these
+                extra_song_audio = extra_song_audio[chunk_len:]
 
-                extra_song_audio = audio_sum[chunk_len:]
-                data = audio_sum[:chunk_len].data
+                data, _ = change_speed(data, speed) # No need to resample here since extra_song_audio will have done that automatically
 
-                zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
+                zw = zwfp.readframes(round(self.chunk_len*44_100/1000))
 
-                data, _ = change_speed(data, speed)
+                # Frame rate is 44.1 kHz because the audio we use in the assets is 44.1 kHz, not necessaryily self.rate
+                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume)
+
+                # Again, even though song_audio could be any sampling rate, the above change_speed function will have resampled it to self.rate
+                song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2)
+
                 if i >= end_offset:
-                    song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2).fade(
-                        from_gain=db_list[i - end_offset][1], to_gain=db_list[i - end_offset][0], start=0, duration=len(data)//4) + amp_to_db(self.volume)
+                    song_audio = song_audio.fade(from_gain=db_list[i - end_offset][1], to_gain=db_list[i - end_offset][0], 
+                                                 start=0, duration=len(data)//4) + amp_to_db(self.volume)
                 else:
-                    song_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2) + (min_db + amp_to_db(self.volume))
-                zw_audio = AudioSegment(data=zw, frame_rate=self.rate, channels=2, sample_width=2) + amp_to_db(self.volume)
+                    song_audio = song_audio + (min_db + amp_to_db(self.volume))
+
                 self.stream.write((song_audio * zw_audio).data)
                 self.get_debug_info()
                 if self.reverse_audio:
@@ -968,12 +991,12 @@ class AudioPlayer():
                 else:
                     self.pos += chunk_len
                     self.frame_pos += num_frames
+                        
+        # If there's any left over data, play it
+        if len(extra_song_audio):
+            self.stream.write((extra_song_audio + amp_to_db(self.volume)).data)
 
-        
-        
-
-        #self.chunk_generator = self.load_chunks(self.song_file, start_pos=self.pos)
-
+        # We can keep using self.chunk_generator, just keep playing the rest of the song
         self.status = "playing"
 
     

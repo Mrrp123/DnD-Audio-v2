@@ -1,5 +1,5 @@
 import numpy as np
-from tools.audioprocessing import db_to_amp
+from tools.audioprocessing import db_to_amp, resample
 
 class AudioSegment():
 
@@ -27,6 +27,9 @@ class AudioSegment():
     
     def __add__(self, arg):
         if isinstance(arg, AudioSegment):
+            if self.frame_rate != arg.frame_rate:
+                arg._data = np.apply_along_axis(resample, axis=0, arr=arg._data, scale=self.frame_rate/arg.frame_rate).astype(self.dt)
+
             self._data = np.concatenate((self._data, arg._data))
             return self
         elif isinstance(arg, float | int | np.integer):
@@ -43,6 +46,10 @@ class AudioSegment():
     
     def __mul__(self, arg):
         if isinstance(arg, AudioSegment):
+
+            # If mixing between two different rates, resample the second argument to the first's rate, then mix
+            if self.frame_rate != arg.frame_rate:
+                arg._data = np.apply_along_axis(resample, axis=0, arr=arg._data, scale=self.frame_rate/arg.frame_rate).astype(self.dt)
 
             self._data = self._data.astype(np.float32) # Cast to float32 incase we overflow from the sum of the signals
 
