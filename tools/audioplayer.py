@@ -337,7 +337,7 @@ class AudioPlayer():
         self._speed = value
 
     
-    def load_chunks(self, file, start_pos=0, end_pos=None, gain=0, chunk_size=None):
+    def load_chunks(self, file, start_pos=0, end_pos=None):
         """
         This function will load a portion of a song defined by self.chunk_len (set to 120ms).
         Chunks may be shorter than 120ms if at EOF and the song length is not a multiple of self.chunk_len
@@ -349,8 +349,6 @@ class AudioPlayer():
         or EOF if end_pos is None.
 
         end_pos: int or None: stop reading at time = end_pos milliseconds, if None, read until EOF
-
-        gain: increase (or decrease) volume of outgoing audiosegment (in dB)
         """
 
         _, file_type = os.path.splitext(file)
@@ -395,10 +393,10 @@ class AudioPlayer():
         chunk_frame_len = round(self.track_data[file]["rate"] * (self.chunk_len / 1000))
 
         if file_type == ".wav":
-            audio_generator = self._load_wav(file, start_frame, gain, num_chunks, chunk_frame_len)
+            audio_generator = self._load_wav(file, start_frame, num_chunks, chunk_frame_len)
         
         elif file_type == ".ogg":
-            audio_generator = self._load_ogg(file, start_frame, gain, num_chunks, chunk_frame_len)
+            audio_generator = self._load_ogg(file, start_frame, num_chunks, chunk_frame_len)
         
         elif file_type == ".mp3":
             # Streaming an mp3 in reverse is impossible, so we will instead create a wav file from the mp3 and read that instead
@@ -407,15 +405,15 @@ class AudioPlayer():
                 if not os.path.exists(f"{self.app_folder}/cache/audio/{track_id}.wav"):
                     self._mp3_to_wav(file, track_id)
                 file = f"{self.app_folder}/cache/audio/{track_id}.wav"
-                audio_generator = self._load_wav(file, start_frame, gain, num_chunks, chunk_frame_len)
+                audio_generator = self._load_wav(file, start_frame, num_chunks, chunk_frame_len)
             else:
-                audio_generator = self._load_mp3(file, start_frame, gain, num_chunks, chunk_frame_len)
-
+                audio_generator = self._load_mp3(file, start_frame, num_chunks, chunk_frame_len)
+        print(f"Using chunk_frame_len of {chunk_frame_len} for file {file}")
         for audio in audio_generator:
             yield audio
 
 
-    def _load_wav(self, file, start_frame, gain, num_chunks, chunk_frame_len):
+    def _load_wav(self, file, start_frame, num_chunks, chunk_frame_len):
 
         reverse_audio = self.reverse_audio # set local variable in case we reverse audio during a transition
 
@@ -435,13 +433,13 @@ class AudioPlayer():
                     frame_rate = self.track_data[file]["rate"]
                 except KeyError: # This is meant to handle cases for cached and reversed mp3 audio
                     frame_rate = fp.getframerate()
-                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2) + gain
+                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2)
                 if reverse_audio:
                     yield audio.reverse()
                 else:
                     yield audio
     
-    def _load_ogg(self, file, start_frame, gain, num_chunks, chunk_frame_len):
+    def _load_ogg(self, file, start_frame, num_chunks, chunk_frame_len):
 
         miniaudio_stream = VorbisFileStream(file, start_frame, frames_to_read=chunk_frame_len)
 
@@ -462,7 +460,7 @@ class AudioPlayer():
             if not byte_data:
                 break
 
-            audio = AudioSegment(data=byte_data, frame_rate=self.track_data[file]["rate"], channels=2, sample_width=2) + gain
+            audio = AudioSegment(data=byte_data, frame_rate=self.track_data[file]["rate"], channels=2, sample_width=2)
             if reverse_audio:
                 if cut:
                     audio._data = audio._data[:chunk_frame_len]
@@ -470,14 +468,14 @@ class AudioPlayer():
             else:
                 yield audio
     
-    def _load_mp3(self, file, start_frame, gain, num_chunks, chunk_frame_len):
+    def _load_mp3(self, file, start_frame, num_chunks, chunk_frame_len):
 
         try:
             miniaudio_stream = miniaudio.mp3_stream_file(file, frames_to_read=chunk_frame_len, seek_frame=start_frame)
             for samples in miniaudio_stream:
 
                 byte_data = samples.tobytes()
-                audio = AudioSegment(data=byte_data, frame_rate=self.track_data[file]["rate"], channels=2, sample_width=2) + gain
+                audio = AudioSegment(data=byte_data, frame_rate=self.track_data[file]["rate"], channels=2, sample_width=2)
 
                 yield audio
 
@@ -492,7 +490,7 @@ class AudioPlayer():
             for samples in miniaudio_stream:
 
                 byte_data = samples.tobytes()
-                audio = AudioSegment(data=byte_data, frame_rate=self.track_data[file]["rate"], channels=2, sample_width=2) + gain
+                audio = AudioSegment(data=byte_data, frame_rate=self.track_data[file]["rate"], channels=2, sample_width=2)
 
                 yield audio
     
