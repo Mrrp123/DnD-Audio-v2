@@ -481,7 +481,8 @@ class ToggleableEffectWidget(EffectWidget):
 class SongsScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
-        self.add_widget(SongsDisplay())
+        self.songs_display = SongsDisplay()
+        self.add_widget(self.songs_display)
     
     # def on_enter(self, *args):
     #     print(self.children[0].song_list.data)
@@ -507,6 +508,7 @@ class SongsDisplay(Widget):
         
         self.sort_by = "date_added"
         self.reverse_sort = True
+        self.ids[f"sort_{self.sort_by}"].ids.sort_checkbox.active = True
         self.song_list.data.sort(
             key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
         self.app.music_database.valid_pointers.sort(
@@ -664,8 +666,8 @@ class SettingsDisplay(Widget):
         if os.path.exists(f"{common_vars.app_folder}/config"):
             try:
                 with open(f"{common_vars.app_folder}/config", "rb") as fp:
-                    offset = int.from_bytes(fp.read(2), "little") + 15
-                    fp.seek(offset)
+                    #offset = int.from_bytes(fp.read(2), "little") + 20
+                    fp.seek(-26, 2)
 
                     fade_duration = int.from_bytes(fp.read(2), "little")
                     song_length, speed, volume = struct.unpack("3d", fp.read(24))
@@ -953,9 +955,12 @@ class DndAudio(App):
                  speed, fade_duration, volume, reverse_audio) = self.config_vars
                 fp.write(len(bytes(song_file, encoding="utf-8")).to_bytes(2, "little"))
                 fp.write(bytes(song_file, encoding="utf-8"))
+                # Add special code so we know the file format is ok, even if the above path fails
+                fp.write(bytes([0x6D, 0x72, 0x72, 0x70])) # mrrp
                 fp.write(int(song_pos).to_bytes(4, "little"))
                 fp.write(int(total_frames).to_bytes(8, "little"))
                 fp.write(int(reverse_audio).to_bytes(1, "little"))
+                fp.write(self.sort_by_bytemap[self.root.get_screen("songs").songs_display.sort_by])
                 fp.write(int(fade_duration).to_bytes(2, "little"))
                 fp.write(struct.pack("3d", song_length, speed, volume))
         except Exception as err:
@@ -967,18 +972,20 @@ class DndAudio(App):
             with open(f"{common_vars.app_folder}/config", "rb") as fp:
                 file_len = int.from_bytes(fp.read(2), "little")
                 song_file = fp.read(file_len).decode("utf-8")
+                delim = fp.read(4)
                 song_pos = int.from_bytes(fp.read(4), "little")
                 total_frames = int.from_bytes(fp.read(8), "little")
                 reverse_audio = int.from_bytes(fp.read(1), "little")
+                sort_by = self.reverse_sort_by_bytemap[fp.read(1)]
                 fade_duration = int.from_bytes(fp.read(2), "little")
                 song_length, speed, volume = struct.unpack("3d", fp.read(24))
                 
         except Exception as err:
             return
-        if os.path.exists(song_file): # make sure song file still exists
+        if os.path.exists(song_file) and delim == bytes([0x6D, 0x72, 0x72, 0x70]): # make sure song file still exists
             #self.set_audioplayer_attr("pause_flag", True)
             self.music_database.set_track(song_file)
-            self.set_audioplayer_attr("song_file", self.music_database.get_track()["file"])
+        if delim == bytes([0x6D, 0x72, 0x72, 0x70]):
             self.set_audioplayer_attr("init_pos", song_pos)
             self.set_audioplayer_attr("pos", song_pos) # This (technically) shouldn't do anything, but it prevents time slider visual glitches on startup
             self.set_audioplayer_attr("total_frames", total_frames)
@@ -988,6 +995,10 @@ class DndAudio(App):
             self.set_audioplayer_attr("volume", volume)
             self.set_audioplayer_attr("song_length", song_length)
             self.set_audioplayer_attr("reverse_audio", reverse_audio)
+            self.root.get_screen("songs").songs_display.sort_by = sort_by
+            self.root.get_screen("songs").songs_display.reverse_sort = sort_by in ("date_added", "play_date", "play_count")
+            self.root.get_screen("songs").songs_display.ids[f"sort_{sort_by}"].ids.sort_checkbox.active = True
+            self.root.get_screen("songs").songs_display.refresh_songs()
 
             # This waits until the audioplayer has fully received all of the config messages
             while self.get_audioplayer_attr("song_length") == ():
@@ -1005,9 +1016,18 @@ class DndAudio(App):
         
         self.osc_server.timeout = None
 
+        self.sort_by_bytemap = {
+                "date_added" : b'\x00',
+                "name" : b'\x01',
+                "artist" : b'\x02',
+                "play_date" : b'\x03',
+                "play_count" : b'\x04'
+            }
+        self.reverse_sort_by_bytemap = {v : k for k, v in self.sort_by_bytemap.items()}
+
         if os.path.exists(f"{common_vars.app_folder}/config"):
             self.load_audioplayer_config()
-        elif len(self.music_database) != 0:
+        if len(self.music_database) != 0:
             self.set_audioplayer_attr("song_file", self.music_database.data["tracks"][self.music_database.track_pointer]["file"])
 
         self.config_vars = self._get_config_vars(0)

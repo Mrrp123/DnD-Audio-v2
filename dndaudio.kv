@@ -553,6 +553,7 @@
             on_kv_post: self.dismiss()
             
             SortButton:
+                id: sort_name
                 text: "Name"
                 sort_by: "name"
                 size_hint_y: None
@@ -572,6 +573,7 @@
                         points: (self.x, self.y, self.x + self.width, self.y)
             
             SortButton:
+                id: sort_artist
                 text: "Artist"
                 sort_by: "artist"
                 size_hint_y: None
@@ -590,6 +592,7 @@
                         points: (self.x, self.y, self.x + self.width, self.y)
             
             SortButton:
+                id: sort_date_added
                 text: "Date Added"
                 sort_by: "date_added"
                 size_hint_y: None
@@ -608,6 +611,7 @@
                         points: (self.x, self.y, self.x + self.width, self.y)
             
             SortButton:
+                id: sort_play_date
                 text: "Last Played"
                 sort_by: "play_date"
                 size_hint_y: None
@@ -626,6 +630,7 @@
                         points: (self.x, self.y, self.x + self.width, self.y)
             
             SortButton:
+                id: sort_play_count
                 text: "Plays"
                 sort_by: "play_count"
                 size_hint_y: None
