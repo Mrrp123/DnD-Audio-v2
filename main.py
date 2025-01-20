@@ -2,6 +2,7 @@ from kivy.app import App
 
 from kivy.uix.widget import Widget
 from kivy.uix.button import Button
+from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.screenmanager import ScreenManager, Screen, CardTransition, NoTransition, SlideTransition
 from kivy.uix.effectwidget import EffectWidget
 #from kivy.properties import StringProperty, BooleanProperty, ObjectProperty, ListProperty
@@ -499,12 +500,17 @@ class SongsDisplay(Widget):
 
         self.song_list = self.ids.song_list
         self.song_search = self.ids.song_search
-        self.song_list.data = [{"name" : self.app.music_database.data["tracks"][track]["name"],
-                                 "artist" : self.app.music_database.data["tracks"][track]["artist"],
-                                 "track_id" : self.app.music_database.data["tracks"][track]["id"], 
-                                "song_filepath" : self.app.music_database.data["tracks"][track]["file"],
-                                "cover" : self.app.music_database.data["tracks"][track]["cover"]} 
-                                for track in self.app.music_database.data["tracks"].keys()]
+        self.song_list.data = [
+            {"track_id" : self.app.music_database.data["tracks"][track]["id"]} 
+            for track in self.app.music_database.data["tracks"].keys()
+            ]
+        
+        self.sort_by = "date_added"
+        self.reverse_sort = True
+        self.song_list.data.sort(
+            key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
+        self.app.music_database.valid_pointers.sort(
+            key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
         self.update_clock = None
 
     def on_text(self, widget):
@@ -532,7 +538,11 @@ class SongsDisplay(Widget):
             self.widget.scroll_x = 0
         else:
             self.widget.halign = "right"
-
+    
+    def change_sort(self, sort_by, reverse_sort):
+        self.sort_by = sort_by
+        self.reverse_sort = reverse_sort
+        self.refresh_songs()
 
     def update_song_list(self, dt):
         
@@ -543,23 +553,22 @@ class SongsDisplay(Widget):
 
         if self.song_search.text == "":
             self.song_list.data = [
-                                {"name" : self.app.music_database.data["tracks"][track]["name"],
-                                 "artist" : self.app.music_database.data["tracks"][track]["artist"],
-                                 "track_id" : self.app.music_database.data["tracks"][track]["id"], 
-                                "song_filepath" : self.app.music_database.data["tracks"][track]["file"],
-                                "cover" : self.app.music_database.data["tracks"][track]["cover"]} 
-                                 for track in self.app.music_database.data["tracks"].keys()]
-            return
-
-        self.song_list.data = self.song_list.data = [
-                                {"name" : self.app.music_database.data["tracks"][track]["name"],
-                                 "artist" : self.app.music_database.data["tracks"][track]["artist"],
-                                 "track_id" : self.app.music_database.data["tracks"][track]["id"], 
-                                "song_filepath" : self.app.music_database.data["tracks"][track]["file"],
-                                "cover" : self.app.music_database.data["tracks"][track]["cover"]} 
-                                for track in self.app.music_database.data["tracks"].keys()
-                                if self.song_search.text.lower() in self.app.music_database.data["tracks"][track]["name"].lower()
-                                or self.song_search.text.lower() in self.app.music_database.data["tracks"][track]["artist"].lower()]
+            {"track_id" : self.app.music_database.data["tracks"][track]["id"]} 
+            for track in self.app.music_database.data["tracks"].keys()
+            ]
+        
+        else:
+            self.song_list.data = [
+            {"track_id" : self.app.music_database.data["tracks"][track]["id"]} 
+            for track in self.app.music_database.data["tracks"].keys()
+            if self.song_search.text.lower() in self.app.music_database.data["tracks"][track]["name"].lower()
+            or self.song_search.text.lower() in self.app.music_database.data["tracks"][track]["artist"].lower()
+            ]
+            
+        self.song_list.data.sort(
+            key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
+        self.app.music_database.valid_pointers.sort(
+            key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
 
 class SongButton(Widget):
     def __init__(self, *args, **kwargs):
@@ -571,6 +580,10 @@ class SongButton(Widget):
         self.touch_down_called = False
 
     def on_parent(self, *args):
+        self.name = self.app.music_database.data["tracks"][self.track_id]["name"]
+        self.artist = self.app.music_database.data["tracks"][self.track_id]["artist"]
+        self.song_filepath = self.app.music_database.data["tracks"][self.track_id]["file"]
+
         self.ids.name_label.text = self.name
         self.ids.artist_label.text = self.artist
         if os.path.isfile(f"{common_vars.app_folder}/cache/small_covers/{self.track_id}.jpg"):
@@ -608,7 +621,26 @@ class SongButton(Widget):
             else:
                 self.app.change_song(self.song_filepath, transition="crossfade")
         self.touch_down_called = False
+
+class SortButton(BoxLayout):
     
+    def on_parent(self, *args):
+        # self.songs_display = self.app.root.get_screen("songs").songs_display
+
+        # fucked up way of getting the songs display since the above line doesn't work
+        self.songs_display: SongsDisplay = args[0].parent.parent.parent.parent
+    
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):
+            self.background_color = 0.52941176, 0.52941176, 0.52941176, 1 # hex 878787FF
+            reverse_sort = self.sort_by in ("date_added", "play_date", "play_count")
+            self.songs_display.change_sort(self.sort_by, reverse_sort)
+            self.songs_display.ids.dropdown.dismiss()
+            self.ids.sort_checkbox.active = True
+            return True
+    
+    def on_touch_up(self, touch):
+        self.background_color = 0.2, 0.2, 0.2, 1
 
 class SettingsScreen(Screen):
 

@@ -468,6 +468,25 @@
             # Clear the stencil object
             StencilPop
 
+<SortButton>:
+    orientation: "horizontal"
+    text: ""
+    sort_by: "date_added"
+    CheckBox:
+        id: sort_checkbox
+        group: "sort_checkbox"
+        size_hint_x: .2
+    Label:
+        text: root.text
+        halign: "left"
+        valign: "center"
+        bold: True
+        size_hint_x: .8
+        text_size: self.size
+        font_size: root.height * (35/64)
+        color: 1, 1, 1, 1
+        height: root.height
+        padding: 0, 0, 0, 0
 
 <SongsDisplay>:
     Button:
@@ -497,7 +516,8 @@
         id: song_label
         bold: True
         color: 1,1,1,1
-        width: root.width
+        width: root.width/2
+        height: root.height/20
         x: 0
         y: root.height - root.height / 6
         halign: "left"
@@ -507,6 +527,118 @@
         font_size: root.height/20
         padding: ("23dp", "15dp", 0, 0)
 
+
+    Button:
+        text: "Song Sort"
+        halign: "center"
+        valign: "center"
+        x: root.width - self.width*2
+        center_y: song_page.center_y - 2
+        size: root.height/20, root.height/20
+        #background_normal: "./assets/icon/icon.png"
+        on_release: 
+            dropdown.open(self)
+            dropdown.x = self.x + self.width - dropdown.width
+
+        # trick to not lose the DropDown instance
+        # DropDown itself is not really made to be used in kv.
+        __safe_id: [dropdown.__self__]
+
+        border: (0,0,0,0)
+        DropDown:
+            id: dropdown
+            auto_width: False
+            width: root.width * 0.5
+            # Prevent the dropdown from opening on startup and eating the first input
+            on_kv_post: self.dismiss()
+            
+            SortButton:
+                text: "Name"
+                sort_by: "name"
+                size_hint_y: None
+                height: size_indicator.size[1]
+                background_color: 0.2, 0.2, 0.2, 1
+                canvas.before:
+                    Color:
+                        rgba: self.background_color
+                    RoundedRectangle:
+                        size: self.size
+                        pos: self.pos
+                        radius: self.height / 3, self.height / 3, 0, 0
+                    Color:
+                        rgba: 1, 1, 1, 1
+                    Line:
+                        width: 1
+                        points: (self.x, self.y, self.x + self.width, self.y)
+            
+            SortButton:
+                text: "Artist"
+                sort_by: "artist"
+                size_hint_y: None
+                height: size_indicator.size[1]
+                background_color: 0.2, 0.2, 0.2, 1
+                canvas.before:
+                    Color:
+                        rgba: self.background_color
+                    Rectangle:
+                        size: self.size
+                        pos: self.pos
+                    Color:
+                        rgba: 1, 1, 1, 1
+                    Line:
+                        width: 1
+                        points: (self.x, self.y, self.x + self.width, self.y)
+            
+            SortButton:
+                text: "Date Added"
+                sort_by: "date_added"
+                size_hint_y: None
+                height: size_indicator.size[1]
+                background_color: 0.2, 0.2, 0.2, 1
+                canvas.before:
+                    Color:
+                        rgba: self.background_color
+                    Rectangle:
+                        size: self.size
+                        pos: self.pos
+                    Color:
+                        rgba: 1, 1, 1, 1
+                    Line:
+                        width: 1
+                        points: (self.x, self.y, self.x + self.width, self.y)
+            
+            SortButton:
+                text: "Last Played"
+                sort_by: "play_date"
+                size_hint_y: None
+                height: size_indicator.size[1]
+                background_color: 0.2, 0.2, 0.2, 1
+                canvas.before:
+                    Color:
+                        rgba: self.background_color
+                    Rectangle:
+                        size: self.size
+                        pos: self.pos
+                    Color:
+                        rgba: 1, 1, 1, 1
+                    Line:
+                        width: 1
+                        points: (self.x, self.y, self.x + self.width, self.y)
+            
+            SortButton:
+                text: "Plays"
+                sort_by: "play_count"
+                size_hint_y: None
+                height: size_indicator.size[1]
+                background_color: 0.2, 0.2, 0.2, 1
+                canvas.before:
+                    Color:
+                        rgba: self.background_color
+                    RoundedRectangle:
+                        size: self.size
+                        pos: self.pos
+                        radius: 0, 0, self.height/3, self.height/3
+            
 
     TextInput: # This exists only to help the rounded rectangle figure out its height, it mimics the settings of song_search
         id: size_indicator
