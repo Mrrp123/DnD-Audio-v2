@@ -402,9 +402,9 @@ class AudioPlayer():
             # Streaming an mp3 in reverse is impossible, so we will instead create a wav file from the mp3 and read that instead
             if self.reverse_audio:
                 track_id = self.track_data[file]["id"]
-                if not os.path.exists(f"{self.app_folder}/cache/audio/{track_id}.wav"):
+                if not os.path.exists(f"{self.app_folder}/cache/audio/{track_id}_reversed.wav"):
                     self._mp3_to_wav(file, track_id)
-                file = f"{self.app_folder}/cache/audio/{track_id}.wav"
+                file = f"{self.app_folder}/cache/audio/{track_id}_reversed.wav"
                 audio_generator = self._load_wav(file, start_frame, num_chunks, chunk_frame_len)
             else:
                 audio_generator = self._load_mp3(file, start_frame, num_chunks, chunk_frame_len)
@@ -498,7 +498,7 @@ class AudioPlayer():
     def _mp3_to_wav(self, file: str, track_id: int):
 
         # Try to delete files if there are too many (>3) in the cache
-        current_cached_files = glob(f"{self.app_folder}/cache/audio/*.wav")
+        current_cached_files = glob(f"{self.app_folder}/cache/audio/*_reversed.wav")
         if len(current_cached_files) > 3:
             num_to_delete = len(current_cached_files) - 3
             # Sort everything by when they were last modfied to choose deletion order
@@ -520,7 +520,7 @@ class AudioPlayer():
         else:
             file_stream = miniaudio.mp3_stream_file(file)
 
-        with wave.open(f"{self.app_folder}/cache/audio/{track_id}.wav", "wb") as fp:
+        with wave.open(f"{self.app_folder}/cache/audio/{track_id}_reversed.wav", "wb") as fp:
             fp.setparams((2, 2, self.track_data[file]["rate"], 0, "NONE", "NONE"))
             for samples in file_stream:
                 fp.writeframes(samples)
