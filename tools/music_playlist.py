@@ -47,7 +47,7 @@ class UpdatingDict(dict):
             
     def update(self):
         with open(common_vars.music_database_path, "w") as fp:
-            fp.write(yaml.safe_dump(literal_eval(str(self)), sort_keys=False))
+            yaml.safe_dump(literal_eval(str(self)), stream=fp, sort_keys=False)
 
 class MusicDatabase():
     """
