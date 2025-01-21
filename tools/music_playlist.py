@@ -218,7 +218,7 @@ class MusicDatabase():
         file_ext = os.path.splitext(file)[1].lower()
 
         if not file.isascii():
-            hard_link_path = "./cache/audio/temp"
+            hard_link_path = f"{common_vars.app_folder}/cache/audio/temp"
             if os.path.exists(hard_link_path):
                 os.remove(hard_link_path)
             os.link(file, hard_link_path)
