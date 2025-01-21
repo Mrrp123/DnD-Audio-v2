@@ -786,6 +786,7 @@ class AudioPlayer():
                 
                 elif self.status == "seek": # If we seek during a transition, override the transition and play the currently fading out song as normal
                     self.seek(self.seek_pos)
+                    self.osc_client.send_message("/call/music_database", ["set_track", self.song_file]) # Resync music_database pointer
                     self.next_song_file = None
                     return
 
