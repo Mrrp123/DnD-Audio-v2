@@ -32,6 +32,7 @@ class UpdatingDict(dict):
             if isinstance(self[key], dict):
                 self[key] = UpdatingDict(self[key], parent=self, parent_key=key)
         self.setup = False
+        self.locked = True # Won't cause any writes if locked
 
     def __setitem__(self, key, value):
         if value:
@@ -39,7 +40,7 @@ class UpdatingDict(dict):
             if not self.setup:
                 if isinstance(self.parent, UpdatingDict):
                     self.parent.__setitem__(self.parent_key, self)
-                else:
+                elif not self.locked:
                     Thread(target=self.update(), daemon=False).start()
         else:
             raise ValueError("Value is empty!")
@@ -99,7 +100,11 @@ class MusicDatabase():
     
     def __add__(self, value):
         if isinstance(value, int):
-            self.data["tracks"][self.track_pointer]["play_count"] += 1
+            self.data["tracks"][self.track_pointer]["play_count"] += value
+            self.data.locked = False # Add this so we don't write the whole yaml twice
+            self.data["tracks"][self.track_pointer]["play_date"] = datetime.now().timestamp()
+            self.data.locked = True
+
     
     def load_yaml(self, database_file):
         with open(database_file, "r") as fp:
