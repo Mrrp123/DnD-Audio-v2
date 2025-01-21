@@ -495,7 +495,7 @@ class AudioPlayer():
                 yield audio
     
 
-    def _mp3_to_wav(self, file, track_id):
+    def _mp3_to_wav(self, file: str, track_id: int):
 
         # Try to delete files if there are too many (>3) in the cache
         current_cached_files = glob(f"{self.app_folder}/cache/audio/*.wav")
@@ -511,7 +511,15 @@ class AudioPlayer():
                     # Just leave it alone in this case
                     pass
 
-        file_stream = miniaudio.mp3_stream_file(file)
+        # Windows path reading shenanigans
+        if not file.isascii():
+            hard_link_path = f"{self.app_folder}/cache/audio/{self.track_data[file]['id']}.mp3"
+            if not os.path.exists(hard_link_path):
+                os.link(file, hard_link_path)
+            file_stream = miniaudio.mp3_stream_file(hard_link_path)
+        else:
+            file_stream = miniaudio.mp3_stream_file(file)
+
         with wave.open(f"{self.app_folder}/cache/audio/{track_id}.wav", "wb") as fp:
             fp.setparams((2, 2, self.track_data[file]["rate"], 0, "NONE", "NONE"))
             for samples in file_stream:
