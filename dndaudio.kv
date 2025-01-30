@@ -345,16 +345,16 @@
     Button:
         id: reverse
         bold: True
-        width: root.height * (15/224)
+        width: root.height * (12/224)
         height: self.width
-        disabled_color: 1,1,1,1
-        background_color: 0,1,1,1
-        disabled_background_color: 0,1,1,1
-        x: root.width * (1/4) - self.width/2
-        center_y: root.height * (1/18)
-        text: "Reverse"
+        center_x: previous_song.center_x
+        center_y: volume_slider.center_y / 2
         on_release: root.reverse()
 
+        background_normal: f"{app_folder}/assets/buttons/reverse_normal.png"
+        background_disabled_normal: f"{app_folder}/assets/buttons/reverse_normal.png"
+        background_down: f"{app_folder}/assets/buttons/reverse_pressed.png"
+        background_disabled_down: f"{app_folder}/assets/buttons/reverse_pressed.png"
         border: (0,0,0,0)
 
     Button:
