@@ -10,8 +10,6 @@ from glob import glob
 from threading import Thread, Lock
 import time
 from scipy.signal import iirfilter
-import miniaudio
-from miniaudio import lib, ffi, _get_filename_bytes
 from functools import reduce
 import yaml
 
@@ -27,6 +25,8 @@ if platform == "android":
 
 
 if platform in ('win', 'linux', 'linux2', 'macos'):
+    import miniaudio
+    from miniaudio import lib, ffi, _get_filename_bytes
     AUDIO_API = "miniaudio"
 
 
@@ -139,6 +139,372 @@ class AudioStreamer():
             else:
                 time.sleep(0.01)
 
+
+class AudioDecoder():
+
+    def __init__(self):
+
+        self.app_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+        if AUDIO_API == "audiotrack":
+            self._android_init()
+        
+        elif AUDIO_API == "miniaudio":
+            self._miniaudio_init()
+    
+    def _miniaudio_init(self):
+        self.load_ogg = self._miniaudio_load_ogg
+        self.load_mp3 = self._miniaudio_load_mp3
+        self.mp3_to_wav = self._miniaudio_mp3_to_wav
+
+
+    def _android_init(self):
+        self.load_ogg = self._android_load_ogg
+        self.load_mp3 = self._android_load_mp3
+        self.mp3_to_wav = self._android_mp3_to_wav
+    
+    def load_ogg(self, file, start_frame, num_chunks, chunk_frame_len, reverse_audio=False, frame_rate=44_100):
+        pass
+
+    def load_mp3(self, file, track_id, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
+        pass
+
+    def mp3_to_wav(self, file, track_id, frame_rate=44_100):
+        pass
+
+
+    class MiniaudioVorbisFileStream():
+        """
+        The generator for a vorbis file provided by miniaudio:
+          a) Doesn't allow us to set a fixed chunk length
+          b) Doesn't expose the actual stb_vorbis* pointer, which doesn't allow us to seek (for reversing)
+        Therefore, I made my own class that acts a lot like the pyogg variant to decode bytes and seek
+        """
+
+        def __init__(self, file, start_frame=0, frames_to_read=1024):
+            filenamebytes = _get_filename_bytes(file)
+            with ffi.new("int *") as error:
+                self.vorbis = lib.stb_vorbis_open_filename(filenamebytes, error, ffi.NULL)
+                if not self.vorbis:
+                    raise miniaudio.DecodeError("Could not open/decode file")
+            self.info = lib.stb_vorbis_get_info(self.vorbis)
+            self.decode_buffer = ffi.new("short[]", frames_to_read * self.info.channels)
+            self.decodebuf_ptr = ffi.cast("short *", self.decode_buffer)
+            self.bytes_per_sample = 2 * self.info.channels
+            if start_frame > 0:
+                self.seek(start_frame)
+            self.frames_to_read = frames_to_read
+        
+        def __enter__(self):
+            return self
+        
+        def get_buffer(self):
+            num_samples = lib.stb_vorbis_get_samples_short_interleaved(self.vorbis, self.info.channels, self.decodebuf_ptr,
+                                                                                self.frames_to_read * self.info.channels)
+            if num_samples <= 0:
+                return bytes(0)
+                    
+            buffer = ffi.buffer(self.decode_buffer, num_samples * self.bytes_per_sample)
+            return bytes(buffer)
+        
+        def seek(self, seek_frame):
+            result = lib.stb_vorbis_seek(self.vorbis, seek_frame)
+            if result <= 0:
+                raise miniaudio.DecodeError(f"Can't seek to frame {seek_frame}")
+            
+        def close(self):
+            self.__exit__()
+
+        def __exit__(self, *args):
+            ffi.release(self.decode_buffer)
+            lib.stb_vorbis_close(self.vorbis)
+    
+    class AndroidFileStream():
+
+        def __init__(self, file, start_frame=0, frames_to_read=1024):
+            MediaExtractor = autoclass("android.media.MediaExtractor")
+            FileInputStream = autoclass("java.io.FileInputStream")
+            File = autoclass("java.io.File")
+            MediaCodec = autoclass("android.media.MediaCodec")
+            MediaFormat = autoclass("android.media.MediaFormat")
+            BufferInfo = autoclass("android.media.MediaCodec$BufferInfo")
+
+            self.BUFFER_FLAG_END_OF_STREAM = MediaCodec.BUFFER_FLAG_END_OF_STREAM
+
+            self.media_extractor = MediaExtractor()
+            file_input_stream = FileInputStream(File(file))
+            fd = file_input_stream.getFD()
+            self.media_extractor.setDataSource(fd)
+            file_input_stream.close()
+
+            self.media_extractor.selectTrack(0)
+            self.track_format = self.media_extractor.getTrackFormat(0)
+
+            mime = self.track_format.getString("mime")
+            self.sample_rate = self.track_format.getInteger("sample-rate")
+            self.channel_count = self.track_format.getInteger("channel-count")
+
+            self.decoder = MediaCodec.createDecoderByType(mime)
+            self.decoder.configure(self.track_format, None, None, 0)
+            self.decoder.start()
+
+            self.buffer_info = BufferInfo()
+            self.extra_pcm_buffer = bytearray(0)
+            
+            if start_frame > 0:
+                self.seek(start_frame)
+            self.frames_to_read = frames_to_read
+            self.bytes_per_sample = 2 * self.channel_count
+        
+        def __enter__(self):
+            return self
+        
+        def get_buffer(self):
+            pcm_output_buffer = self.extra_pcm_buffer
+            eof = False
+
+            if len(pcm_output_buffer) >= self.frames_to_read * self.bytes_per_sample:
+                self.extra_pcm_buffer = pcm_output_buffer[self.frames_to_read * self.bytes_per_sample:]
+                return bytes(pcm_output_buffer[:self.frames_to_read * self.bytes_per_sample])
+
+
+            while len(pcm_output_buffer) < self.frames_to_read * self.bytes_per_sample:
+
+                if not eof:
+                    input_buffer_id = self.decoder.dequeueInputBuffer(100_000)
+
+                    if input_buffer_id >= 0:
+                        input_buffer = self.decoder.getInputBuffer(input_buffer_id)
+                        total_sample_bytes = 0
+                        presentation_time_us = 0
+
+                        while total_sample_bytes < 2048:
+                            num_encoded_bytes = self.media_extractor.readSampleData(input_buffer, total_sample_bytes)
+
+                            if num_encoded_bytes < 0:
+                                eof = True
+                                self.decoder.queueInputBuffer(input_buffer_id, 0, 0, 0, self.BUFFER_FLAG_END_OF_STREAM)
+                                break
+                        
+                            else:
+                                total_sample_bytes += num_encoded_bytes
+                                presentation_time_us = self.media_extractor.getSampleTime()
+                                self.media_extractor.advance()
+                            
+                            if total_sample_bytes >= 2048:
+                                self.decoder.queueInputBuffer(input_buffer_id, 0, total_sample_bytes, presentation_time_us, 0)
+                                break
+                                    
+                output_buffer_id = self.decoder.dequeueOutputBuffer(self.buffer_info, 100_000)
+
+                if output_buffer_id >= 0:
+                    output_buffer = self.decoder.getOutputBuffer(output_buffer_id)
+                    buffer_format = self.decoder.getOutputFormat(output_buffer_id)
+
+                    pcm_chunk = bytearray(self.buffer_info.size)
+                    output_buffer.get(pcm_chunk)
+                    pcm_output_buffer.extend(pcm_chunk)
+
+                    self.decoder.releaseOutputBuffer(output_buffer_id, False)
+
+                if eof:
+                    break
+                
+            
+            if len(pcm_output_buffer) > self.frames_to_read * self.bytes_per_sample:
+                self.extra_pcm_buffer = pcm_output_buffer[self.frames_to_read * self.bytes_per_sample:]
+
+            return bytes(pcm_output_buffer[:self.frames_to_read * self.bytes_per_sample])
+
+        
+        def seek(self, seek_frame):
+            """
+            Note, while android seekTo takes in a value in microseconds, this function
+            takes in a specific frame, not time.
+            """
+            seek_time_us = (seek_frame / self.sample_rate) * 1_000_000
+            self.media_extractor.seekTo(seek_time_us, self.media_extractor.SEEK_TO_CLOSEST_SYNC)
+            
+        def close(self):
+            self.__exit__()
+
+        def __exit__(self, *args):
+            self.media_extractor.release()
+            self.decoder.stop()
+            self.decoder.release()
+
+
+    def load_wav(self, file, start_frame, num_chunks, chunk_frame_len, reverse_audio=False, frame_rate=44_100):
+
+        with wave.open(file, "rb") as fp:
+
+            for chunk_index in range(num_chunks):
+                if reverse_audio:
+                    frame_pos = -chunk_frame_len*(chunk_index+1) + start_frame
+                    if frame_pos < 0:
+                        chunk_frame_len += frame_pos # frame pos is negative here, so we're subtracting from chunk_frame_len
+                        frame_pos = 0
+                    fp.setpos(frame_pos)
+                else:
+                    fp.setpos(chunk_frame_len*chunk_index + start_frame)
+                byte_data = fp.readframes(chunk_frame_len)
+                try:
+                    frame_rate = frame_rate
+                except KeyError: # This is meant to handle cases for cached and reversed mp3 audio
+                    frame_rate = fp.getframerate()
+                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2)
+                if reverse_audio:
+                    yield audio.reverse()
+                else:
+                    yield audio
+
+    def _miniaudio_load_ogg(self, file, start_frame, num_chunks, chunk_frame_len, reverse_audio=False, frame_rate=44_100):
+
+        miniaudio_stream = self.MiniaudioVorbisFileStream(file, start_frame, frames_to_read=chunk_frame_len)
+
+        cut = False
+
+        for chunk_index in range(num_chunks):
+            if reverse_audio:
+                frame_pos = -chunk_frame_len*(chunk_index+1) + start_frame
+                if frame_pos < 0:
+                    chunk_frame_len += frame_pos # frame pos is negative here, so we're subtracting from chunk_frame_len
+                    cut = True # Set flag indicating that we have to cut out a part of the AudioSegment
+                    frame_pos = 0
+                miniaudio_stream.seek(frame_pos)
+
+            byte_data = miniaudio_stream.get_buffer()
+
+            if not byte_data:
+                break
+
+            audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2)
+            if reverse_audio:
+                if cut:
+                    audio._data = audio._data[:chunk_frame_len]
+                yield audio.reverse()
+            else:
+                yield audio
+    
+    def _miniaudio_load_mp3(self, file, track_id, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
+
+        try:
+            miniaudio_stream = miniaudio.mp3_stream_file(file, frames_to_read=chunk_frame_len, seek_frame=start_frame)
+            for samples in miniaudio_stream:
+
+                byte_data = samples.tobytes()
+                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2)
+
+                yield audio
+
+        except miniaudio.DecodeError:
+            # Miniaudio on windows is fucking stupid and can't resolve file names with non-ascii characters
+            # Create a hard link here with a set (ASCII) name that we can read from instead
+            hard_link_path = f"{self.app_folder}/cache/audio/{track_id}.mp3"
+            if not os.path.exists(hard_link_path):
+                os.link(file, hard_link_path)
+
+            miniaudio_stream = miniaudio.mp3_stream_file(hard_link_path, frames_to_read=chunk_frame_len, seek_frame=start_frame)
+            for samples in miniaudio_stream:
+
+                byte_data = samples.tobytes()
+                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2)
+
+                yield audio
+    
+    def _miniaudio_mp3_to_wav(self, file, track_id, frame_rate=44_100):
+                
+        # Try to delete files if there are too many (>3) in the cache
+        current_cached_files = glob(f"{self.app_folder}/cache/audio/*_reversed.wav")
+        if len(current_cached_files) > 3:
+            num_to_delete = len(current_cached_files) - 3
+            # Sort everything by when they were last modfied to choose deletion order
+            current_cached_files.sort(key=lambda path: os.path.getmtime(path))
+            for wav_file in current_cached_files[0:num_to_delete]:
+                try:
+                    os.remove(wav_file)
+                except OSError:
+                    # If we encounter an OSError, then it's likely the file is still open
+                    # Just leave it alone in this case
+                    pass
+                
+        # Windows path reading shenanigans
+        if not file.isascii():
+            hard_link_path = f"{self.app_folder}/cache/audio/{self.track_data[file]['id']}.mp3"
+            if not os.path.exists(hard_link_path):
+                os.link(file, hard_link_path)
+            file_stream = miniaudio.mp3_stream_file(hard_link_path)
+        else:
+            file_stream = miniaudio.mp3_stream_file(file)
+
+        with wave.open(f"{self.app_folder}/cache/audio/{track_id}_reversed.wav", "wb") as fp:
+            fp.setparams((2, 2, frame_rate, 0, "NONE", "NONE"))
+            for samples in file_stream:
+                fp.writeframes(samples)
+
+    def _android_load_ogg(self, file, start_frame, num_chunks, chunk_frame_len, reverse_audio=False, frame_rate=44_100):
+
+        with self.MiniaudioVorbisFileStream(file, start_frame, frames_to_read=chunk_frame_len) as stream:
+            cut = False
+
+            for chunk_index in range(num_chunks):
+                if reverse_audio:
+                    frame_pos = -chunk_frame_len*(chunk_index+1) + start_frame
+                    if frame_pos < 0:
+                        chunk_frame_len += frame_pos # frame pos is negative here, so we're subtracting from chunk_frame_len
+                        cut = True # Set flag indicating that we have to cut out a part of the AudioSegment
+                        frame_pos = 0
+                    stream.seek(frame_pos)
+
+                byte_data = stream.get_buffer()
+
+                if not byte_data:
+                    break
+
+                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2)
+                if reverse_audio:
+                    if cut:
+                        audio._data = audio._data[:chunk_frame_len]
+                    yield audio.reverse()
+                else:
+                    yield audio
+
+    def _android_load_mp3(self, file, track_id, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
+
+        with self.AndroidFileStream(file, start_frame, frames_to_read=chunk_frame_len) as stream:
+            for chunk_index in range(num_chunks):
+
+                byte_data = stream.get_buffer()
+
+                if not byte_data:
+                    break
+
+                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2)
+                yield audio
+    
+    def _android_mp3_to_wav(self, file, track_id, frame_rate=44_100):
+
+        # Try to delete files if there are too many (>3) in the cache
+        current_cached_files = glob(f"{self.app_folder}/cache/audio/*_reversed.wav")
+        if len(current_cached_files) > 3:
+            num_to_delete = len(current_cached_files) - 3
+            # Sort everything by when they were last modfied to choose deletion order
+            current_cached_files.sort(key=lambda path: os.path.getmtime(path))
+            for wav_file in current_cached_files[0:num_to_delete]:
+                try:
+                    os.remove(wav_file)
+                except OSError:
+                    # If we encounter an OSError, then it's likely the file is still open
+                    # Just leave it alone in this case
+                    pass
+                
+        with self.AndroidFileStream(file) as stream:
+
+            with wave.open(f"{self.app_folder}/cache/audio/{track_id}_reversed.wav", "wb") as fp:
+                fp.setparams((2, 2, frame_rate, 0, "NONE", "NONE"))
+                while (samples := stream.get_buffer()):
+                    fp.writeframes(samples)
+
 # class FFMPEGProcessHandler():
 #     """
 #     Ensure ffmpeg processes are "gracefully" killed and don't throw any errors
@@ -150,47 +516,6 @@ class AudioStreamer():
 
 #     def __del__(self, *args, **kwargs):
 #         self.ffmpeg_process.terminate()
-
-# The generator for a vorbis file provided by miniaudio:
-#   a) Doesn't allow us to set a fixed chunk length
-#   b) Doesn't expose the actual stb_vorbis* pointer, which doesn't allow us to seek (for reversing)
-# Therefore, I made my own class that acts a lot like the pyogg variant to decode bytes and seek
-class VorbisFileStream():
-
-    def __init__(self, file, start_frame=0, frames_to_read=1024):
-        filenamebytes = _get_filename_bytes(file)
-        with ffi.new("int *") as error:
-            self.vorbis = lib.stb_vorbis_open_filename(filenamebytes, error, ffi.NULL)
-            if not self.vorbis:
-                raise miniaudio.DecodeError("Could not open/decode file")
-        self.info = lib.stb_vorbis_get_info(self.vorbis)
-        self.decode_buffer = ffi.new("short[]", frames_to_read * self.info.channels)
-        self.decodebuf_ptr = ffi.cast("short *", self.decode_buffer)
-        self.bytes_per_sample = 2 * self.info.channels
-        if start_frame > 0:
-            self.seek(start_frame)
-        self.frames_to_read = frames_to_read
-    
-    def get_buffer(self):
-        num_samples = lib.stb_vorbis_get_samples_short_interleaved(self.vorbis, self.info.channels, self.decodebuf_ptr,
-                                                                            self.frames_to_read * self.info.channels)
-        if num_samples <= 0:
-            return bytes(0)
-                
-        buffer = ffi.buffer(self.decode_buffer, num_samples * self.bytes_per_sample)
-        return bytes(buffer)
-    
-    def seek(self, seek_frame):
-        result = lib.stb_vorbis_seek(self.vorbis, seek_frame)
-        if result <= 0:
-            raise miniaudio.DecodeError(f"Can't seek to frame {seek_frame}")
-        
-    def close(self):
-        self.__exit__()
-
-    def __exit__(self):
-        ffi.release(self.decode_buffer)
-        lib.stb_vorbis_close(self.vorbis)
 
 class AudioPlayer():
     """
@@ -244,6 +569,7 @@ class AudioPlayer():
         self.app_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
         self.stream = AudioStreamer(channels, rate, buffersize_ms, encoding)
+        self.decoder = AudioDecoder()
 
         self.song_file = f"{common_vars.app_folder}/assets/audio/silence.wav"
         self.next_song_file = None
@@ -393,142 +719,25 @@ class AudioPlayer():
         chunk_frame_len = round(self.track_data[file]["rate"] * (self.chunk_len / 1000))
 
         if file_type == ".wav":
-            audio_generator = self._load_wav(file, start_frame, num_chunks, chunk_frame_len)
+            audio_generator = self.decoder.load_wav(file, start_frame, num_chunks, chunk_frame_len, self.reverse_audio, self.track_data[file]["rate"])
         
         elif file_type == ".ogg":
-            audio_generator = self._load_ogg(file, start_frame, num_chunks, chunk_frame_len)
+            audio_generator = self.decoder.load_ogg(file, start_frame, num_chunks, chunk_frame_len, self.reverse_audio, self.track_data[file]["rate"])
         
         elif file_type == ".mp3":
+            track_id = self.track_data[file]["id"]
             # Streaming an mp3 in reverse is impossible, so we will instead create a wav file from the mp3 and read that instead
             if self.reverse_audio:
-                track_id = self.track_data[file]["id"]
                 if not os.path.exists(f"{self.app_folder}/cache/audio/{track_id}_reversed.wav"):
-                    self._mp3_to_wav(file, track_id)
+                    self.decoder.mp3_to_wav(file, track_id)
                 file = f"{self.app_folder}/cache/audio/{track_id}_reversed.wav"
-                audio_generator = self._load_wav(file, start_frame, num_chunks, chunk_frame_len)
+                audio_generator = self.decoder.load_wav(file, start_frame, num_chunks, chunk_frame_len)
             else:
-                audio_generator = self._load_mp3(file, start_frame, num_chunks, chunk_frame_len)
+                audio_generator = self.decoder.load_mp3(file, track_id, start_frame, num_chunks, chunk_frame_len, self.track_data[file]["rate"])
         print(f"Using chunk_frame_len of {chunk_frame_len} for file {file}")
         for audio in audio_generator:
             yield audio
 
-
-    def _load_wav(self, file, start_frame, num_chunks, chunk_frame_len):
-
-        reverse_audio = self.reverse_audio # set local variable in case we reverse audio during a transition
-
-        with wave.open(file, "rb") as fp:
-
-            for chunk_index in range(num_chunks):
-                if reverse_audio:
-                    frame_pos = -chunk_frame_len*(chunk_index+1) + start_frame
-                    if frame_pos < 0:
-                        chunk_frame_len += frame_pos # frame pos is negative here, so we're subtracting from chunk_frame_len
-                        frame_pos = 0
-                    fp.setpos(frame_pos)
-                else:
-                    fp.setpos(chunk_frame_len*chunk_index + start_frame)
-                byte_data = fp.readframes(chunk_frame_len)
-                try:
-                    frame_rate = self.track_data[file]["rate"]
-                except KeyError: # This is meant to handle cases for cached and reversed mp3 audio
-                    frame_rate = fp.getframerate()
-                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2)
-                if reverse_audio:
-                    yield audio.reverse()
-                else:
-                    yield audio
-    
-    def _load_ogg(self, file, start_frame, num_chunks, chunk_frame_len):
-
-        miniaudio_stream = VorbisFileStream(file, start_frame, frames_to_read=chunk_frame_len)
-
-        reverse_audio = self.reverse_audio # set local variable in case we reverse audio during a transition
-        cut = False
-
-        for chunk_index in range(num_chunks):
-            if reverse_audio:
-                frame_pos = -chunk_frame_len*(chunk_index+1) + start_frame
-                if frame_pos < 0:
-                    chunk_frame_len += frame_pos # frame pos is negative here, so we're subtracting from chunk_frame_len
-                    cut = True # Set flag indicating that we have to cut out a part of the AudioSegment
-                    frame_pos = 0
-                miniaudio_stream.seek(frame_pos)
-
-            byte_data = miniaudio_stream.get_buffer()
-
-            if not byte_data:
-                break
-
-            audio = AudioSegment(data=byte_data, frame_rate=self.track_data[file]["rate"], channels=2, sample_width=2)
-            if reverse_audio:
-                if cut:
-                    audio._data = audio._data[:chunk_frame_len]
-                yield audio.reverse()
-            else:
-                yield audio
-    
-    def _load_mp3(self, file, start_frame, num_chunks, chunk_frame_len):
-
-        try:
-            miniaudio_stream = miniaudio.mp3_stream_file(file, frames_to_read=chunk_frame_len, seek_frame=start_frame)
-            for samples in miniaudio_stream:
-
-                byte_data = samples.tobytes()
-                audio = AudioSegment(data=byte_data, frame_rate=self.track_data[file]["rate"], channels=2, sample_width=2)
-
-                yield audio
-
-        except miniaudio.DecodeError:
-            # Miniaudio on windows is fucking stupid and can't resolve file names with non-ascii characters
-            # Create a hard link here with a set (ASCII) name that we can read from instead
-            hard_link_path = f"{self.app_folder}/cache/audio/{self.track_data[file]['id']}.mp3"
-            if not os.path.exists(hard_link_path):
-                os.link(file, hard_link_path)
-
-            miniaudio_stream = miniaudio.mp3_stream_file(hard_link_path, frames_to_read=chunk_frame_len, seek_frame=start_frame)
-            for samples in miniaudio_stream:
-
-                byte_data = samples.tobytes()
-                audio = AudioSegment(data=byte_data, frame_rate=self.track_data[file]["rate"], channels=2, sample_width=2)
-
-                yield audio
-    
-
-    def _mp3_to_wav(self, file: str, track_id: int):
-
-        # Try to delete files if there are too many (>3) in the cache
-        current_cached_files = glob(f"{self.app_folder}/cache/audio/*_reversed.wav")
-        if len(current_cached_files) > 3:
-            num_to_delete = len(current_cached_files) - 3
-            # Sort everything by when they were last modfied to choose deletion order
-            current_cached_files.sort(key=lambda path: os.path.getmtime(path))
-            for wav_file in current_cached_files[0:num_to_delete]:
-                try:
-                    os.remove(wav_file)
-                except OSError:
-                    # If we encounter an OSError, then it's likely the file is still open
-                    # Just leave it alone in this case
-                    pass
-
-        # Windows path reading shenanigans
-        if not file.isascii():
-            hard_link_path = f"{self.app_folder}/cache/audio/{self.track_data[file]['id']}.mp3"
-            if not os.path.exists(hard_link_path):
-                os.link(file, hard_link_path)
-            file_stream = miniaudio.mp3_stream_file(hard_link_path)
-        else:
-            file_stream = miniaudio.mp3_stream_file(file)
-
-        with wave.open(f"{self.app_folder}/cache/audio/{track_id}_reversed.wav", "wb") as fp:
-            fp.setparams((2, 2, self.track_data[file]["rate"], 0, "NONE", "NONE"))
-            for samples in file_stream:
-                fp.writeframes(samples)
-        
-        
-
-
-    
 
     def get_track_length(self, file):
         num_frames = self.track_data[file]["length"]
