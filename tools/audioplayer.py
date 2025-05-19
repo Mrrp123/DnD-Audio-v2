@@ -97,7 +97,8 @@ class AudioStreamer():
                 miniaudio.SampleFormat.SIGNED16,
                 self.channels,
                 self.rate,
-                self.buffersize_ms
+                self.buffersize_ms,
+                callback_periods=2
                 )
         else:
             raise ValueError("8 bit encoding not supported for miniaudio!")
@@ -134,7 +135,6 @@ class AudioStreamer():
         while data:
             if len(self.audio_buffer) < self.req_audio_buffer_size:
                 self.audio_buffer.extend(data)
-                data = bytes(0)
                 break
             else:
                 time.sleep(0.01)
