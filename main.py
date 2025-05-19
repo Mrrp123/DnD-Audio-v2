@@ -713,6 +713,7 @@ class DndAudio(App):
         self.dispatcher = Dispatcher()
         self.dispatcher.map("/return", self._return_message)
         self.dispatcher.map("/call/*", self.call_function)
+        self.dispatcher.map("/kill", self.stop)
 
         self.osc_server = BlockingOSCUDPServer(("127.0.0.1", 8000), self.dispatcher)
         self.osc_client = SimpleUDPClient("127.0.0.1", 8001)

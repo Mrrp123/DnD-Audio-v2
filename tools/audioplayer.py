@@ -1280,8 +1280,12 @@ class AudioPlayer():
                 self.status = "playing"
 
 if __name__ == "__main__" or __name__ == "<run_path>":
-    audioplayer = AudioPlayer(lock=Lock(), rate=44_100)
-    audioplayer.run()
-    # audio_thread = Thread(target=audioplayer.run, daemon=True)
-    # audio_thread.start()
-    # audio_thread.join()
+    try:
+        audioplayer = AudioPlayer(lock=Lock(), rate=44_100)
+        audioplayer.run()
+    # No matter what happens, try to make sure that if the audioplayer dies, so too does the UI
+    except Exception as err:
+        import traceback
+        traceback.print_exception(err)
+        audioplayer.osc_client.send_message("/kill", str(err))
+        exit()
