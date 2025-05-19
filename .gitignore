@@ -9,3 +9,7 @@ release/*
 *.yaml
 *.json
 cache/*
+.vscode
+*.md
+conv.py
+*xml_to_yaml.py
