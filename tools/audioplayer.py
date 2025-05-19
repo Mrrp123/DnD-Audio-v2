@@ -348,10 +348,6 @@ class AudioDecoder():
                 else:
                     fp.setpos(chunk_frame_len*chunk_index + start_frame)
                 byte_data = fp.readframes(chunk_frame_len)
-                try:
-                    frame_rate = frame_rate
-                except KeyError: # This is meant to handle cases for cached and reversed mp3 audio
-                    frame_rate = fp.getframerate()
                 audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2)
                 if reverse_audio:
                     yield audio.reverse()
@@ -430,7 +426,7 @@ class AudioDecoder():
                 
         # Windows path reading shenanigans
         if not file.isascii():
-            hard_link_path = f"{self.app_folder}/cache/audio/{self.track_data[file]['id']}.mp3"
+            hard_link_path = f"{self.app_folder}/cache/audio/{track_id}.mp3"
             if not os.path.exists(hard_link_path):
                 os.link(file, hard_link_path)
             file_stream = miniaudio.mp3_stream_file(hard_link_path)
@@ -730,8 +726,8 @@ class AudioPlayer():
             if self.reverse_audio:
                 if not os.path.exists(f"{self.app_folder}/cache/audio/{track_id}_reversed.wav"):
                     self.decoder.mp3_to_wav(file, track_id)
-                file = f"{self.app_folder}/cache/audio/{track_id}_reversed.wav"
-                audio_generator = self.decoder.load_wav(file, start_frame, num_chunks, chunk_frame_len)
+                reversed_file = f"{self.app_folder}/cache/audio/{track_id}_reversed.wav"
+                audio_generator = self.decoder.load_wav(reversed_file, start_frame, num_chunks, chunk_frame_len, True, self.track_data[file]["rate"])
             else:
                 audio_generator = self.decoder.load_mp3(file, track_id, start_frame, num_chunks, chunk_frame_len, self.track_data[file]["rate"])
         print(f"Using chunk_frame_len of {chunk_frame_len} for file {file}")
