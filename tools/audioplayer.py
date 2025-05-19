@@ -1139,7 +1139,7 @@ class AudioPlayer():
                 self.stream.write((song_audio * zw_audio).data)
 
                 # Tell the main display to run the shaders to do the time stop effect
-                if i == 0:
+                if i == 1:
                     self.osc_client.send_message("/call/main/main_display", "_start_time_effect")
 
                 self.get_debug_info()
