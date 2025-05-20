@@ -29,17 +29,16 @@ from pythonosc.dispatcher import Dispatcher
 from pythonosc.osc_server import BlockingOSCUDPServer, ThreadingOSCUDPServer
 from pythonosc.udp_client import SimpleUDPClient
 
-
+from kivy.graphics import (RenderContext, Fbo, Color, Rectangle,
+                           Translate, PushMatrix, PopMatrix, ClearColor,
+                           ClearBuffers)
 
 class MainScreen(Screen):
     
     def __init__(self, **kw):
         super().__init__(**kw)
         self.main_display = MainDisplay()
-        self.effects_display = EffectDisplay()
-
         self.add_widget(self.main_display)
-        self.add_widget(self.effects_display)
 
         self.initialized = False
     
@@ -48,15 +47,45 @@ class MainScreen(Screen):
             self.main_display._frame_one_init()
             self.initialized = True
 
-class MainDisplay(Widget):
+class MainDisplay(EffectWidget):
     next_song_event = None
     previous_song_event = None
     time_stop_event = False
     audio_clock = None
 
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
 
+        # Custom EffectWidget stuff to give the fbo a stencil buffer
+        self.canvas = RenderContext(use_parent_projection=True,
+                                    use_parent_modelview=True)
+
+        with self.canvas:
+            self.fbo = Fbo(size=self.size, with_stencilbuffer=True)
+
+        with self.fbo.before:
+            PushMatrix()
+        with self.fbo:
+            ClearColor(0, 0, 0, 0)
+            ClearBuffers()
+            self._background_color = Color(*self.background_color)
+            self.fbo_rectangle = Rectangle(size=self.size)
+        with self.fbo.after:
+            PopMatrix()
+
+        super(EffectWidget, self).__init__(**kwargs)
+
+        #Clock.schedule_interval(self._update_glsl, 0)
+
+        fbind = self.fbind
+        fbo_setup = self.refresh_fbo_setup
+        fbind('size', fbo_setup)
+        fbind('effects', fbo_setup)
+        fbind('background_color', self._refresh_background_color)
+
+        self.refresh_fbo_setup()
+        self._refresh_background_color()  # In case this was changed in kwargs
+
+        # Normal init stuff
         self.app: DndAudio = App.get_running_app()        
 
         self.time_slider = self.ids.audio_position_slider
@@ -73,16 +102,11 @@ class MainDisplay(Widget):
         self.time_slider_anim = Animation(pos=(0, 0), size=(0, 0))
         self.volume_slider_anim = Animation(pos=(0, 0), size=(0, 0))
 
-        Clock.schedule_once(self._frame_zero_init, 0)
+        # Clock.schedule_once(self._frame_zero_init, 0)
 
     
     def _frame_zero_init(self, dt):
-        # Get a reference to the effect display
-        for widget in self.parent.children:
-            if isinstance(widget, EffectDisplay):
-                self.effect_display = widget
-                break
-        self.effect_widgets = [widget for widget in self.effect_display.children if isinstance(widget, EffectWidget)]
+        pass
 
     
     def _frame_one_init(self):
@@ -392,24 +416,17 @@ class MainDisplay(Widget):
             
         
     def stop_time(self):
-
-        ## DEBUG
-        # self.effect_widgets[0].effects = [TimeStop()]
-        # self._update_foreground_texture(0)
-        # self.update_uniforms(t0=Clock.get_boottime())
-        # self.effect_display.ids.foreground.x = 0
-        # self.effect_display.ids.foreground.size = self.size
         
         if not self.time_stop_event: # Prevent this effect from playing twice in a row
             status, pos, song_length, speed, reverse_audio = self.app.get_audioplayer_attr("status", "pos", "song_length", "speed", "reverse_audio")
             if (status == "playing" and # Prevent this from playing during transitions and within 7 sec from end of song
             (not reverse_audio and (song_length - pos)/1000/speed > 7) or (reverse_audio and pos/1000/speed > 7)):
             
+                self.update_uniforms(t0=-1)
                 self.disabled = True
-                #self.time_stop_event = Clock.schedule_interval(self._check_time_effect, 0)
-                self.texture_update_clock = Clock.schedule_interval(self._update_foreground_texture, 0)
-                self.app.set_audioplayer_attr("status", "zawarudo")
-                self.effect_widgets[0].effects = [TimeStop()]
+                self.effects = [TimeStop()]
+                self.glsl_clock = Clock.schedule_interval(self._update_glsl, 0)
+                self.app.set_audioplayer_attr("status", "zawarudo")               
     
     def _start_time_effect(self):
         """
@@ -417,66 +434,23 @@ class MainDisplay(Widget):
         """
         self.time_stop_event = True
         self.update_uniforms(t0=Clock.get_boottime())
-        self.effect_display.ids.foreground.x = 0
-        self.effect_display.ids.foreground.size = self.size
-        self.effect_widgets[0].disabled = False
         Clock.schedule_once(self.resume_time, 11.3)#9.3)
     
     def resume_time(self, dt):
         """
         Resets various settings when time resumes
         """
-        self.effect_widgets[0].effects = []
-        self.effect_display.ids.foreground.size = 1,1
-        self.effect_display.ids.foreground.x = -1
-        Clock.unschedule(self.texture_update_clock)
+        self.effects = []
+        self.glsl_clock.cancel()
         self.time_stop_event = False
         self.disabled = False
-        self.effect_widgets[0].disabled = True
-    
-    def get_texture(self):
-        img = self.export_as_image() # For some goofy fuck all reason, this image comes out vertically flipped???
-        img.texture.flip_vertical() # Anyway we just need to flip it before getting the texture object
-        return img.texture
     
     def update_uniforms(self, **kwargs):
         for key, value in kwargs.items():
-            for widget in self.effect_widgets:
-                
-                widget.canvas[key] = value
-                for fbo in widget.fbo_list:
-                    fbo[key] = value
-    
-    def _update_foreground_texture(self, dt):
-        texture = self.get_texture()
-        self.effect_display.ids.foreground_img.texture = texture
-        
-
-class EffectDisplay(Widget):
-    """
-    Simply a widget to hold the effects so that we don't corrupt the main display's texture
-    """
-    pass
-
-class ToggleableEffectWidget(EffectWidget):
-    """
-    Modified EffectWidget that allows us to disable the updating of uniform
-    variables when the widget is disabled
-    """
-    def _update_glsl(self, *largs):
-        '''(internal) Passes new time and resolution uniform
-        variables to the shader.
-
-        Disabled if widget is disabled
-        '''
-        if not self.disabled:
-            time = Clock.get_boottime()
-            resolution = [float(size) for size in self.size]
-            self.canvas['time'] = time
-            self.canvas['resolution'] = resolution
+            self.canvas[key] = value
             for fbo in self.fbo_list:
-                fbo['time'] = time
-                fbo['resolution'] = resolution
+                fbo[key] = value
+      
 
 class SongsScreen(Screen):
     def __init__(self, **kw):

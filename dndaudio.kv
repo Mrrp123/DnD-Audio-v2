@@ -24,6 +24,7 @@
         disabled_color: 0, 1, 1, 1
         x: root.width - self.width
         y: root.height - self.height
+        size_hint: None, None
         text: "Songs \u203A"
         halign: "right"
         valign: "top"
@@ -46,6 +47,7 @@
         disabled_color: 0, 1, 1, 1
         x: 0
         y: root.height - self.height
+        size_hint: None, None
         text: "\u2039 Settings"
         halign: "left"
         valign: "top"
@@ -62,6 +64,7 @@
         id: song_cover
         source: f"{app_folder}/assets/covers/default_cover.png"
         #color: 1,1,1,0.5
+        size_hint: None, None
         size: root.height * (1/3), min(1/self.image_ratio * root.height * (1/3), root.height * (1/3))
         x: -root.width * 2
         fit_mode: "scale-down"
@@ -100,6 +103,7 @@
         id: audio_position_slider
         min: 0
         max: 1000
+        size_hint: None, None
         width: root.width * (11/12) - dp(32)
         height: "48dp"
         disabled: True
@@ -124,8 +128,6 @@
 
             # Create mask for active rail for song pos
             StencilPush 
-            Color:
-                rgba: 0.5,0.5,0.5,1
             RoundedRectangle:
                 pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 16
                 size: self.size[0], self.height / 8
@@ -141,8 +143,6 @@
 
             # Remove mask (so that we can draw the rest of the frame)
             StencilUnUse
-            Color:
-                rgba: 0.5,0.5,0.5,1
             RoundedRectangle:
                 pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 16
                 size: self.size[0], self.height / 8
@@ -155,6 +155,7 @@
         id: volume_slider
         min: 0
         max: 100
+        size_hint: None, None
         width: root.width * (3/4) - dp(32)
         height: "48dp"
         # disabled: False
@@ -179,8 +180,6 @@
 
             # Create mask for active rail for song pos
             StencilPush 
-            Color:
-                rgba: 0.5,0.5,0.5,1
             RoundedRectangle:
                 pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 16
                 size: self.size[0], self.height / 8
@@ -196,8 +195,6 @@
 
             # Remove mask (so that we can draw the rest of the frame)
             StencilUnUse
-            Color:
-                rgba: 0.5,0.5,0.5,1
             RoundedRectangle:
                 pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 16
                 size: self.size[0], self.height / 8
@@ -210,6 +207,7 @@
         id: volume_min_img
         source: f"{app_folder}/assets/buttons/volume_min.png"
         #color: 1,1,1,0.5
+        size_hint: None, None
         size: dp(16), dp(16)
         x: volume_slider.x - dp(20)
         y: volume_slider.center_y - self.height/2
@@ -220,6 +218,7 @@
         id: volume_max_img
         source: f"{app_folder}/assets/buttons/volume_max.png"
         #color: 1,1,1,0.5
+        size_hint: None, None
         size: dp(16), dp(16)
         x: volume_slider.x + volume_slider.width + dp(10)
         y: volume_slider.center_y - self.height/2
@@ -233,6 +232,7 @@
         bold: True
         color: 1,1,1,1
         disabled_color: 1,1,1,1
+        size_hint: None, None
         x: 0
         y: audio_position_slider.center_y - dp(12) - self.height
         #center_y: root.height * (13/48)
@@ -249,6 +249,7 @@
         bold: True
         color: 1,1,1,1
         disabled_color: 1,1,1,1
+        size_hint: None, None
         x: root.width/2
         y: audio_position_slider.center_y - dp(12) - self.height
         #center_y: root.height * (13/48)
@@ -264,6 +265,7 @@
         bold: True
         color: 0.9, 0.9, 0.9, 0.6
         disabled_color: 0.9, 0.9, 0.9, 0.6
+        size_hint: None, None
         x: root.width * (1/2) - (root.width * (11/12) - dp(32)) / 2 + dp(2)
         y: root.height * (1/3) + dp(24)
         halign: "left"
@@ -279,6 +281,7 @@
         bold: True
         color: 1,1,1,1
         disabled_color: 1,1,1,1
+        size_hint: None, None
         x: root.width * (1/2) - (root.width * (11/12) - dp(32)) / 2 + dp(2)
         center_y: song_artist.center_y + root.height/30
         halign: "left"
@@ -292,6 +295,7 @@
     Button:
         id: previous_song
         bold: True
+        size_hint: None, None
         width: root.height * (15/224)
         height: self.width
         x: root.width * (1/4) - self.width / 2
@@ -310,6 +314,7 @@
     Button:
         id: next_song
         bold: True
+        size_hint: None, None
         width: root.height * (15/224)
         height: self.width
         x: root.width * (3/4) - self.width / 2
@@ -328,6 +333,7 @@
     Button:
         id: pause
         bold: True
+        size_hint: None, None
         width: root.height * (15/224)
         height: self.width
         x: root.width * (1/2) - self.width / 2
@@ -345,6 +351,7 @@
     Button:
         id: reverse
         bold: True
+        size_hint: None, None
         width: root.height * (12/224)
         height: self.width
         center_x: previous_song.center_x
@@ -360,6 +367,7 @@
     Button:
         id: zawarudo
         bold: True
+        size_hint: None, None
         width: root.height * (15/224)
         height: self.width
         disabled_color: 1,1,1,1

@@ -220,71 +220,75 @@ vec4 effect(vec4 color, sampler2D texture, vec2 tex_coords, vec2 coords)
 {
     float t = (time - t0);
 
-    if (t < 0.9375)
+
+    if (t0 > 0.0) // Special value for t0, if t0 < 0, don't do anything yet
     {
-        // if we're within some (circular) distance from the center, apply various effects
-        float circle_size = length(resolution) * (t*3.0);
-        if (distance(resolution / 2.0, coords) < circle_size)
+        if (t < 0.9375)
         {
-            // apply barrel distortion
-            float t_prime = t - 0.9375;
-            float barrel_power = -1.1377777777777 * (t_prime*t_prime) + 2.0;
-            tex_coords = barrel_distort((tex_coords * 2.0) - 1.0, barrel_power);
+            // if we're within some (circular) distance from the center, apply various effects
+            float circle_size = length(resolution) * (t*3.0);
+            if (distance(resolution / 2.0, coords) < circle_size)
+            {
+                // apply barrel distortion
+                float t_prime = t - 0.9375;
+                float barrel_power = -1.1377777777777 * (t_prime*t_prime) + 2.0;
+                tex_coords = barrel_distort((tex_coords * 2.0) - 1.0, barrel_power);
 
-            // apply color split effect
-            float dist_offset = -0.0147289687791 * (t_prime*t_prime*t_prime*t_prime*t_prime*t_prime) + 0.01;
-            color = color_offset(color, texture, tex_coords, dist_offset);
+                // apply color split effect
+                float dist_offset = -0.0147289687791 * (t_prime*t_prime*t_prime*t_prime*t_prime*t_prime) + 0.01;
+                color = color_offset(color, texture, tex_coords, dist_offset);
 
-            // apply the hue shift to our color
-            color = hue_shift(color);
+                // apply the hue shift to our color
+                color = hue_shift(color);
 
+            }
+            // if we are outside the circle, apply inward barrel effect
+            else 
+            {
+                float barrel_power = -25.0 * (t*t) + 1.0;
+                tex_coords = barrel_distort((tex_coords * 2.0) - 1.0, barrel_power);
+                color = vec4(texture2D(texture, vec2(tex_coords.x, tex_coords.y)).rgb, color.a);
+            }
         }
-        // if we are outside the circle, apply inward barrel effect
-        else 
+        // Once the circle has reached a certain size, begin shrinking it
+        // Additionally, apply desaturation outside the circle instead of negative barrel distortion
+        else if (t <= 1.875)
         {
-            float barrel_power = -25.0 * (t*t) + 1.0;
-            tex_coords = barrel_distort((tex_coords * 2.0) - 1.0, barrel_power);
-            color = vec4(texture2D(texture, vec2(tex_coords.x, tex_coords.y)).rgb, color.a);
+            float max_circle_size = length(resolution) * 5.625;
+            float circle_size = length(resolution) * (-t*3.0) + max_circle_size;
+
+            // apply the same effects inside as before
+            if (distance(resolution / 2.0, coords) < circle_size)
+            {
+                // apply barrel distortion
+                float t_prime = t - 0.9375;
+                float barrel_power = -1.1377777777777 * (t_prime*t_prime) + 2.0;
+                tex_coords = barrel_distort((tex_coords * 2.0) - 1.0, barrel_power);
+
+                // apply color split effect
+                float dist_offset = -0.0147289687791 * (t_prime*t_prime*t_prime*t_prime*t_prime*t_prime) + 0.01;
+                color = color_offset(color, texture, tex_coords, dist_offset);
+
+                // apply the hue shift to our color
+                color = hue_shift(color);
+            }
+            else // outside we want to apply the desaturation effect only
+            {
+                color = desaturate(color, 0.2);
+            }
         }
-    }
-    // Once the circle has reached a certain size, begin shrinking it
-    // Additionally, apply desaturation outside the circle instead of negative barrel distortion
-    else if (t <= 1.875)
-    {
-        float max_circle_size = length(resolution) * 5.625;
-        float circle_size = length(resolution) * (-t*3.0) + max_circle_size;
-
-        // apply the same effects inside as before
-        if (distance(resolution / 2.0, coords) < circle_size)
-        {
-            // apply barrel distortion
-            float t_prime = t - 0.9375;
-            float barrel_power = -1.1377777777777 * (t_prime*t_prime) + 2.0;
-            tex_coords = barrel_distort((tex_coords * 2.0) - 1.0, barrel_power);
-
-            // apply color split effect
-            float dist_offset = -0.0147289687791 * (t_prime*t_prime*t_prime*t_prime*t_prime*t_prime) + 0.01;
-            color = color_offset(color, texture, tex_coords, dist_offset);
-
-            // apply the hue shift to our color
-            color = hue_shift(color);
-        }
-        else // outside we want to apply the desaturation effect only
+        // Simply apply desaturation to the entire texture while we wait for time to resume
+        // Why the (unnecessary) accuracy? Fuck you, it's my program, I can do what I want.
+        else if (t <= 9.4641723356)
         {
             color = desaturate(color, 0.2);
         }
-    }
-    // Simply apply desaturation to the entire texture while we wait for time to resume
-    // Why the (unnecessary) accuracy? Fuck you, it's my program, I can do what I want.
-    else if (t <= 9.4641723356)
-    {
-        color = desaturate(color, 0.2);
-    }
-    // Return saturation back to normal over the course of ~1.7 seconds
-    else
-    {
-        float saturation = clamp((t - 9.464172335600)/1.665, 0.2, 1.0);
-        color = desaturate(color, saturation);
+        // Return saturation back to normal over the course of ~1.7 seconds
+        else
+        {
+            float saturation = clamp((t - 9.464172335600)/1.665, 0.2, 1.0);
+            color = desaturate(color, saturation);
+        }
     }
     return color;
 }
