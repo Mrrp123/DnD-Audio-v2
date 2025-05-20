@@ -80,12 +80,14 @@ def step_fade(chunk_gen, next_chunk_gen=None, fade_duration=3000, chunk_len=120,
     """
     # Defines what proportion of the crossfade duration each chunk should make up
     fade_list = [chunk_len / fade_duration] * (fade_duration // chunk_len) + [fade_duration % chunk_len / fade_duration]
+    if fade_list[-1] == 0:
+        fade_list.pop(-1)
     
     # Using fade_list, creates a map of what volume (in decibels) the starts and ends of each chunk should be at
     db_list = [(amp_to_db(j[0]), amp_to_db(j[1]))
             for j in [(1 - sum(fade_list[:i]), 1 - sum(fade_list[:i+1])) for i in range(len(fade_list))]]
     x = 0 # loop index
-    while x < ceil(fade_duration / chunk_len):
+    while x < len(fade_list):
         chunk = next(chunk_gen)
         
         if fade_type == "fade_out" or fade_type == "crossfade":
