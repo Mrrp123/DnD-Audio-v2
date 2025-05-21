@@ -283,8 +283,11 @@ class MainDisplay(EffectWidget):
         self.app.set_audioplayer_attr("seek_pos", seek_pos)
         self.app.set_audioplayer_attr("pos", seek_pos)
         self.app.set_audioplayer_attr("status", "seek")
-            
 
+    def toggle_repeat_mode(self):
+        self.app.music_database.repeat = not self.app.music_database.repeat
+        self.app.set_audioplayer_attr("next_song_file", self.app.music_database.peek_right(1, "file"))
+            
     def update_time_text(self, pos, speed, song_length):
         pos_time, neg_time = self._format_time(pos/1000/speed, song_length/1000/speed)
         self.ids.song_pos.text = pos_time
@@ -520,6 +523,7 @@ class SongsDisplay(Widget):
         self.sort_by = sort_by
         self.reverse_sort = reverse_sort
         self.refresh_songs()
+        self.app.set_audioplayer_attr("next_song_file", self.app.music_database.peek_right(1, "file"))
 
     def update_song_list(self, dt):
         
@@ -906,7 +910,10 @@ class DndAudio(App):
             screen, widget_name = address.split("/")[2:]
             widget = getattr(self.root.get_screen(screen), widget_name)
             func = getattr(widget, func_name)
-        func(*args)
+        if args and isinstance(args[-1], str) and args[-1][0] == "&":
+            self.set_audioplayer_attr(args[-1][1:], func(*args[:-1]))
+        else:
+            func(*args)
         self.osc_server.handle_request()
     
     def get_audioplayer_attr(self, *args):
@@ -1005,6 +1012,7 @@ class DndAudio(App):
             self.load_audioplayer_config()
         if len(self.music_database) != 0:
             self.set_audioplayer_attr("song_file", self.music_database.data["tracks"][self.music_database.track_pointer]["file"])
+            self.set_audioplayer_attr("next_song_file", self.music_database.peek_right(1, "file"))
 
         self.config_vars = self._get_config_vars(0)
         self.config_clock = Clock.schedule_interval(self._get_config_vars, 1)

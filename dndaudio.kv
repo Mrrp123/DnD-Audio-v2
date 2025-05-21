@@ -381,15 +381,23 @@
 
         border: (0,0,0,0)
 
-<EffectDisplay>:
-    ToggleableEffectWidget:
-        x: -1
-        effects: []
-        size: 1,1
-        id: foreground
-        disabled: True
-        Image:
-            id: foreground_img
+    
+    ToggleButton:
+        id: repeat
+        bold: True
+        size_hint: None, None
+        width: root.height * (15/224)
+        height: self.width
+        disabled_color: 1,1,1,1
+        background_color: 0,1,1,1
+        disabled_background_color: 0,1,1,1
+        x: root.width * (1/2) - self.width/2
+        center_x: next_song.center_x
+        center_y: volume_slider.center_y / 2
+        text: "Repeat"
+        on_release: root.toggle_repeat_mode()
+
+        border: (0,0,0,0)
 
     
         

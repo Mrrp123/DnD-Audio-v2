@@ -616,6 +616,9 @@ class AudioPlayer():
         """
         func = reduce(getattr, func_name.split("."), self)
         self.osc_client.send_message("/return", func(*args))
+    
+    def call_music_database_func(self, func_name, *args):
+        self.osc_client.send_message("/call/music_database", (func_name, *args))
 
     
     @property
@@ -881,6 +884,8 @@ class AudioPlayer():
             self.status = "repeat"
 
         elif self.status != "fade_in": # Transition to next song
+            # Make sure our database pointer is synced
+            self.call_music_database_func("set_track", next_song_file)
             self.status = "transition"
         
         next_song_len, next_song_frame_len = self.get_track_length(next_song_file)
@@ -982,7 +987,7 @@ class AudioPlayer():
                 elif self.status == "skip": # If we change songs via a skip during a transition, just go to the next song
                     if (self.reverse_audio and next_song_len - new_pos <= fade_duration/2) or (not self.reverse_audio and new_pos <= fade_duration/2):
                         self.skip(next_song_file)
-                        self.osc_client.send_message("/call/music_database", ["set_track", next_song_file]) # Resync music_database pointer, otherwise we will be one song ahead/behind
+                        self.call_music_database_func("set_track", next_song_file) # Resync music_database pointer, otherwise we will be one song ahead/behind
                     elif self.next_song_file is not None:
                         self.skip(self.next_song_file)
                     else:
@@ -991,7 +996,7 @@ class AudioPlayer():
                 
                 elif self.status == "seek": # If we seek during a transition, override the transition and play the currently fading out song as normal
                     self.seek(self.seek_pos)
-                    self.osc_client.send_message("/call/music_database", ["set_track", self.song_file]) # Resync music_database pointer
+                    self.call_music_database_func("set_track", next_song_file) # Resync music_database pointer
                     self.next_song_file = None
                     return
 
@@ -1016,10 +1021,12 @@ class AudioPlayer():
 
         if next_song_file is not None:
             self.song_file = next_song_file
-        self.next_song_file = None
+        
+        # This is really fucked up way of setting the next_song_file to be whatever's next in the database
+        self.call_music_database_func("peek_right", 1, "file", "&next_song_file")
 
         if add_playcount:
-            self.osc_client.send_message("/call/music_database", ["__add__", 1])
+            self.call_music_database_func("__add__", 1)
 
         if next_chunk_generator is not None:
             self.chunk_generator = next_chunk_generator

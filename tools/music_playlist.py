@@ -84,18 +84,21 @@ class MusicDatabase():
         self.data = UpdatingDict(self.load_yaml(database_file))
         self.track_pointer = list(self.data["tracks"].keys())[0] # id pointer to a song in self.database["tracks"]
         self.valid_pointers = list(self.data["tracks"].keys())
+        self.repeat = False
     
     def __len__(self):
         return len(self.data["tracks"].keys())
     
     def __lshift__(self, left):
-        current_pos = self.valid_pointers.index(self.track_pointer)
-        self.track_pointer = self.valid_pointers[(current_pos - (left % len(self.valid_pointers))) % len(self.valid_pointers)]
+        if not self.repeat:
+            current_pos = self.valid_pointers.index(self.track_pointer)
+            self.track_pointer = self.valid_pointers[(current_pos - (left % len(self.valid_pointers))) % len(self.valid_pointers)]
         return self.data["tracks"][self.track_pointer]
         
     def __rshift__(self, right):
-        current_pos = self.valid_pointers.index(self.track_pointer)
-        self.track_pointer = self.valid_pointers[(current_pos + (right % len(self.valid_pointers))) % len(self.valid_pointers)]
+        if not self.repeat:
+            current_pos = self.valid_pointers.index(self.track_pointer)
+            self.track_pointer = self.valid_pointers[(current_pos + (right % len(self.valid_pointers))) % len(self.valid_pointers)]
         return self.data["tracks"][self.track_pointer]
     
     def __add__(self, value):
@@ -147,8 +150,36 @@ class MusicDatabase():
     def next(self):
         return self >> 1
 
+    def peek_right(self, right, key=None):
+        """
+        Check what the pointer value or key (advanced 'right' many times) is without actively changing to it
+        """
+        if not self.repeat:
+            current_pos = self.valid_pointers.index(self.track_pointer)
+            track_pointer = self.valid_pointers[(current_pos + (right % len(self.valid_pointers))) % len(self.valid_pointers)]
+        else:
+            track_pointer = self.track_pointer
+        if key is None:
+            return track_pointer
+        else:
+            return self.data["tracks"][track_pointer][key]
+
     def previous(self):
         return self << 1
+    
+    def peek_left(self, left, key=None):
+        """
+        Check what the pointer value or key (advanced backwards 'left' many times) is without actively changing to it
+        """
+        if not self.repeat:
+            current_pos = self.valid_pointers.index(self.track_pointer)
+            track_pointer = self.valid_pointers[(current_pos - (left % len(self.valid_pointers))) % len(self.valid_pointers)]
+        else:
+            track_pointer = self.track_pointer
+        if key is None:
+            return track_pointer
+        else:
+            return self.data["tracks"][track_pointer][key]
     
     @staticmethod
     def get_song_cover(file):
