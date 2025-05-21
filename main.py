@@ -52,6 +52,7 @@ class MainDisplay(EffectWidget):
     previous_song_event = None
     time_stop_event = False
     audio_clock = None
+    time_stop_effect = TimeStop()
 
     def __init__(self, **kwargs):
 
@@ -424,7 +425,7 @@ class MainDisplay(EffectWidget):
             
                 self.update_uniforms(t0=-1)
                 self.disabled = True
-                self.effects = [TimeStop()]
+                self.effects = [self.time_stop_effect]
                 self.glsl_clock = Clock.schedule_interval(self._update_glsl, 0)
                 self.app.set_audioplayer_attr("status", "zawarudo")               
     
