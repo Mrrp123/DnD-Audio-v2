@@ -375,12 +375,28 @@
         disabled_background_color: 0,1,1,1
         x: root.width * (1/2) - self.width/2
         center_x: root.width * (1/2)
-        center_y: root.height * (1/12)
+        center_y: root.height * (11/12)
         text: "ZA WARUDO!!!"
         on_release: root.stop_time()
 
         border: (0,0,0,0)
+    
+    ToggleButton:
+        id: shuffle
+        bold: True
+        size_hint: None, None
+        width: root.height * (15/224)
+        height: self.width
+        disabled_color: 1,1,1,1
+        background_color: 0,1,1,1
+        disabled_background_color: 0,1,1,1
+        x: root.width * (1/2) - self.width/2
+        center_x: pause.center_x
+        center_y: volume_slider.center_y / 2
+        text: "Shuffle"
+        on_release: root.toggle_shuffle_mode()
 
+        border: (0,0,0,0)
     
     ToggleButton:
         id: repeat

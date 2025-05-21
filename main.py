@@ -287,6 +287,10 @@ class MainDisplay(EffectWidget):
     def toggle_repeat_mode(self):
         self.app.music_database.repeat = not self.app.music_database.repeat
         self.app.set_audioplayer_attr("next_song_file", self.app.music_database.peek_right(1, "file"))
+    
+    def toggle_shuffle_mode(self):
+        self.app.music_database.set_shuffle_state((not self.app.music_database._shuffle))
+        self.app.set_audioplayer_attr("next_song_file", self.app.music_database.peek_right(1, "file"))
             
     def update_time_text(self, pos, speed, song_length):
         pos_time, neg_time = self._format_time(pos/1000/speed, song_length/1000/speed)

@@ -6,6 +6,7 @@ import miniaudio
 from mutagen.id3 import ID3
 from mutagen.id3._util import ID3NoHeaderError
 from ast import literal_eval
+import random
 
 import tools.common_vars as common_vars
 
@@ -84,21 +85,33 @@ class MusicDatabase():
         self.data = UpdatingDict(self.load_yaml(database_file))
         self.track_pointer = list(self.data["tracks"].keys())[0] # id pointer to a song in self.database["tracks"]
         self.valid_pointers = list(self.data["tracks"].keys())
+        
+        # We don't want to modify self.valid_pointers directly when we shuffle, make an identical copy that we can use for later
+        self.shuffled_valid_pointers = list(self.data["tracks"].keys())
         self.repeat = False
+        self._shuffle = False # Don't modify this directly
     
     def __len__(self):
         return len(self.data["tracks"].keys())
     
     def __lshift__(self, left):
+        if self._shuffle:
+            valid_pointers = self.shuffled_valid_pointers
+        else:
+            valid_pointers = self.valid_pointers
         if not self.repeat:
-            current_pos = self.valid_pointers.index(self.track_pointer)
-            self.track_pointer = self.valid_pointers[(current_pos - (left % len(self.valid_pointers))) % len(self.valid_pointers)]
+            current_pos = valid_pointers.index(self.track_pointer)
+            self.track_pointer = valid_pointers[(current_pos - (left % len(valid_pointers))) % len(valid_pointers)]
         return self.data["tracks"][self.track_pointer]
         
     def __rshift__(self, right):
+        if self._shuffle:
+            valid_pointers = self.shuffled_valid_pointers
+        else:
+            valid_pointers = self.valid_pointers
         if not self.repeat:
-            current_pos = self.valid_pointers.index(self.track_pointer)
-            self.track_pointer = self.valid_pointers[(current_pos + (right % len(self.valid_pointers))) % len(self.valid_pointers)]
+            current_pos = valid_pointers.index(self.track_pointer)
+            self.track_pointer = valid_pointers[(current_pos + (right % len(valid_pointers))) % len(valid_pointers)]
         return self.data["tracks"][self.track_pointer]
     
     def __add__(self, value):
@@ -147,6 +160,11 @@ class MusicDatabase():
             
         return False # no errors
 
+    def set_shuffle_state(self, shuffle):
+        self._shuffle = shuffle
+        if shuffle:
+            random.shuffle(self.shuffled_valid_pointers)
+
     def next(self):
         return self >> 1
 
@@ -154,9 +172,13 @@ class MusicDatabase():
         """
         Check what the pointer value or key (advanced 'right' many times) is without actively changing to it
         """
+        if self._shuffle:
+            valid_pointers = self.shuffled_valid_pointers
+        else:
+            valid_pointers = self.valid_pointers
         if not self.repeat:
-            current_pos = self.valid_pointers.index(self.track_pointer)
-            track_pointer = self.valid_pointers[(current_pos + (right % len(self.valid_pointers))) % len(self.valid_pointers)]
+            current_pos = valid_pointers.index(self.track_pointer)
+            track_pointer = valid_pointers[(current_pos + (right % len(valid_pointers))) % len(valid_pointers)]
         else:
             track_pointer = self.track_pointer
         if key is None:
@@ -171,9 +193,13 @@ class MusicDatabase():
         """
         Check what the pointer value or key (advanced backwards 'left' many times) is without actively changing to it
         """
+        if self._shuffle:
+            valid_pointers = self.shuffled_valid_pointers
+        else:
+            valid_pointers = self.valid_pointers
         if not self.repeat:
-            current_pos = self.valid_pointers.index(self.track_pointer)
-            track_pointer = self.valid_pointers[(current_pos - (left % len(self.valid_pointers))) % len(self.valid_pointers)]
+            current_pos = valid_pointers.index(self.track_pointer)
+            track_pointer = valid_pointers[(current_pos - (left % len(valid_pointers))) % len(valid_pointers)]
         else:
             track_pointer = self.track_pointer
         if key is None:
