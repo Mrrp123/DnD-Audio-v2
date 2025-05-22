@@ -813,7 +813,8 @@ class AudioPlayer():
             self.frame_pos = 0
         self.seek_pos = 0
         self.song_file = next_song_file
-        self.next_song_file = None
+        # This sets the next_song_file to be whatever's next in the database
+        self.call_music_database_func("peek_right", 1, "file", "&next_song_file")
 
 
     
