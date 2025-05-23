@@ -1020,14 +1020,14 @@ class AudioPlayer():
         self.song_length = self.next_song_length
         self.total_frames = self.next_total_frames
 
+        if add_playcount:
+            self.call_music_database_func("update_play_info", self.track_data[self.song_file]["id"])
+
         if next_song_file is not None:
             self.song_file = next_song_file
         
         # This is really fucked up way of setting the next_song_file to be whatever's next in the database
         self.call_music_database_func("peek_right", 1, "file", "&next_song_file")
-
-        if add_playcount:
-            self.call_music_database_func("__add__", 1)
 
         if next_chunk_generator is not None:
             self.chunk_generator = next_chunk_generator

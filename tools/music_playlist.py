@@ -114,13 +114,12 @@ class MusicDatabase():
             self.track_pointer = valid_pointers[(current_pos + (right % len(valid_pointers))) % len(valid_pointers)]
         return self.data["tracks"][self.track_pointer]
     
-    def __add__(self, value):
-        if isinstance(value, int):
-            self.data["tracks"][self.track_pointer]["play_count"] += value
-            self.data.locked = False # Add this so we don't write the whole yaml twice
-            self.data["tracks"][self.track_pointer]["play_date"] = datetime.now().timestamp()
-            self.data.locked = True
-
+    def update_play_info(self, track_id):
+        self.data.locked = True
+        self.data["tracks"][track_id]["play_count"] += 1
+        self.data.locked = False
+        self.data["tracks"][track_id]["play_date"] = datetime.now().timestamp()
+        self.data.locked = True
     
     def load_yaml(self, database_file):
         with open(database_file, "r") as fp:
