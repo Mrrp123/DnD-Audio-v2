@@ -332,7 +332,7 @@ class MainDisplay(EffectWidget):
 
         # Update song cover
         if self.song_cover_path != track["cover"] and status in ("playing", "idle", "fade_in"):
-            if os.path.isfile(source := f"{common_vars.app_folder}/cache/covers/{track['id']}.jpg"):
+            if os.path.isfile(source := f"{common_vars.app_folder}/cache/covers/{track['persistent_id']}.jpg"):
                 self.song_cover.source = source
             else:
                 self.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover.png"
@@ -568,11 +568,12 @@ class SongButton(Widget):
         self.name = self.app.music_database.data["tracks"][self.track_id]["name"]
         self.artist = self.app.music_database.data["tracks"][self.track_id]["artist"]
         self.song_filepath = self.app.music_database.data["tracks"][self.track_id]["file"]
+        self.persistent_id = self.app.music_database.data["tracks"][self.track_id]["persistent_id"]
 
         self.ids.name_label.text = self.name
         self.ids.artist_label.text = self.artist
-        if os.path.isfile(f"{common_vars.app_folder}/cache/small_covers/{self.track_id}.jpg"):
-            self.ids.song_cover.source = f"{common_vars.app_folder}/cache/small_covers/{self.track_id}.jpg"
+        if os.path.isfile(f"{common_vars.app_folder}/cache/small_covers/{self.persistent_id}.jpg"):
+            self.ids.song_cover.source = f"{common_vars.app_folder}/cache/small_covers/{self.persistent_id}.jpg"
         else:
             self.ids.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover_small.png"
     

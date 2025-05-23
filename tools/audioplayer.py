@@ -166,10 +166,10 @@ class AudioDecoder():
     def load_ogg(self, file, start_frame, num_chunks, chunk_frame_len, reverse_audio=False, frame_rate=44_100):
         pass
 
-    def load_mp3(self, file, track_id, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
+    def load_mp3(self, file, persistent_track_id, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
         pass
 
-    def mp3_to_wav(self, file, track_id, frame_rate=44_100):
+    def mp3_to_wav(self, file, persistent_track_id, frame_rate=44_100):
         pass
 
 
@@ -382,7 +382,7 @@ class AudioDecoder():
             else:
                 yield audio
     
-    def _miniaudio_load_mp3(self, file, track_id, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
+    def _miniaudio_load_mp3(self, file, persistent_track_id, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
 
         try:
             miniaudio_stream = miniaudio.mp3_stream_file(file, frames_to_read=chunk_frame_len, seek_frame=start_frame)
@@ -396,7 +396,7 @@ class AudioDecoder():
         except miniaudio.DecodeError:
             # Miniaudio on windows is fucking stupid and can't resolve file names with non-ascii characters
             # Create a hard link here with a set (ASCII) name that we can read from instead
-            hard_link_path = f"{self.app_folder}/cache/audio/{track_id}.mp3"
+            hard_link_path = f"{self.app_folder}/cache/audio/{persistent_track_id}.mp3"
             if not os.path.exists(hard_link_path):
                 os.link(file, hard_link_path)
 
@@ -408,7 +408,7 @@ class AudioDecoder():
 
                 yield audio
     
-    def _miniaudio_mp3_to_wav(self, file, track_id, frame_rate=44_100):
+    def _miniaudio_mp3_to_wav(self, file, persistent_track_id, frame_rate=44_100):
                 
         # Try to delete files if there are too many (>3) in the cache
         current_cached_files = glob(f"{self.app_folder}/cache/audio/*_reversed.wav")
@@ -426,14 +426,14 @@ class AudioDecoder():
                 
         # Windows path reading shenanigans
         if not file.isascii():
-            hard_link_path = f"{self.app_folder}/cache/audio/{track_id}.mp3"
+            hard_link_path = f"{self.app_folder}/cache/audio/{persistent_track_id}.mp3"
             if not os.path.exists(hard_link_path):
                 os.link(file, hard_link_path)
             file_stream = miniaudio.mp3_stream_file(hard_link_path)
         else:
             file_stream = miniaudio.mp3_stream_file(file)
 
-        with wave.open(f"{self.app_folder}/cache/audio/{track_id}_reversed.wav", "wb") as fp:
+        with wave.open(f"{self.app_folder}/cache/audio/{persistent_track_id}_reversed.wav", "wb") as fp:
             fp.setparams((2, 2, frame_rate, 0, "NONE", "NONE"))
             for samples in file_stream:
                 fp.writeframes(samples)
@@ -465,7 +465,7 @@ class AudioDecoder():
                 else:
                     yield audio
 
-    def _android_load_mp3(self, file, track_id, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
+    def _android_load_mp3(self, file, persistent_track_id, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
 
         with self.AndroidFileStream(file, start_frame, frames_to_read=chunk_frame_len) as stream:
             for chunk_index in range(num_chunks):
@@ -478,7 +478,7 @@ class AudioDecoder():
                 audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2)
                 yield audio
     
-    def _android_mp3_to_wav(self, file, track_id, frame_rate=44_100):
+    def _android_mp3_to_wav(self, file, persistent_track_id, frame_rate=44_100):
 
         # Try to delete files if there are too many (>3) in the cache
         current_cached_files = glob(f"{self.app_folder}/cache/audio/*_reversed.wav")
@@ -496,7 +496,7 @@ class AudioDecoder():
                 
         with self.AndroidFileStream(file) as stream:
 
-            with wave.open(f"{self.app_folder}/cache/audio/{track_id}_reversed.wav", "wb") as fp:
+            with wave.open(f"{self.app_folder}/cache/audio/{persistent_track_id}_reversed.wav", "wb") as fp:
                 fp.setparams((2, 2, frame_rate, 0, "NONE", "NONE"))
                 while (samples := stream.get_buffer()):
                     fp.writeframes(samples)
@@ -724,15 +724,15 @@ class AudioPlayer():
             audio_generator = self.decoder.load_ogg(file, start_frame, num_chunks, chunk_frame_len, self.reverse_audio, self.track_data[file]["rate"])
         
         elif file_type == ".mp3":
-            track_id = self.track_data[file]["id"]
+            persistent_track_id = self.track_data[file]["persistent_id"]
             # Streaming an mp3 in reverse is impossible, so we will instead create a wav file from the mp3 and read that instead
             if self.reverse_audio:
-                if not os.path.exists(f"{self.app_folder}/cache/audio/{track_id}_reversed.wav"):
-                    self.decoder.mp3_to_wav(file, track_id)
-                reversed_file = f"{self.app_folder}/cache/audio/{track_id}_reversed.wav"
+                if not os.path.exists(f"{self.app_folder}/cache/audio/{persistent_track_id}_reversed.wav"):
+                    self.decoder.mp3_to_wav(file, persistent_track_id)
+                reversed_file = f"{self.app_folder}/cache/audio/{persistent_track_id}_reversed.wav"
                 audio_generator = self.decoder.load_wav(reversed_file, start_frame, num_chunks, chunk_frame_len, True, self.track_data[file]["rate"])
             else:
-                audio_generator = self.decoder.load_mp3(file, track_id, start_frame, num_chunks, chunk_frame_len, self.track_data[file]["rate"])
+                audio_generator = self.decoder.load_mp3(file, persistent_track_id, start_frame, num_chunks, chunk_frame_len, self.track_data[file]["rate"])
         print(f"Using chunk_frame_len of {chunk_frame_len} for file {file}")
         for audio in audio_generator:
             yield audio

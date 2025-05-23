@@ -11,6 +11,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from io import BytesIO
 from ast import literal_eval
 import random
+import hashlib
 
 from kivy.utils import platform
 
@@ -74,17 +75,18 @@ class MusicDatabase():
     {
         "tracks" : {
             id (int) : {
-                "id" : unique numerical id (int)
+                "id" : numerical id (int),
+                "persistent_id" : unique id based on the sha256 hash of the audio file (str),
                 "file" : Path to audio file (str),
                 "length" : Length of audio file (int) [frames],
-                "size" : File size of audio file (int) [bytes]
-                "rate" : Sampling rate of file (int) [Hz]
+                "size" : File size of audio file (int) [bytes],
+                "rate" : Sampling rate of file (int) [Hz],
                 "date_added" : UTC timestamp when song was first added to database (float) [sec],
                 "date_modified" : UTC timestamp of the last time the file was modified (float) [sec],
-                "bit_rate" : Bit rate of file if applicable (int) [kbps]
+                "bit_rate" : Bit rate of file if applicable (int) [kbps],
                 "name" : Song title (str),
                 "artist" : Artist name (str),
-                "cover" : Path to album cover file (str)
+                "cover" : Path to album cover file (str),
                 "album" : Album name (str),
                 "genre" : Music genre (str),
                 "year" : Release year (int),
@@ -221,6 +223,19 @@ class MusicDatabase():
         else:
             return self.data["tracks"][track_pointer][key]
     
+    @staticmethod
+    def _get_hash_from_file(file):
+        buf_size = 65536
+        sha256 = hashlib.sha256()
+        with open(file, "rb") as fp:
+            while True:
+                data = fp.read(buf_size)
+                if not data:
+                    break
+                sha256.update(data)
+        hash_out = sha256.hexdigest()
+        # Truncate and XOR our hash so we don't use so much path length
+        return hex(int(hash_out[:32], 16) ^ int(hash_out[32:], 16))[2:]
     
     def cache_covers(self):
 
@@ -229,10 +244,11 @@ class MusicDatabase():
         os.makedirs("./cache/small_covers", exist_ok=True)
         os.makedirs("./cache/audio", exist_ok=True)
         for track in self.data["tracks"].keys():
+            persistent_id = self.data["tracks"][track]["persistent_id"]
             cover = self.data["tracks"][track]["cover"]
             if os.path.isfile(cover) and os.path.samefile(cover, f"{common_vars.app_folder}/assets/covers/default_cover.png"):
                 continue
-            elif (not os.path.isfile(cached_img := f"{common_vars.app_folder}/cache/covers/{track}.jpg")
+            elif (not os.path.isfile(cached_img := f"{common_vars.app_folder}/cache/covers/{persistent_id}.jpg")
                 and os.path.isfile(cover)):
                 try:
                     metadata = ID3(cover)
@@ -255,7 +271,7 @@ class MusicDatabase():
                         fp.write(img_data)
                     if img.mode in ("RGBA", "P"): img = img.convert("RGB")
                     img = ImageOps.contain(img, (128,128), Image.Resampling.LANCZOS)
-                    img.save(f"{common_vars.app_folder}/cache/small_covers/{track}.jpg", "JPEG", quality=100)
+                    img.save(f"{common_vars.app_folder}/cache/small_covers/{persistent_id}.jpg", "JPEG", quality=100)
                 except OSError:
                     print(f"Failed to save image for track {track}!")
 
@@ -294,6 +310,7 @@ class MusicDatabase():
         self.data["tracks"][new_id] = UpdatingDict(
         {
             "id" : new_id,
+            "persistent_id" : self._get_hash_from_file(file),
             "file" : os.path.normpath(file),
             "length" : track_info["length"],
             "size" : os.path.getsize(file),
