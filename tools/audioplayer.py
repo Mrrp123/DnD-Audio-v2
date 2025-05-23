@@ -1098,19 +1098,21 @@ class AudioPlayer():
 
                 # If chunk lengths match, mix together and play, otherwise cut off remaining zw audio and add extra audio data to extra_song_audio
                 if len(song_audio) == len(zw_audio):
-                    self.stream.write((song_audio * zw_audio).data)
+                    chunk = song_audio * zw_audio
                 else:
                     extra_song_audio = song_audio[len(zw_audio):] # Note, this has already been resampled to self.rate
-                    self.stream.write((song_audio[0:len(zw_audio)] * zw_audio).data)
+                    chunk = song_audio[0:len(zw_audio)] * zw_audio
+
+                self.stream.write(chunk.data)
 
                 self.get_debug_info()
                 # Change frame_pos by how many frames *would have* been read before accounting for resampling rather than self.rate
                 if self.reverse_audio:
-                    self.pos -= len(zw_audio) * self.speed
-                    self.frame_pos -= round(self.chunk_len*self.track_data[self.song_file]["rate"]/1000)
+                    self.pos -= len(chunk) * self.speed
+                    self.frame_pos -= round(len(chunk)*self.track_data[self.song_file]["rate"]/1000)
                 else:
-                    self.pos += len(zw_audio) * self.speed
-                    self.frame_pos += round(self.chunk_len*self.track_data[self.song_file]["rate"]/1000)
+                    self.pos += len(chunk) * self.speed
+                    self.frame_pos += round(len(chunk)*self.track_data[self.song_file]["rate"]/1000)
                 
                 # Read in more zawarudo.wav audio
                 zw = zwfp.readframes(round(self.chunk_len*44_100/self.speed/1000))
@@ -1215,6 +1217,13 @@ class AudioPlayer():
         # If there's any left over data, play it
         if len(extra_song_audio):
             self.stream.write((extra_song_audio + amp_to_db(self.volume)).data)
+            self.get_debug_info()
+            if self.reverse_audio:
+                self.pos -= len(extra_song_audio)
+                self.frame_pos -= round(len(extra_song_audio)*self.track_data[self.song_file]["rate"]/1000)
+            else:
+                self.pos += len(extra_song_audio)
+                self.frame_pos += round(len(extra_song_audio)*self.track_data[self.song_file]["rate"]/1000)
 
         # We can keep using self.chunk_generator, just keep playing the rest of the song
         self.status = "playing"
