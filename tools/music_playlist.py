@@ -2,11 +2,22 @@ import os
 from threading import Thread
 import yaml
 from datetime import datetime
-import miniaudio
-from mutagen.id3 import ID3
-from mutagen.id3._util import ID3NoHeaderError
+from mutagen.mp3 import MP3
+from mutagen.oggvorbis import OggVorbis
+from mutagen.wave import WAVE
 from ast import literal_eval
 import random
+
+from kivy.utils import platform
+
+if platform == "android":
+    from jnius import autoclass
+    AUDIO_API = "audiotrack"
+
+
+if platform in ('win', 'linux', 'linux2', 'macos'):
+    import miniaudio
+    AUDIO_API = "miniaudio"
 
 import tools.common_vars as common_vars
 
@@ -206,25 +217,6 @@ class MusicDatabase():
         else:
             return self.data["tracks"][track_pointer][key]
     
-    @staticmethod
-    def get_song_cover(file):
-        asset_folder = f"{common_vars.app_folder}/assets/covers"
-        name = os.path.split(file)[-1].split(".")[0]
-        try:
-            metadata = ID3(file)
-            if metadata.getall("APIC") != []:
-                return file
-        except ID3NoHeaderError:
-            pass
-
-        if os.path.isfile(f"{asset_folder}/{name}.png"):
-            return f"{asset_folder}/{name}.png"
-        
-        elif os.path.isfile(f"{asset_folder}/{name}.jpg"):
-            return f"{asset_folder}/{name}.jpg"
-        
-        else:
-            return f"{asset_folder}/default_cover.png"
 
     def add_track(
             self, 
@@ -240,30 +232,50 @@ class MusicDatabase():
         new_id = max(self.valid_pointers) + 1
         track_info = self.get_track_info(file)
 
-        if name == "":
-            name = os.path.split(file)[-1].split(".")[0]
-        if cover == "":
-            cover = self.get_song_cover(file)
+        if name != "":
+            track_info["name"] = name
+        if album != "":
+            track_info["artist"] = artist
+        if cover != "":
+            track_info["cover"] = cover
+        if album != "":
+            track_info["album"] = album
+        if genre != "":
+            track_info["genre"] = genre
+        if year is not None:
+            track_info["year"] = year
+        if bpm is not None:
+            track_info["bpm"] = bpm
 
-        self.data["tracks"][new_id] = {
+        self.data.locked = True
+        self.data["tracks"][new_id] = 1 # Add new key to UpdatingDict with bogus entry
+        self.data.locked = False
+        self.data["tracks"][new_id] = UpdatingDict(
+        {
             "id" : new_id,
             "file" : os.path.normpath(file),
-            "length" : track_info.num_frames,
+            "length" : track_info["length"],
             "size" : os.path.getsize(file),
-            "rate" : track_info.sample_rate,
+            "rate" : track_info["rate"],
             "date_added" : datetime.now().timestamp(),
             "date_modified" : datetime.now().timestamp(),
-            "bit_rate" : round((os.path.getsize(file)-44) * 8 / (track_info.num_frames / track_info.sample_rate) / 1000),
-            "name" : name,
-            "artist" : artist,
-            "cover" : cover,
-            "album" : album,
-            "genre" : genre,
-            "year" : year,
-            "bpm" : bpm,
+            "bit_rate" : track_info["bit_rate"],
+            "name" : track_info["name"],
+            "artist" : track_info["artist"],
+            "cover" : track_info["cover"],
+            "album" : track_info["album"],
+            "genre" : track_info["genre"],
+            "year" : track_info["year"],
+            "bpm" : track_info["bpm"],
             "play_count" : 0,
-            "play_date" : datetime.now().timestamp()
-        }
+            "play_date" : -1.0
+        },
+        parent=self.data["tracks"], parent_key=new_id)
+        self.data.locked = True
+
+        # Reload list of pointers
+        self.valid_pointers = list(self.data["tracks"].keys())
+        self.shuffled_valid_pointers = list(self.data["tracks"].keys())
     
     def set_track(self, file):
         if file is not None:
@@ -273,9 +285,54 @@ class MusicDatabase():
     
     def get_track(self):
         return self.data["tracks"][self.track_pointer]
+    
+    def get_track_info(self, file: str):
+        if AUDIO_API == "audiotrack":
+            track_info, metadata = self._android_get_track_info(file)
+        elif AUDIO_API == "miniaudio":
+            track_info, metadata = self._miniaudio_get_track_info(file)
+        
+        if isinstance(metadata, (MP3, WAVE)):
+            if metadata.get("APIC:") is not None:
+                track_info["cover"] = file
+            if metadata.get("TIT2") is not None:
+                track_info["name"] = metadata.get("TIT2").text[0]
+            if metadata.get("TPE1") is not None:
+                track_info["artist"] = metadata.get("TPE1").text[0]
+            if metadata.get("TALB") is not None:
+                track_info["album"] = metadata.get("TALB").text[0]
+            if metadata.get("TCON") is not None:
+                track_info["genre"] = metadata.get("TCON").genres[0]
+            if metadata.get("TDRC") is not None:
+                track_info["year"] = metadata.get("TDRC").text[0].year
+            if metadata.get("TBPM") is not None:
+                track_info["bpm"] = +metadata.get("TBPM")
+        
+        elif isinstance(metadata, OggVorbis):
+            if metadata.get("METADATA_BLOCK_PICTURE") is not None:
+                track_info["cover"] = file
+            if metadata.get("title") is not None:
+                track_info["name"] = metadata.get("title")[0]
+            if metadata.get("artist") is not None:
+                track_info["artist"] = metadata.get("artist")[0]
+            if metadata.get("album") is not None:
+                track_info["album"] = metadata.get("album")[0]
+            if metadata.get("genre") is not None:
+                track_info["genre"] = metadata.get("genre")[0]
+            if metadata.get("date") is not None:
+                try:
+                    track_info["year"] = datetime.fromisoformat(metadata.get("date")[0]).year
+                except ValueError:
+                    try:
+                        track_info["year"] = int(metadata.get("date")[0])
+                    except ValueError:
+                        pass
+            if metadata.get("bpm") is not None: # This isn't typical to have in a vorbis file, but try anyway
+                track_info["bpm"] = metadata.get("bpm")[0]
 
-    @staticmethod
-    def get_track_info(file: str):
+        return track_info
+
+    def _miniaudio_get_track_info(self, file: str):
         file_ext = os.path.splitext(file)[1].lower()
         hard_link_path = f"{common_vars.app_folder}/cache/audio/temp"
 
@@ -284,16 +341,33 @@ class MusicDatabase():
                 os.remove(hard_link_path)
             os.link(file, hard_link_path)
             file = hard_link_path
+        
+        # Base dict to fill known info into
+        track_info = {
+            "length" : None,
+            "rate" : None,
+            "bit_rate" : None,
+            "name" : os.path.split(file)[-1],
+            "artist" : "",
+            "cover" : "",
+            "album" : "",
+            "genre" : "",
+            "year" : None,
+            "bpm" : None,
+        }
 
         try:
-            if file_ext.lower() == ".wav":
-                info = miniaudio.wav_get_file_info(file)
+            if file_ext == ".wav":
+                file_info = miniaudio.wav_get_file_info(file)
+                metadata = WAVE(file)
 
-            elif file_ext.lower() == ".ogg":
-                info = miniaudio.vorbis_get_file_info(file)
+            elif file_ext == ".ogg":
+                file_info = miniaudio.vorbis_get_file_info(file)
+                metadata = OggVorbis(file)
             
-            elif file_ext.lower() == ".mp3":
-                info = miniaudio.mp3_get_file_info(file)
+            elif file_ext == ".mp3":
+                file_info = miniaudio.mp3_get_file_info(file)
+                metadata = MP3(file)
             
             else:
                 raise ValueError("Unsupported file type!")
@@ -304,5 +378,58 @@ class MusicDatabase():
         finally:
             if os.path.exists(hard_link_path):
                 os.remove(hard_link_path)
+                
+        track_info["rate"] = file_info.sample_rate
+        track_info["length"] = file_info.num_frames
+        track_info["bit_rate"] = metadata.info.bitrate // 1000
         
-        return info
+        return track_info, metadata
+    
+    def _android_get_track_info(self, file: str):
+        # For some *obscene* reason, Android's MediaMetadataRetriever class 
+        # didn't support something as fucking simple as SAMPLE RATE until 
+        # api 31, so we use mutagen for metadata, and MediaExtractor 
+        # for sample rate, length and bitrate
+        MediaExtractor = autoclass("android.media.MediaExtractor")
+
+        self.media_extractor = MediaExtractor()
+        self.media_extractor.setDataSource(file)
+        self.track_format = self.media_extractor.getTrackFormat(0)
+
+        # Base dict to fill known info into
+        track_info = {
+            "length" : None,
+            "rate" : None,
+            "bit_rate" : None,
+            "name" : os.path.split(file)[-1],
+            "artist" : "",
+            "cover" : "",
+            "album" : "",
+            "genre" : "",
+            "year" : None,
+            "bpm" : None,
+        }
+
+        # rate and length absolutely must exist, if they don't these will throw errors
+        track_info["rate"] = self.track_format.getInteger("sample-rate")
+        # This will be off by at most 0.5 us (2 or 3 frames @ 48kHz), which should be good enough, but if it causes problems then this will need to change.
+        track_info["length"] = round(self.track_format.getLong("durationUs") * track_info["rate"] / 1_000_000)
+        track_info["bit_rate"] = self.track_format.getInteger("bitrate") // 1000
+        self.media_extractor.release()
+
+        file_ext = os.path.splitext(file)[1].lower()
+
+        if file_ext == ".wav":
+            metadata = WAVE(file)
+
+        elif file_ext == ".ogg":
+            metadata = OggVorbis(file)
+        
+        elif file_ext == ".mp3":
+            metadata = MP3(file)
+        
+        else:
+            raise ValueError("Unsupported file type!")
+        
+        
+        return track_info, metadata
