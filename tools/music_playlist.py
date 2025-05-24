@@ -237,15 +237,17 @@ class MusicDatabase():
         # Truncate and XOR our hash so we don't use so much path length
         return hex(int(hash_out[:32], 16) ^ int(hash_out[32:], 16))[2:]
     
-    def cache_covers(self):
+    def cache_covers(self, track_ids=None):
 
         # Create cache folder if it doesn't exist
         os.makedirs("./cache/covers", exist_ok=True)
         os.makedirs("./cache/small_covers", exist_ok=True)
         os.makedirs("./cache/audio", exist_ok=True)
-        for track in self.data["tracks"].keys():
-            persistent_id = self.data["tracks"][track]["persistent_id"]
-            cover = self.data["tracks"][track]["cover"]
+        if track_ids is None:
+            track_ids = self.data["tracks"].keys()
+        for track_id in track_ids:
+            persistent_id = self.data["tracks"][track_id]["persistent_id"]
+            cover = self.data["tracks"][track_id]["cover"]
             if os.path.isfile(cover) and os.path.samefile(cover, f"{common_vars.app_folder}/assets/covers/default_cover.png"):
                 continue
             elif (not os.path.isfile(cached_img := f"{common_vars.app_folder}/cache/covers/{persistent_id}.jpg")
@@ -259,7 +261,7 @@ class MusicDatabase():
                         with open(cover, "rb") as fp:
                             img_data = fp.read()
                     except OSError:
-                        print(f"Failed to read image for track {track}!")
+                        print(f"Failed to read image for track {track_id}!")
                         continue
                 try:
                     img: Image.Image = Image.open(BytesIO(img_data))
@@ -273,7 +275,7 @@ class MusicDatabase():
                     img = ImageOps.contain(img, (128,128), Image.Resampling.LANCZOS)
                     img.save(f"{common_vars.app_folder}/cache/small_covers/{persistent_id}.jpg", "JPEG", quality=100)
                 except OSError:
-                    print(f"Failed to save image for track {track}!")
+                    print(f"Failed to save image for track {track_id}!")
 
     def add_track(
             self, 
@@ -334,6 +336,9 @@ class MusicDatabase():
         # Reload list of pointers
         self.valid_pointers = list(self.data["tracks"].keys())
         self.shuffled_valid_pointers = list(self.data["tracks"].keys())
+
+        # Add any cover art to the cache
+        self.cache_covers(track_ids=[new_id])
     
     def set_track(self, file):
         if file is not None:

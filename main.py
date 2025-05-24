@@ -714,7 +714,15 @@ class DndAudio(App):
         self.reload_songs()
         self.start_service()     
 
-        #Window.bind(on_request_close=self.on_request_close)
+        def nothing(*args, **kwargs):
+            pass
+
+        # In kivy versions 2.1.0 - 2.3.1 (current), on_dropfile is fucked up 
+        # and gets called instead, despite being depreceated.
+        # Set this to be a function that does absolutely nothing 
+        # so the on_drop_file event works correctly.
+        Window.on_dropfile = nothing
+        Window.bind(on_drop_file=self._file_drop_handler)
         if platform != "android":
             Window.size = (375, 700)
         
@@ -871,6 +879,12 @@ class DndAudio(App):
         
         else:
             self.audio_service.kill()
+    
+    
+    def _file_drop_handler(self, window, file_path: bytes, x, y, *args):
+        self.music_database.add_track(file_path.decode("utf-8"))
+        self.call_audioplayer_func("reload_track_data")
+        self.root.get_screen("songs").songs_display.refresh_songs()
 
 
     def _return_message(self, address: str, *values):

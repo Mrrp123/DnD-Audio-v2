@@ -584,12 +584,7 @@ class AudioPlayer():
         Thread(target=self.osc_server.serve_forever, daemon=True).start()
         self.osc_client.send_message("/return", "ready")
 
-        with open(common_vars.music_database_path) as fp:
-            music_data = yaml.safe_load(fp)
-
-        # Create file -> database LUT since it's more convienient to use the file as the key
-        self.track_data = {music_data["tracks"][track]["file"] : music_data["tracks"][track]
-                           for track in music_data["tracks"].keys()}
+        self.reload_track_data()
 
         
     
@@ -619,6 +614,18 @@ class AudioPlayer():
     
     def call_music_database_func(self, func_name, *args):
         self.osc_client.send_message("/call/music_database", (func_name, *args))
+
+    def reload_track_data(self):
+        """
+        Reloads track information
+        """
+        with open(common_vars.music_database_path) as fp:
+            music_data = yaml.safe_load(fp)
+
+        # Create file -> database LUT since it's more convienient to use the file as the key
+        self.track_data = {music_data["tracks"][track]["file"] : music_data["tracks"][track]
+                           for track in music_data["tracks"].keys()}
+
 
     
     @property
