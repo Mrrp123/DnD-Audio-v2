@@ -237,7 +237,12 @@ class MainDisplay(EffectWidget):
             self.update_time_pos = False
             new_size = (self.orig_time_slider_size[0] * 1.05, self.orig_time_slider_size[1] * 2)
             new_pos = (self.orig_time_slider_pos[0] - self.orig_time_slider_size[0] * .025, self.orig_time_slider_pos[1] - self.orig_time_slider_size[1]/2)
-            
+
+            song_length, speed = self.app.get_audioplayer_attr("song_length", "speed")
+            # Force call set_value_pos since otherwise it's a frame behind and doesn't update when the slider is first grabbed
+            self.time_slider.set_value_pos(touch.pos)
+            self.update_time_text(self.time_slider.value * song_length / 1000, speed, song_length)
+
             # Make the song pos bar expand when held
             self.time_slider_anim.stop(self.time_slider)
             self.time_slider_anim = Animation(size=new_size, pos=new_pos, duration=0.3, transition="out_expo")
@@ -248,7 +253,11 @@ class MainDisplay(EffectWidget):
             if self.time_slider.value == 1000:
                 self.app.set_audioplayer_attr("seek_pos", 0)
             song_length, speed = self.app.get_audioplayer_attr("song_length", "speed")
-            self.update_time_text(int(self.time_slider.value * song_length / 1000), speed, song_length)
+
+            # Force call set_value_pos since otherwise it's a frame behind and results in unexpected
+            # behavior when the slider is released
+            self.time_slider.set_value_pos(touch.pos)
+            self.update_time_text(self.time_slider.value * song_length / 1000, speed, song_length)
 
     def end_seek(self, touch):
         if touch.grab_current == self.time_slider:
@@ -267,7 +276,7 @@ class MainDisplay(EffectWidget):
             elif self.time_slider.value == 0 and reverse_audio:
                 pos = song_length
             else:
-                pos = int(self.time_slider.value * song_length / 1000)
+                pos = self.time_slider.value * song_length / 1000
             
             self.app.set_audioplayer_attr("seek_pos", pos)
             self.app.set_audioplayer_attr("pos", pos)
@@ -327,7 +336,7 @@ class MainDisplay(EffectWidget):
             self.ids.song_name.text = track["name"]
             self.ids.song_artist.text = track["artist"]
             if not self.update_time_pos:
-                self.update_time_text(int(self.time_slider.value * song_length / 1000), speed, song_length)
+                self.update_time_text(self.time_slider.value * song_length / 1000, speed, song_length)
         
 
         # Update song cover
