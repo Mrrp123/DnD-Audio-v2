@@ -408,26 +408,26 @@ class MainDisplay(EffectWidget):
     def _format_time(seconds, length):
 
         seconds = int(seconds)
-        length = int(length) - seconds
+        seconds_remaining = int(length) - seconds
 
         #print(seconds)
 
         if length < 3_600:
             pos_min = seconds // 60
             pos_sec = seconds % 60
-            length_min = length // 60
-            length_sec = length % 60
+            neg_min = seconds_remaining // 60
+            neg_sec = seconds_remaining % 60
             pos = f"{pos_min}:{pos_sec:02d}"
-            neg = f"-{length_min}:{length_sec:02d}"
+            neg = f"-{neg_min}:{neg_sec:02d}"
         else:
             pos_hour = seconds // 3600
             pos_min = (seconds % 3600) // 60
             pos_sec = (seconds % 3600) % 60
-            length_hour = length // 3600
-            length_min = (length % 3600) // 60
-            length_sec = (length % 3600) % 60
+            neg_hour = seconds_remaining // 3600
+            neg_min = (seconds_remaining % 3600) // 60
+            neg_sec = (seconds_remaining % 3600) % 60
             pos = f"{pos_hour}:{pos_min:02d}:{pos_sec:02d}"
-            neg = f"-{length_hour}:{length_min:02d}:{length_sec:02d}"
+            neg = f"-{neg_hour}:{neg_min:02d}:{neg_sec:02d}"
 
         return pos, neg
             
