@@ -154,10 +154,10 @@ class MusicDatabase():
 
         required_base_keys = ("tracks",)
 
-        required_track_keys = ("id", "file", "length", "size", "rate", 
-                               "date_added", "date_modified", "bit_rate",
-                               "name", "artist", "cover", "album", "genre", 
-                               "year", "bpm", "play_count", "play_date")
+        required_track_keys = ("id", "persistent_id", "file", "length", 
+                               "size", "rate", "date_added", "date_modified", 
+                               "bit_rate", "name", "artist", "cover", "album", 
+                               "genre", "year", "bpm", "play_count", "play_date")
 
         if not isinstance(yaml_object, dict):
             return "MusicDatabase is not a dictionary at the tree level"
