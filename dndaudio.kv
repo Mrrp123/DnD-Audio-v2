@@ -381,21 +381,20 @@
 
         border: (0,0,0,0)
     
-    ToggleButton:
+    Button:
         id: shuffle
         bold: True
         size_hint: None, None
         width: root.height * (15/224)
         height: self.width
-        disabled_color: 1,1,1,1
-        background_color: 0,1,1,1
-        disabled_background_color: 0,1,1,1
-        x: root.width * (1/2) - self.width/2
         center_x: pause.center_x
         center_y: volume_slider.center_y / 2
-        text: "Shuffle"
         on_release: root.toggle_shuffle_mode()
 
+        background_normal: f"{app_folder}/assets/buttons/shuffle_inactive_normal.png"
+        background_disabled_normal: f"{app_folder}/assets/buttons/shuffle_inactive_normal.png"
+        background_down: f"{app_folder}/assets/buttons/shuffle_inactive_pressed.png"
+        background_disabled_down: f"{app_folder}/assets/buttons/shuffle_inactive_pressed.png"
         border: (0,0,0,0)
     
     ToggleButton:

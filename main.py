@@ -298,8 +298,21 @@ class MainDisplay(EffectWidget):
         self.app.set_audioplayer_attr("next_song_file", self.app.music_database.peek_right(1, "file"))
     
     def toggle_shuffle_mode(self):
-        self.app.music_database.set_shuffle_state((not self.app.music_database._shuffle))
+        shuffle_state = not self.app.music_database._shuffle
+        self.app.music_database.set_shuffle_state(shuffle_state)
         self.app.set_audioplayer_attr("next_song_file", self.app.music_database.peek_right(1, "file"))
+
+        if shuffle_state:
+            self.ids.shuffle.background_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_active_normal.png"
+            self.ids.shuffle.background_disabled_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_active_normal.png"
+            self.ids.shuffle.background_down = f"{common_vars.app_folder}/assets/buttons/shuffle_active_pressed.png"
+            self.ids.shuffle.background_disabled_down = f"{common_vars.app_folder}/assets/buttons/shuffle_active_pressed.png"
+
+        else:
+            self.ids.shuffle.background_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_inactive_normal.png"
+            self.ids.shuffle.background_disabled_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_active_normal.png"
+            self.ids.shuffle.background_down = f"{common_vars.app_folder}/assets/buttons/shuffle_inactive_pressed.png"
+            self.ids.shuffle.background_disabled_down = f"{common_vars.app_folder}/assets/buttons/shuffle_active_pressed.png"
             
     def update_time_text(self, pos, speed, song_length):
         pos_time, neg_time = self._format_time(pos/1000/speed, song_length/1000/speed)

@@ -1,4 +1,5 @@
 assets/buttons/pdn
+*.kra*
 *.pdn
 test*.py
 audio/*
