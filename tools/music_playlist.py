@@ -340,11 +340,9 @@ class MusicDatabase():
         # Add any cover art to the cache
         self.cache_covers(track_ids=[new_id])
     
-    def set_track(self, file):
-        if file is not None:
-            for track in self.data["tracks"].keys():
-                if os.path.samefile(file, self.data["tracks"][track]["file"]):
-                    self.track_pointer = track
+    def set_track(self, track_id):
+        if track_id in self.valid_pointers:
+            self.track_pointer = track_id
     
     def get_track(self):
         return self.data["tracks"][self.track_pointer]

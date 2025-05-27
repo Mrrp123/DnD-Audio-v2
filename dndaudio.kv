@@ -118,7 +118,7 @@
         on_touch_move: root.update_seek(args[1])
         on_touch_up: root.end_seek(args[1])
         canvas:
-            # Draw background rail for song position
+            # Draw background rail for track position
             Color:
                 rgba: 0.5,0.5,0.5,1
             RoundedRectangle:
@@ -126,7 +126,7 @@
                 size: self.size[0], self.height / 8
                 radius: self.height / 16,
 
-            # Create mask for active rail for song pos
+            # Create mask for active rail for track pos
             StencilPush 
             RoundedRectangle:
                 pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 16
@@ -170,7 +170,7 @@
         on_touch_move: root.update_volume(args[1])
         on_touch_up: root.end_change_volume(args[1])
         canvas:
-            # Draw background rail for song position
+            # Draw background rail
             Color:
                 rgba: 0.5,0.5,0.5,1
             RoundedRectangle:
@@ -178,7 +178,7 @@
                 size: self.size[0], self.height / 8
                 radius: self.height / 16,
 
-            # Create mask for active rail for song pos
+            # Create mask for active rail
             StencilPush 
             RoundedRectangle:
                 pos: self.pos[0], self.pos[1] + self.height / 2 - self.height / 16
@@ -228,7 +228,7 @@
 
     
     Label:
-        id: song_pos
+        id: track_pos
         bold: True
         color: 1,1,1,1
         disabled_color: 1,1,1,1
@@ -245,7 +245,7 @@
 
     
     Label:
-        id: neg_song_pos
+        id: neg_track_pos
         bold: True
         color: 1,1,1,1
         disabled_color: 1,1,1,1
@@ -261,7 +261,7 @@
         padding: 0, 0, audio_position_slider.x + dp(2), 0
     
     Label:
-        id: song_artist
+        id: track_artist
         bold: True
         color: 0.9, 0.9, 0.9, 0.6
         disabled_color: 0.9, 0.9, 0.9, 0.6
@@ -277,13 +277,13 @@
         shorten_from: "right"
 
     Label:
-        id: song_name
+        id: track_name
         bold: True
         color: 1,1,1,1
         disabled_color: 1,1,1,1
         size_hint: None, None
         x: root.width * (1/2) - (root.width * (11/12) - dp(32)) / 2 + dp(2)
-        center_y: song_artist.center_y + root.height/30
+        center_y: track_artist.center_y + root.height/30
         halign: "left"
         text: ""
         text_size: self.size
@@ -293,7 +293,7 @@
         shorten_from: "right"
 
     Button:
-        id: previous_song
+        id: previous_track
         bold: True
         size_hint: None, None
         width: root.height * (15/224)
@@ -303,7 +303,7 @@
         disabled: True
         # center_x: root.width * (1/4)
         # center_y: root.height * (1/6)
-        on_touch_up: root.get_tap_type(self, args[1])
+        on_touch_up: root.get_tap_type(args[1])
 
         background_normal: f"{app_folder}/assets/buttons/backward_skip_normal.png"
         background_disabled_normal: f"{app_folder}/assets/buttons/backward_skip_normal.png"
@@ -312,7 +312,7 @@
         border: (0,0,0,0)
     
     Button:
-        id: next_song
+        id: next_track
         bold: True
         size_hint: None, None
         width: root.height * (15/224)
@@ -322,7 +322,7 @@
         disabled: True
         # center_x: root.width * (3/4)
         # center_y: root.height * (1/6)
-        on_touch_up: root.get_tap_type(self, args[1])
+        on_touch_up: root.get_tap_type(args[1])
         
         background_normal: f"{app_folder}/assets/buttons/forward_skip_normal.png"
         background_disabled_normal: f"{app_folder}/assets/buttons/forward_skip_normal.png"
@@ -354,7 +354,7 @@
         size_hint: None, None
         width: root.height * (12/224)
         height: self.width
-        center_x: previous_song.center_x
+        center_x: previous_track.center_x
         center_y: volume_slider.center_y / 2
         on_release: root.reverse()
 
@@ -407,7 +407,7 @@
         background_color: 0,1,1,1
         disabled_background_color: 0,1,1,1
         x: root.width * (1/2) - self.width/2
-        center_x: next_song.center_x
+        center_x: next_track.center_x
         center_y: volume_slider.center_y / 2
         text: "Repeat"
         on_release: root.toggle_repeat_mode()
@@ -676,7 +676,7 @@
                         radius: 0, 0, self.height/3, self.height/3
             
 
-    TextInput: # This exists only to help the rounded rectangle figure out its height, it mimics the settings of song_search
+    TextInput: # This exists only to help the rounded rectangle figure out its height, it mimics the settings of track_search
         id: size_indicator
         background_color: 0,0,0,0
         foreground_color: 0,0,0,0
@@ -699,7 +699,7 @@
                 radius: size_indicator.height / 2,
 
     TextInput:
-        id: song_search
+        id: track_search
         bold: True
         width: root.width - song_label.padding[0]*2
         height: self.minimum_height
@@ -717,15 +717,15 @@
         on_text: root.on_text(self)
     
     RecycleView:
-        id: song_list
+        id: track_list
         viewclass: "SongButton"
         width: root.width
-        height: song_search.y - song_search.height
+        height: track_search.y - track_search.height
         RecycleBoxLayout:
             default_size: None, size_indicator.size[1]*2
             default_size_hint: 1, None
             size_hint: None, None
-            height: self.minimum_height#song_search.y - song_search.height
+            height: self.minimum_height
             width: root.width
             orientation:  "vertical"
             background_color: 1,1,1,0.3
