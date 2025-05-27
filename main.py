@@ -179,27 +179,28 @@ class MainDisplay(EffectWidget):
 
     def pause_music(self):
         pause_flag, status = self.app.get_audioplayer_attr("pause_flag", "status")
-        if status == "idle":
+        if status == "idle" and len(self.app.music_database) != 0:
             self.play_music()
         else:
             self.app.set_audioplayer_attr("pause_flag", not pause_flag)
             pause_flag = not pause_flag
 
-        if pause_flag:
-            self.ids.pause.background_normal = f"{common_vars.app_folder}/assets/buttons/play_normal.png"
-            self.ids.pause.background_down = f"{common_vars.app_folder}/assets/buttons/play_pressed.png"
-            Animation.cancel_all(self.ids.song_cover, "size")
-            new_size = (self.height * (1/3), min(1/self.song_cover.image_ratio * self.height * (1/3), self.height * (1/3)))
-            anim = Animation(size=new_size, duration=0.25, transition="out_back")
-            anim.start(self.song_cover)
+        if len(self.app.music_database) != 0:
+            if pause_flag:
+                self.ids.pause.background_normal = f"{common_vars.app_folder}/assets/buttons/play_normal.png"
+                self.ids.pause.background_down = f"{common_vars.app_folder}/assets/buttons/play_pressed.png"
+                Animation.cancel_all(self.ids.song_cover, "size")
+                new_size = (self.height * (1/3), min(1/self.song_cover.image_ratio * self.height * (1/3), self.height * (1/3)))
+                anim = Animation(size=new_size, duration=0.25, transition="out_back")
+                anim.start(self.song_cover)
 
-        else:
-            self.ids.pause.background_normal = f"{common_vars.app_folder}/assets/buttons/pause_normal.png"
-            self.ids.pause.background_down = f"{common_vars.app_folder}/assets/buttons/pause_pressed.png"
-            Animation.cancel_all(self.song_cover, "size")
-            new_size = (self.height * (5/12), min(1/self.song_cover.image_ratio * self.height * (5/12), self.height * (5/12)))
-            anim = Animation(size=new_size, duration=0.25, transition="out_back")
-            anim.start(self.song_cover)
+            else:
+                self.ids.pause.background_normal = f"{common_vars.app_folder}/assets/buttons/pause_normal.png"
+                self.ids.pause.background_down = f"{common_vars.app_folder}/assets/buttons/pause_pressed.png"
+                Animation.cancel_all(self.song_cover, "size")
+                new_size = (self.height * (5/12), min(1/self.song_cover.image_ratio * self.height * (5/12), self.height * (5/12)))
+                anim = Animation(size=new_size, duration=0.25, transition="out_back")
+                anim.start(self.song_cover)
 
     
     def begin_change_volume(self, touch):
@@ -286,21 +287,24 @@ class MainDisplay(EffectWidget):
             self.update_time_pos = True
     
     def reverse(self):
-        reverse_audio, track_length = self.app.get_audioplayer_attr("reverse_audio", "track_length")
-        self.app.set_audioplayer_attr("reverse_audio", not reverse_audio)
-        seek_pos = int(self.time_slider.value * track_length / 1000)
-        self.app.set_audioplayer_attr("seek_pos", seek_pos)
-        self.app.set_audioplayer_attr("pos", seek_pos)
-        self.app.set_audioplayer_attr("status", "seek")
+        if len(self.app.music_database) != 0:
+            reverse_audio, track_length = self.app.get_audioplayer_attr("reverse_audio", "track_length")
+            self.app.set_audioplayer_attr("reverse_audio", not reverse_audio)
+            seek_pos = int(self.time_slider.value * track_length / 1000)
+            self.app.set_audioplayer_attr("seek_pos", seek_pos)
+            self.app.set_audioplayer_attr("pos", seek_pos)
+            self.app.set_audioplayer_attr("status", "seek")
 
     def toggle_repeat_mode(self):
         self.app.music_database.repeat = not self.app.music_database.repeat
-        self.app.set_audioplayer_attr("next_track_id", self.app.music_database.peek_right(1))
+        if len(self.app.music_database) != 0:
+            self.app.set_audioplayer_attr("next_track_id", self.app.music_database.peek_right(1))
     
     def toggle_shuffle_mode(self):
         shuffle_state = not self.app.music_database._shuffle
         self.app.music_database.set_shuffle_state(shuffle_state)
-        self.app.set_audioplayer_attr("next_track_id", self.app.music_database.peek_right(1))
+        if len(self.app.music_database) != 0:
+            self.app.set_audioplayer_attr("next_track_id", self.app.music_database.peek_right(1))
 
         if shuffle_state:
             self.ids.shuffle.background_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_active_normal.png"
@@ -321,15 +325,15 @@ class MainDisplay(EffectWidget):
 
     def update_track_info(self, dt): # Main track info update loop
 
+        if len(self.app.music_database) == 0:
+            self.ids.track_name.text = "No songs found!"
+            self.time_slider.disabled = True
+            return
+
         # If we get a value error, these values don't exist in the audioplayer, thus skip this update
         try:
             status, pos, track_length, speed = self.app.get_audioplayer_attr("status", "pos", "track_length", "speed")
         except ValueError:
-            return
-        
-        if len(self.app.music_database) == 0:
-            self.ids.track_name.text = "No songs found!"
-            self.time_slider.disabled = True
             return
         
         track = self.app.music_database.get_track() # Currently playing track
@@ -447,7 +451,7 @@ class MainDisplay(EffectWidget):
         
     def stop_time(self):
         
-        if not self.time_stop_event: # Prevent this effect from playing twice in a row
+        if not self.time_stop_event and len(self.app.music_database) != 0: # Prevent this effect from playing twice in a row
             status, pos, track_length, speed, reverse_audio = self.app.get_audioplayer_attr("status", "pos", "track_length", "speed", "reverse_audio")
             if (status == "playing" and # Prevent this from playing during transitions and within 7 sec from end of song
             (not reverse_audio and (track_length - pos)/1000/speed > 7) or (reverse_audio and pos/1000/speed > 7)):
@@ -505,18 +509,21 @@ class SongsDisplay(Widget):
 
         self.track_list = self.ids.track_list
         self.track_search = self.ids.track_search
-        self.track_list.data = [
-            {"track_id" : self.app.music_database.data["tracks"][track]["id"]} 
-            for track in self.app.music_database.data["tracks"].keys()
-            ]
-        
+
         self.sort_by = "date_added"
         self.reverse_sort = True
         self.ids[f"sort_{self.sort_by}"].ids.sort_checkbox.active = True
-        self.track_list.data.sort(
-            key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
-        self.app.music_database.valid_pointers.sort(
-            key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
+        
+        if len(self.app.music_database) != 0:
+            self.track_list.data = [
+                {"track_id" : self.app.music_database.data["tracks"][track]["id"]} 
+                for track in self.app.music_database.data["tracks"].keys()
+                ]
+            
+            self.track_list.data.sort(
+                key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
+            self.app.music_database.valid_pointers.sort(
+                key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
         self.update_clock = None
 
     def on_text(self, widget):
@@ -531,11 +538,12 @@ class SongsDisplay(Widget):
         else:
             dt = 0.5
 
-        if self.update_clock is None:
-            self.update_clock = Clock.schedule_once(self.update_track_list, dt)
-        else:
-            self.update_clock.cancel()
-            self.update_clock = Clock.schedule_once(self.update_track_list, dt)
+        if len(self.app.music_database) != 0:
+            if self.update_clock is None:
+                self.update_clock = Clock.schedule_once(self.update_track_list, dt)
+            else:
+                self.update_clock.cancel()
+                self.update_clock = Clock.schedule_once(self.update_track_list, dt)
         
         width = self.widget.width - self.widget.padding[0] - self.widget.padding[2]
 
@@ -548,8 +556,9 @@ class SongsDisplay(Widget):
     def change_sort(self, sort_by, reverse_sort):
         self.sort_by = sort_by
         self.reverse_sort = reverse_sort
-        self.refresh_tracks()
-        self.app.set_audioplayer_attr("next_track_id", self.app.music_database.peek_right(1))
+        if len(self.app.music_database) != 0:
+            self.refresh_tracks()
+            self.app.set_audioplayer_attr("next_track_id", self.app.music_database.peek_right(1))
 
     def update_track_list(self, dt):
         
@@ -728,7 +737,7 @@ class DndAudio(App):
         # We haven't been using reload_songs for quite some time, leave it for later reworks
         self.music_database = MusicDatabase(common_vars.music_database_path)
         # This won't work on android
-        if platform in ('linux', 'linux2', 'macos', 'win'):
+        if platform in ('linux', 'linux2', 'macos', 'win') and len(self.music_database) != 0:
             self.music_database.cache_covers()
         
         self.start_service()     
@@ -975,15 +984,20 @@ class DndAudio(App):
         if track_id in self.music_database.valid_pointers and file_tag == bytes([0x6D, 0x72, 0x72, 0x70]): # make sure track id still exists
             #self.set_audioplayer_attr("pause_flag", True)
             self.music_database.set_track(track_id)
+            found_track = True
+        else:
+            found_track = False
         if file_tag == bytes([0x6D, 0x72, 0x72, 0x70]):
-            self.set_audioplayer_attr("init_pos", track_pos)
-            self.set_audioplayer_attr("pos", track_pos) # This (technically) shouldn't do anything, but it prevents time slider visual glitches on startup
-            self.set_audioplayer_attr("total_frames", total_frames)
+            if found_track:
+                # If we can't find the track, don't set track position values since these aren't valid
+                self.set_audioplayer_attr("init_pos", track_pos)
+                self.set_audioplayer_attr("pos", track_pos) # This (technically) shouldn't do anything, but it prevents time slider visual glitches on startup
+                self.set_audioplayer_attr("total_frames", total_frames)
+                self.set_audioplayer_attr("track_length", track_length)
             self.set_audioplayer_attr("speed", speed)
             self.set_audioplayer_attr("base_fade_duration", fade_duration)
             self.set_audioplayer_attr("fade_duration", int(fade_duration * speed))
             self.set_audioplayer_attr("volume", volume)
-            self.set_audioplayer_attr("track_length", track_length)
             self.set_audioplayer_attr("reverse_audio", reverse_audio)
             self.root.get_screen("songs").songs_display.sort_by = sort_by
             self.root.get_screen("songs").songs_display.reverse_sort = sort_by in ("date_added", "play_date", "play_count")
@@ -991,7 +1005,7 @@ class DndAudio(App):
             self.root.get_screen("songs").songs_display.refresh_tracks()
 
             # This waits until the audioplayer has fully received all of the config messages
-            while self.get_audioplayer_attr("track_length") == ():
+            while self.get_audioplayer_attr("reverse_audio") == ():
                 time.sleep(0.001)
 
     def on_pause(self, *args):
@@ -1015,7 +1029,7 @@ class DndAudio(App):
             }
         self.reverse_sort_by_bytemap = {v : k for k, v in self.sort_by_bytemap.items()}
 
-        if os.path.exists(f"{common_vars.app_folder}/config"):
+        if os.path.exists(f"{common_vars.app_folder}/config") and len(self.music_database) != 0:
             self.load_audioplayer_config()
         if len(self.music_database) != 0:
             self.set_audioplayer_attr("track_id", self.music_database.track_pointer)

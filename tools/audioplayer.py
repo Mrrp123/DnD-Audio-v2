@@ -567,8 +567,12 @@ class AudioPlayer():
         self.stream = AudioStreamer(channels, rate, buffersize_ms, encoding)
         self.decoder = AudioDecoder()
 
-        self.reload_track_data()
-        self.track_id = list(self.track_data.keys())[0]
+        if os.path.exists(common_vars.music_database_path):
+            self.reload_track_data()
+            self.track_id = list(self.track_data.keys())[0]
+        else:
+            self.track_data = {}
+            self.track_id = None
         self.next_track_id = None
 
         # This will listen and respond to calls from the gui

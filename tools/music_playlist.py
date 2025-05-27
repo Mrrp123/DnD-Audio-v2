@@ -99,17 +99,28 @@ class MusicDatabase():
     """
 
     def __init__(self, database_file) -> None:
-        self.data = UpdatingDict(self.load_yaml(database_file))
-        self.track_pointer = list(self.data["tracks"].keys())[0] # id pointer to a song in self.database["tracks"]
-        self.valid_pointers = list(self.data["tracks"].keys())
+        try:
+            self.data = UpdatingDict(self.load_yaml(database_file))
+            self.track_pointer = list(self.data["tracks"].keys())[0] # id pointer to a song in self.database["tracks"]
+            self.valid_pointers = list(self.data["tracks"].keys())
+            
+            # We don't want to modify self.valid_pointers directly when we shuffle, make an identical copy that we can use for later
+            self.shuffled_valid_pointers = list(self.data["tracks"].keys())
         
-        # We don't want to modify self.valid_pointers directly when we shuffle, make an identical copy that we can use for later
-        self.shuffled_valid_pointers = list(self.data["tracks"].keys())
+        except OSError:
+            self.data = {}
+            self.track_pointer = None
+            self.valid_pointers = []
+            self.shuffled_valid_pointers = []
+
         self.repeat = False
         self._shuffle = False # Don't modify this directly
     
     def __len__(self):
-        return len(self.data["tracks"].keys())
+        try:
+            return len(self.data["tracks"].keys())
+        except KeyError:
+            return 0
     
     def __lshift__(self, left):
         if self._shuffle:
@@ -139,8 +150,11 @@ class MusicDatabase():
         self.data.locked = True
     
     def load_yaml(self, database_file):
-        with open(database_file, "r") as fp:
-            yaml_object = yaml.safe_load(fp)
+        try:
+            with open(database_file, "r") as fp:
+                yaml_object = yaml.safe_load(fp)
+        except FileNotFoundError:
+            yaml_object = None
 
         if yaml_object is None:
             raise OSError(f"No yaml data in {database_file}")
@@ -288,7 +302,11 @@ class MusicDatabase():
             year=None,
             bpm=None,
             ):
-        new_id = max(self.valid_pointers) + 1
+        
+        if len(self) != 0:
+            new_id = max(self.valid_pointers) + 1
+        else:
+            new_id = 1
         track_info = self.get_track_info(file)
 
         if name != "":
@@ -306,11 +324,7 @@ class MusicDatabase():
         if bpm is not None:
             track_info["bpm"] = bpm
 
-        self.data.locked = True
-        self.data["tracks"][new_id] = 1 # Add new key to UpdatingDict with bogus entry
-        self.data.locked = False
-        self.data["tracks"][new_id] = UpdatingDict(
-        {
+        new_dict_entry = {
             "id" : new_id,
             "persistent_id" : self._get_hash_from_file(file),
             "file" : os.path.normpath(file),
@@ -329,9 +343,19 @@ class MusicDatabase():
             "bpm" : track_info["bpm"],
             "play_count" : 0,
             "play_date" : -1.0
-        },
-        parent=self.data["tracks"], parent_key=new_id)
-        self.data.locked = True
+        }
+
+        if len(self) != 0:
+            self.data.locked = True
+            self.data["tracks"][new_id] = 1 # Add new key to UpdatingDict with bogus entry
+            self.data.locked = False
+            self.data["tracks"][new_id] = UpdatingDict(new_dict_entry, parent=self.data["tracks"], parent_key=new_id)
+            self.data.locked = True
+        
+        else:
+            new_dict_entry = {"tracks" : {new_id : new_dict_entry}}
+            self.data = UpdatingDict(new_dict_entry)
+            self.data.update()
 
         # Reload list of pointers
         self.valid_pointers = list(self.data["tracks"].keys())
