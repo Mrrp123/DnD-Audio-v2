@@ -332,7 +332,7 @@ class MusicDatabase():
             "size" : os.path.getsize(file),
             "rate" : track_info["rate"],
             "date_added" : datetime.now().timestamp(),
-            "date_modified" : datetime.now().timestamp(),
+            "date_modified" : os.path.getmtime(file),
             "bit_rate" : track_info["bit_rate"],
             "name" : track_info["name"],
             "artist" : track_info["artist"],
