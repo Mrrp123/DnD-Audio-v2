@@ -1,20 +1,31 @@
+from __future__ import annotations
 from kivy.config import Config
 Config.set("kivy", "exit_on_escape", 0)
 
 from kivy.app import App
 
 from kivy.uix.widget import Widget
-from kivy.uix.button import Button
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.screenmanager import ScreenManager, Screen, CardTransition, NoTransition, SlideTransition
 from kivy.uix.effectwidget import EffectWidget
-#from kivy.properties import StringProperty, BooleanProperty, ObjectProperty, ListProperty
 from kivy.clock import Clock
-#from kivy.graphics import StencilPush, StencilPop, StencilUse, StencilUnUse, Color, Rectangle, Ellipse
 from kivy.animation import Animation
 from kivy.utils import get_color_from_hex, platform
 from tools.kivy_gradient import Gradient
 from tools.shaders import TimeStop
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from kivy.uix.button import Button
+    from kivy.uix.slider import Slider
+    from kivy.uix.image import Image
+    from kivy.uix.label import Label
+    from kivy.uix.checkbox import CheckBox
+    from kivy.uix.recycleview import RecycleView
+    from kivy.uix.textinput import TextInput
+    from kivy.uix.dropdown import DropDown
+    from kivy.input.motionevent import MotionEvent
+    
 
 import tools.common_vars as common_vars
 from tools.music_playlist import MusicDatabase
@@ -92,17 +103,28 @@ class MainDisplay(EffectWidget):
         # Normal init stuff
         self.app: DndAudio = App.get_running_app()        
 
-        self.time_slider = self.ids.audio_position_slider
-        self.volume_slider = self.ids.volume_slider
+        # Setting up various widgets names
+        self.time_slider: Slider = self.ids.audio_position_slider
+        self.volume_slider: Slider = self.ids.volume_slider
+        self.song_cover: Image = self.ids.song_cover
+        self.background_img: Image = self.ids.background
+        self.next_track_button: Button = self.ids.next_track
+        self.previous_track_button: Button = self.ids.previous_track
+        self.pause_button: Button = self.ids.pause
+        self.shuffle_button: Button = self.ids.shuffle
+        self.track_pos_label: Label = self.ids.track_pos
+        self.neg_track_pos_label: Label = self.ids.neg_track_pos
+        self.track_name_label: Label = self.ids.track_name
+        self.track_artist_label: Label = self.ids.track_artist
+
         self.stop_move = False # Stops gestures from working when grabbing the time slider
         self.update_time_pos = True # Stops time values from updating when grabbing the time slider
-        self.song_cover = self.ids.song_cover
         self.song_cover_path = None
 
         self.c1 = "060606"
         self.c2 = "111111"
 
-        self.ids.background.texture = Gradient.vertical(get_color_from_hex(self.c1), get_color_from_hex(self.c2))
+        self.background_img.texture = Gradient.vertical(get_color_from_hex(self.c1), get_color_from_hex(self.c2))
         self.time_slider_anim = Animation(pos=(0, 0), size=(0, 0))
         self.volume_slider_anim = Animation(pos=(0, 0), size=(0, 0))
 
@@ -143,21 +165,20 @@ class MainDisplay(EffectWidget):
             self.app.start_audio_player()
             self.audio_clock = Clock.schedule_interval(self.update_track_info, 0.05)
             self.time_slider.disabled = False
-            self.ids.next_track.disabled = False
-            self.ids.previous_track.disabled = False
+            self.next_track_button.disabled = False
+            self.previous_track_button.disabled = False
     
-
-    def get_tap_type(self, touch):
+    def get_tap_type(self, touch: MotionEvent):
         self.button_touch = touch
-        if touch.grab_current == self.ids.next_track and self.next_track_event is None:
+        if touch.grab_current == self.next_track_button and self.next_track_event is None:
             self.next_track_event = Clock.schedule_once(lambda dt: self.play_next_track(self.button_touch), 0.2)
             return True
-        elif touch.grab_current == self.ids.previous_track and self.previous_track_event is None:
+        elif touch.grab_current == self.previous_track_button and self.previous_track_event is None:
             self.previous_track_event = Clock.schedule_once(lambda dt: self.play_previous_track(self.button_touch), 0.2)
             return True
 
 
-    def play_next_track(self, touch):
+    def play_next_track(self, touch: MotionEvent):
         if touch.is_double_tap:
             self.app.change_track(transition="skip", direction="forward")
         else:
@@ -167,7 +188,7 @@ class MainDisplay(EffectWidget):
         self.next_track_event = None
     
 
-    def play_previous_track(self, touch):
+    def play_previous_track(self, touch: MotionEvent):
         if touch.is_double_tap:
             self.app.change_track(transition="skip", direction="backward")
         else:
@@ -187,23 +208,23 @@ class MainDisplay(EffectWidget):
 
         if len(self.app.music_database) != 0:
             if pause_flag:
-                self.ids.pause.background_normal = f"{common_vars.app_folder}/assets/buttons/play_normal.png"
-                self.ids.pause.background_down = f"{common_vars.app_folder}/assets/buttons/play_pressed.png"
-                Animation.cancel_all(self.ids.song_cover, "size")
+                self.pause_button.background_normal = f"{common_vars.app_folder}/assets/buttons/play_normal.png"
+                self.pause_button.background_down = f"{common_vars.app_folder}/assets/buttons/play_pressed.png"
+                Animation.cancel_all(self.song_cover, "size")
                 new_size = (self.height * (1/3), min(1/self.song_cover.image_ratio * self.height * (1/3), self.height * (1/3)))
                 anim = Animation(size=new_size, duration=0.25, transition="out_back")
                 anim.start(self.song_cover)
 
             else:
-                self.ids.pause.background_normal = f"{common_vars.app_folder}/assets/buttons/pause_normal.png"
-                self.ids.pause.background_down = f"{common_vars.app_folder}/assets/buttons/pause_pressed.png"
+                self.pause_button.background_normal = f"{common_vars.app_folder}/assets/buttons/pause_normal.png"
+                self.pause_button.background_down = f"{common_vars.app_folder}/assets/buttons/pause_pressed.png"
                 Animation.cancel_all(self.song_cover, "size")
                 new_size = (self.height * (5/12), min(1/self.song_cover.image_ratio * self.height * (5/12), self.height * (5/12)))
                 anim = Animation(size=new_size, duration=0.25, transition="out_back")
                 anim.start(self.song_cover)
 
     
-    def begin_change_volume(self, touch):
+    def begin_change_volume(self, touch: MotionEvent):
 
         if self.volume_slider.collide_point(*touch.pos) and not self.volume_slider.disabled:
             self.app.set_audioplayer_attr("volume", (self.volume_slider.value / 100))
@@ -216,11 +237,11 @@ class MainDisplay(EffectWidget):
             self.volume_slider_anim = Animation(size=new_size, pos=new_pos, duration=0.3, transition="out_expo")
             self.volume_slider_anim.start(self.volume_slider)
     
-    def update_volume(self, touch):
+    def update_volume(self, touch: MotionEvent):
         if touch.grab_current == self.volume_slider:
             self.app.set_audioplayer_attr("volume", (self.volume_slider.value / 100))
     
-    def end_change_volume(self, touch):
+    def end_change_volume(self, touch: MotionEvent):
         if touch.grab_current == self.volume_slider:
 
             # Revert track pos to original position
@@ -231,7 +252,7 @@ class MainDisplay(EffectWidget):
             self.app.set_audioplayer_attr("volume", (self.volume_slider.value / 100))
 
 
-    def begin_seek(self, touch):
+    def begin_seek(self, touch: MotionEvent):
 
         if self.time_slider.collide_point(*touch.pos) and not self.time_slider.disabled:
             self.stop_move = True
@@ -249,7 +270,7 @@ class MainDisplay(EffectWidget):
             self.time_slider_anim = Animation(size=new_size, pos=new_pos, duration=0.3, transition="out_expo")
             self.time_slider_anim.start(self.time_slider)
     
-    def update_seek(self, touch):
+    def update_seek(self, touch: MotionEvent):
         if touch.grab_current == self.time_slider:
             if self.time_slider.value == 1000:
                 self.app.set_audioplayer_attr("seek_pos", 0)
@@ -260,7 +281,7 @@ class MainDisplay(EffectWidget):
             self.time_slider.set_value_pos(touch.pos)
             self.update_time_text(self.time_slider.value * track_length / 1000, speed, track_length)
 
-    def end_seek(self, touch):
+    def end_seek(self, touch: MotionEvent):
         if touch.grab_current == self.time_slider:
             self.stop_move = False
 
@@ -307,26 +328,26 @@ class MainDisplay(EffectWidget):
             self.app.set_audioplayer_attr("next_track_id", self.app.music_database.peek_right(1))
 
         if shuffle_state:
-            self.ids.shuffle.background_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_active_normal.png"
-            self.ids.shuffle.background_disabled_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_active_normal.png"
-            self.ids.shuffle.background_down = f"{common_vars.app_folder}/assets/buttons/shuffle_active_pressed.png"
-            self.ids.shuffle.background_disabled_down = f"{common_vars.app_folder}/assets/buttons/shuffle_active_pressed.png"
+            self.shuffle_button.background_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_active_normal.png"
+            self.shuffle_button.background_disabled_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_active_normal.png"
+            self.shuffle_button.background_down = f"{common_vars.app_folder}/assets/buttons/shuffle_active_pressed.png"
+            self.shuffle_button.background_disabled_down = f"{common_vars.app_folder}/assets/buttons/shuffle_active_pressed.png"
 
         else:
-            self.ids.shuffle.background_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_inactive_normal.png"
-            self.ids.shuffle.background_disabled_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_active_normal.png"
-            self.ids.shuffle.background_down = f"{common_vars.app_folder}/assets/buttons/shuffle_inactive_pressed.png"
-            self.ids.shuffle.background_disabled_down = f"{common_vars.app_folder}/assets/buttons/shuffle_active_pressed.png"
+            self.shuffle_button.background_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_inactive_normal.png"
+            self.shuffle_button.background_disabled_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_active_normal.png"
+            self.shuffle_button.background_down = f"{common_vars.app_folder}/assets/buttons/shuffle_inactive_pressed.png"
+            self.shuffle_button.background_disabled_down = f"{common_vars.app_folder}/assets/buttons/shuffle_active_pressed.png"
             
     def update_time_text(self, pos, speed, track_length):
         pos_time, neg_time = self._format_time(pos/1000/speed, track_length/1000/speed)
-        self.ids.track_pos.text = pos_time
-        self.ids.neg_track_pos.text = neg_time
+        self.track_pos_label.text = pos_time
+        self.neg_track_pos_label.text = neg_time
 
     def update_track_info(self, dt): # Main track info update loop
 
         if len(self.app.music_database) == 0:
-            self.ids.track_name.text = "No songs found!"
+            self.track_name_label.text = "No songs found!"
             self.time_slider.disabled = True
             return
 
@@ -346,12 +367,12 @@ class MainDisplay(EffectWidget):
             self.update_time_text(pos, speed, track_length)
 
         # Update track name / artist (and position if user is holding the time slider)
-        if ((self.ids.track_name.text   != track["name"] 
-        or   self.ids.track_artist.text != track["artist"]) 
+        if ((self.track_name_label.text   != track["name"] 
+        or   self.track_artist_label.text != track["artist"]) 
         and  status in ("playing", "idle", "fade_in")):
             
-            self.ids.track_name.text = track["name"]
-            self.ids.track_artist.text = track["artist"]
+            self.track_name_label.text = track["name"]
+            self.track_artist_label.text = track["artist"]
             if not self.update_time_pos:
                 self.update_time_text(self.time_slider.value * track_length / 1000, speed, track_length)
         
@@ -418,7 +439,7 @@ class MainDisplay(EffectWidget):
         except StopIteration:
             Clock.unschedule(self.background_updater)
         else:
-            self.ids.background.texture = Gradient.vertical(get_color_from_hex(c1), get_color_from_hex(c2))
+            self.background_img.texture = Gradient.vertical(get_color_from_hex(c1), get_color_from_hex(c2))
 
 
     @staticmethod
@@ -507,12 +528,19 @@ class SongsDisplay(Widget):
 
         self.app: DndAudio = App.get_running_app()
 
-        self.track_list = self.ids.track_list
-        self.track_search = self.ids.track_search
+        self.track_list: RecycleView = self.ids.track_list
+        self.track_search: TextInput = self.ids.track_search
+        self.sort_buttons: dict[str, SortButton] = {
+                  "sort_name" : self.ids.sort_name,
+                "sort_artist" : self.ids.sort_artist,
+            "sort_date_added" : self.ids.sort_date_added,
+            " sort_play_date" : self.ids.sort_play_date,
+            "sort_play_count" : self.ids.sort_play_count
+        }
 
         self.sort_by = "date_added"
         self.reverse_sort = True
-        self.ids[f"sort_{self.sort_by}"].ids.sort_checkbox.active = True
+        self.sort_buttons[f"sort_{self.sort_by}"].sort_checkbox.active = True
         
         if len(self.app.music_database) != 0:
             self.track_list.data = [
@@ -526,12 +554,10 @@ class SongsDisplay(Widget):
                 key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
         self.update_clock = None
 
-    def on_text(self, widget):
+    def on_text(self):
         """
         Only do our text searches after the user has stopped typing for 0.5 seconds (or if text field is empty, update immediately)
         """
-
-        self.widget = widget
 
         if self.track_search.text == "":
             dt = 0
@@ -545,13 +571,13 @@ class SongsDisplay(Widget):
                 self.update_clock.cancel()
                 self.update_clock = Clock.schedule_once(self.update_track_list, dt)
         
-        width = self.widget.width - self.widget.padding[0] - self.widget.padding[2]
+        width = self.track_search.width - self.track_search.padding[0] - self.track_search.padding[2]
 
-        if self.widget._lines_labels[0].size[0] < width:
-            self.widget.halign = "left"
-            self.widget.scroll_x = 0
+        if self.track_search._lines_labels[0].size[0] < width:
+            self.track_search.halign = "left"
+            self.track_search.scroll_x = 0
         else:
-            self.widget.halign = "right"
+            self.track_search.halign = "right"
     
     def change_sort(self, sort_by, reverse_sort):
         self.sort_by = sort_by
@@ -596,25 +622,29 @@ class SongButton(Widget):
         self.touch_down_called = False
         self.track_id: int # This gets set by the SongsDisplay init
 
+        self.name_label: Label = self.ids.name_label
+        self.artist_label: Label = self.ids.artist_label
+        self.song_cover: Image = self.ids.song_cover
+
     def on_parent(self, *args):
         self.name = self.app.music_database.data["tracks"][self.track_id]["name"]
         self.artist = self.app.music_database.data["tracks"][self.track_id]["artist"]
         self.persistent_id = self.app.music_database.data["tracks"][self.track_id]["persistent_id"]
 
-        self.ids.name_label.text = self.name
-        self.ids.artist_label.text = self.artist
+        self.name_label.text = self.name
+        self.artist_label.text = self.artist
         if os.path.isfile(f"{common_vars.app_folder}/cache/small_covers/{self.persistent_id}.jpg"):
-            self.ids.song_cover.source = f"{common_vars.app_folder}/cache/small_covers/{self.persistent_id}.jpg"
+            self.song_cover.source = f"{common_vars.app_folder}/cache/small_covers/{self.persistent_id}.jpg"
         else:
-            self.ids.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover_small.png"
+            self.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover_small.png"
     
-    def on_touch_down(self, touch):
+    def on_touch_down(self, touch: MotionEvent):
         if self.y < touch.y < self.y + self.height:
             self.touch_down_called = True
             self.background_color = 0.52941176, 0.52941176, 0.52941176, 0.71372549 # hex 878787B6
             return True
 
-    def on_touch_up(self, touch):
+    def on_touch_up(self, touch: MotionEvent):
         self.background_color = 0, 0, 0, 1
         if self.y < touch.y < self.y + self.height and self.touch_down_called:
             status, pause_flag = self.app.get_audioplayer_attr("status", "pause_flag")
@@ -639,23 +669,30 @@ class SongButton(Widget):
         self.touch_down_called = False
 
 class SortButton(BoxLayout):
-    
+
     def on_parent(self, *args):
         # self.songs_display = self.app.root.get_screen("songs").songs_display
 
         # fucked up way of getting the songs display since the above line doesn't work
         self.songs_display: SongsDisplay = args[0].parent.parent.parent.parent
+
+        # Reference to the dropdown in SongsDisplay
+        self.songs_display_dropdown: DropDown = self.songs_display.ids.dropdown
+
+        # These are handled in the dndaudio.kv file
+        self.sort_by: str
+        self.sort_checkbox: CheckBox
     
-    def on_touch_down(self, touch):
+    def on_touch_down(self, touch: MotionEvent):
         if self.collide_point(*touch.pos):
             self.background_color = 0.52941176, 0.52941176, 0.52941176, 1 # hex 878787FF
             reverse_sort = self.sort_by in ("date_added", "play_date", "play_count")
             self.songs_display.change_sort(self.sort_by, reverse_sort)
-            self.songs_display.ids.dropdown.dismiss()
-            self.ids.sort_checkbox.active = True
+            self.songs_display_dropdown.dismiss()
+            self.sort_checkbox.active = True
             return True
     
-    def on_touch_up(self, touch):
+    def on_touch_up(self, touch: MotionEvent):
         self.background_color = 0.2, 0.2, 0.2, 1
 
 class SettingsScreen(Screen):
@@ -671,8 +708,10 @@ class SettingsDisplay(Widget):
 
         self.fps_clock = Clock.schedule_interval(self.update_fps, 0.5)
         self.debug_clock = Clock.schedule_interval(self.get_debug_info, 0.05)
-        self.speed_slider = self.ids.speed_slider
-        self.fade_slider = self.ids.fade_slider
+        self.speed_slider: Slider = self.ids.speed_slider
+        self.fade_slider: Slider = self.ids.fade_slider
+        self.fps_label: Label = self.ids.fps
+        self.debug_info_label: Label = self.ids.debug_info
 
         self.app: DndAudio = App.get_running_app()
 
@@ -695,24 +734,24 @@ class SettingsDisplay(Widget):
             self.speed_slider.value = 100
             self.fade_slider.value = 3000
     
-    def change_speed(self, touch):
+    def change_speed(self, touch: MotionEvent):
         if touch.grab_current == self.speed_slider:
             #print(self.speed_slider.value, self.speed_slider.value / 100)
             self.app.set_audioplayer_attr("speed", np.float64(self.speed_slider.value / 100))
     
 
-    def change_fade_duration(self, touch):
+    def change_fade_duration(self, touch: MotionEvent):
         if touch.grab_current == self.fade_slider:
             self.app.set_audioplayer_attr("base_fade_duration", self.fade_slider.value)
             self.app.set_audioplayer_attr("fade_duration", int(self.fade_slider.value * (self.speed_slider.value / 100)))
 
     def update_fps(self, dt):
         fps = Clock.get_fps()
-        self.ids.fps.text = f"FPS: {fps:.3f}"
+        self.fps_label.text = f"FPS: {fps:.3f}"
     
     def get_debug_info(self, dt):
         try:
-            self.ids.debug_info.text = "Debug Info:" + self.app.get_audioplayer_attr("debug_string")
+            self.debug_info_label.text = "Debug Info:" + self.app.get_audioplayer_attr("debug_string")
         except:
             pass
 
@@ -754,6 +793,7 @@ class DndAudio(App):
         if platform != "android":
             Window.size = (375, 700)
         
+        self.root: ScreenManager
         sm = ScreenManager(transition=NoTransition())
         sm.add_widget(SongsScreen(name="songs"))
         sm.add_widget(MainScreen(name="main"))
@@ -999,10 +1039,11 @@ class DndAudio(App):
             self.set_audioplayer_attr("fade_duration", int(fade_duration * speed))
             self.set_audioplayer_attr("volume", volume)
             self.set_audioplayer_attr("reverse_audio", reverse_audio)
-            self.root.get_screen("songs").songs_display.sort_by = sort_by
-            self.root.get_screen("songs").songs_display.reverse_sort = sort_by in ("date_added", "play_date", "play_count")
-            self.root.get_screen("songs").songs_display.ids[f"sort_{sort_by}"].ids.sort_checkbox.active = True
-            self.root.get_screen("songs").songs_display.refresh_tracks()
+            songs_display: SongsDisplay = self.root.get_screen("songs").songs_display
+            songs_display.sort_by = sort_by
+            songs_display.reverse_sort = sort_by in ("date_added", "play_date", "play_count")
+            songs_display.sort_buttons[f"sort_{sort_by}"].sort_checkbox.active = True
+            songs_display.refresh_tracks()
 
             # This waits until the audioplayer has fully received all of the config messages
             while self.get_audioplayer_attr("reverse_audio") == ():
@@ -1022,9 +1063,9 @@ class DndAudio(App):
 
         self.sort_by_bytemap = {
                 "date_added" : b'\x00',
-                "name" : b'\x01',
-                "artist" : b'\x02',
-                "play_date" : b'\x03',
+                      "name" : b'\x01',
+                    "artist" : b'\x02',
+                 "play_date" : b'\x03',
                 "play_count" : b'\x04'
             }
         self.reverse_sort_by_bytemap = {v : k for k, v in self.sort_by_bytemap.items()}

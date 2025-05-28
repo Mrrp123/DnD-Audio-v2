@@ -12,6 +12,11 @@ from io import BytesIO
 from ast import literal_eval
 import random
 import hashlib
+from typing import TypeVar, Generic, TypedDict
+K = TypeVar("K")
+V = TypeVar("V")
+
+
 
 from kivy.utils import platform
 
@@ -26,7 +31,7 @@ if platform in ('win', 'linux', 'linux2', 'macos'):
 
 import tools.common_vars as common_vars
 
-class UpdatingDict(dict):
+class UpdatingDict(dict[K, V], Generic[K, V]):
     """
     Dictionary that updates the database whenever modified
     """
@@ -58,13 +63,37 @@ class UpdatingDict(dict):
                 if isinstance(self.parent, UpdatingDict):
                     self.parent.__setitem__(self.parent_key, self)
                 elif not self.locked:
-                    Thread(target=self.update(), daemon=False).start()
+                    Thread(target=self.update_file(), daemon=False).start()
         else:
             raise ValueError("Value is empty!")
+    
+    def update(self, *args, **kwargs):
+        for key, value in dict(*args, **kwargs).items():
+            self[key] = value
             
-    def update(self):
+    def update_file(self):
         with open(common_vars.music_database_path, "w") as fp:
             yaml.safe_dump(literal_eval(str(self)), stream=fp, sort_keys=False)
+
+class TrackInfo(TypedDict):
+    id: int
+    persistent_id: str
+    file: str
+    length: int
+    size: int
+    rate: int
+    date_added: float
+    date_modified: float
+    bit_rate: int
+    name: str
+    artist: str
+    cover: str
+    album: str
+    genre: str
+    year: int
+    bpm: int
+    play_count: int
+    play_date: float
 
 class MusicDatabase():
     """
@@ -100,7 +129,7 @@ class MusicDatabase():
 
     def __init__(self, database_file) -> None:
         try:
-            self.data = UpdatingDict(self.load_yaml(database_file))
+            self.data: UpdatingDict[str, UpdatingDict[int, TrackInfo]] = UpdatingDict(self.load_yaml(database_file))
             self.track_pointer = list(self.data["tracks"].keys())[0] # id pointer to a song in self.database["tracks"]
             self.valid_pointers = list(self.data["tracks"].keys())
             
@@ -164,7 +193,7 @@ class MusicDatabase():
         return yaml_object
     
     @staticmethod
-    def _verify_format(yaml_object):
+    def _verify_format(yaml_object: dict[str, dict[int, dict[str, int|float|str|None]]]):
 
         required_base_keys = ("tracks",)
 
@@ -186,7 +215,8 @@ class MusicDatabase():
             if not isinstance(track_id, int):
                 return f"MusicDatabase['tracks'] key: {track_id} is not an integer"
             if not all(key in yaml_object["tracks"][track_id].keys() for key in required_track_keys):
-                return f"MusicDatabase is missing required track_id level key: {key}"
+                missing_keys = [key for key in required_track_keys if key not in yaml_object["tracks"][track_id].keys()]
+                return f"MusicDatabase is missing required track_id level keys: {missing_keys}"
             
         return False # no errors
 
@@ -347,7 +377,7 @@ class MusicDatabase():
 
         if len(self) != 0:
             self.data.locked = True
-            self.data["tracks"][new_id] = 1 # Add new key to UpdatingDict with bogus entry
+            self.data["tracks"][new_id] = 1 # Add new key to UpdatingDict with temp bogus entry
             self.data.locked = False
             self.data["tracks"][new_id] = UpdatingDict(new_dict_entry, parent=self.data["tracks"], parent_key=new_id)
             self.data.locked = True
@@ -355,7 +385,7 @@ class MusicDatabase():
         else:
             new_dict_entry = {"tracks" : {new_id : new_dict_entry}}
             self.data = UpdatingDict(new_dict_entry)
-            self.data.update()
+            self.data.update_file()
 
         # Reload list of pointers
         self.valid_pointers = list(self.data["tracks"].keys())

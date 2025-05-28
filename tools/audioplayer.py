@@ -120,9 +120,6 @@ class AudioStreamer():
 
     def write(self, data: bytes):
         pass
-
-    def _pyaudio_write(self, data: bytes):
-        self.stream.write(data)
     
     def _android_write(self, data: bytes):
         bytes_written = self.audio_stream.write(data, 0, len(data))
@@ -408,7 +405,7 @@ class AudioDecoder():
 
                 yield audio
     
-    def _miniaudio_mp3_to_wav(self, file, persistent_track_id, frame_rate=44_100):
+    def _miniaudio_mp3_to_wav(self, file: str, persistent_track_id: int, frame_rate=44_100):
                 
         # Try to delete files if there are too many (>3) in the cache
         current_cached_files = glob(f"{self.app_folder}/cache/audio/*_reversed.wav")
@@ -829,7 +826,6 @@ class AudioPlayer():
         """
         Seek to a certain position in the track
         """
-        del self.chunk_generator
         start_pos = int(start_pos)
         self.chunk_generator = self.load_chunks(self.track_id, start_pos=start_pos)
         self.pos = start_pos
@@ -1248,7 +1244,8 @@ class AudioPlayer():
             start_pos = -1
         else:
             start_pos = 0
-        self.chunk_generator = None # initial value
+
+        # self.chunk_generator is set during self.seek()
         self.seek(start_pos)
         while self.status != "stopped":
         

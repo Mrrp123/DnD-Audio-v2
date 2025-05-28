@@ -507,6 +507,7 @@
         id: sort_checkbox
         group: "sort_checkbox"
         size_hint_x: .2
+        on_parent: root.sort_checkbox = self
     Label:
         text: root.text
         halign: "left"
@@ -714,7 +715,7 @@
         text_size: self.size 
         font_size: root.height/40
         padding: size_indicator.padding
-        on_text: root.on_text(self)
+        on_text: root.on_text()
     
     RecycleView:
         id: track_list

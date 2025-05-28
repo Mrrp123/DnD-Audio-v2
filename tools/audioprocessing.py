@@ -1,7 +1,11 @@
+from __future__ import annotations
 from math import log10, ceil
 import time
 import numpy as np
 from scipy.signal import sosfilt
+from typing import TYPE_CHECKING, Generator
+if TYPE_CHECKING:
+    from tools.audiosegment import AudioSegment
 
 def make_chunks(audio_segment, chunk_length):
     """
@@ -74,7 +78,8 @@ def db_to_amp(db):
 #             chunk = fade_out_chunk * fade_in_chunk
 #             yield chunk, fade_out_chunk_db, fade_in_chunk_db
 
-def step_fade(chunk_gen, next_chunk_gen=None, fade_duration=3000, chunk_len=120, fade_type="fade_out"):
+def step_fade(chunk_gen: Generator[AudioSegment], next_chunk_gen: Generator[AudioSegment] | None = None, 
+              fade_duration=3000, chunk_len=50, fade_type="fade_out"):
     """
     Fades audio from one or two AudioSegment *generators*. Note: fade_duration MUST be >= chunk_len
     """
@@ -158,7 +163,7 @@ def change_speed(song_data, speed, sos=None, zf=np.zeros(shape=(15, 2, 2)), dt=n
 
         return np.clip(y, a_min=-32768, a_max=32767), zf
     
-    channels = np.fromstring(bytes(song_data), dtype=dt) # Convert bytes to numpy array (faster to deal with)
+    channels: np.ndarray = np.fromstring(bytes(song_data), dtype=dt) # Convert bytes to numpy array (faster to deal with)
     channels.shape = (len(song_data)//4, 2)
 
     channels = np.apply_along_axis(resample, axis=0, arr=channels, scale=1/speed)
