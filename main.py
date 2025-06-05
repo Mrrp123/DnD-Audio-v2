@@ -112,6 +112,7 @@ class MainDisplay(EffectWidget):
         self.previous_track_button: Button = self.ids.previous_track
         self.pause_button: Button = self.ids.pause
         self.shuffle_button: Button = self.ids.shuffle
+        self.repeat_button: Button = self.ids.repeat
         self.track_pos_label: Label = self.ids.track_pos
         self.neg_track_pos_label: Label = self.ids.neg_track_pos
         self.track_name_label: Label = self.ids.track_name
@@ -317,9 +318,22 @@ class MainDisplay(EffectWidget):
             self.app.set_audioplayer_attr("status", "seek")
 
     def toggle_repeat_mode(self):
-        self.app.music_database.repeat = not self.app.music_database.repeat
+        repeat_state = not self.app.music_database.repeat
+        self.app.music_database.repeat = repeat_state
         if len(self.app.music_database) != 0:
             self.app.set_audioplayer_attr("next_track_id", self.app.music_database.peek_right(1))
+
+        if repeat_state:
+            self.repeat_button.background_normal = f"{common_vars.app_folder}/assets/buttons/repeat_active_normal.png"
+            self.repeat_button.background_disabled_normal = f"{common_vars.app_folder}/assets/buttons/repeat_active_normal.png"
+            self.repeat_button.background_down = f"{common_vars.app_folder}/assets/buttons/repeat_active_pressed.png"
+            self.repeat_button.background_disabled_down = f"{common_vars.app_folder}/assets/buttons/repeat_active_pressed.png"
+
+        else:
+            self.repeat_button.background_normal = f"{common_vars.app_folder}/assets/buttons/repeat_inactive_normal.png"
+            self.repeat_button.background_disabled_normal = f"{common_vars.app_folder}/assets/buttons/repeat_inactive_normal.png"
+            self.repeat_button.background_down = f"{common_vars.app_folder}/assets/buttons/repeat_inactive_pressed.png"
+            self.repeat_button.background_disabled_down = f"{common_vars.app_folder}/assets/buttons/repeat_inactive_pressed.png"
     
     def toggle_shuffle_mode(self):
         shuffle_state = not self.app.music_database._shuffle
