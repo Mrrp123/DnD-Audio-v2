@@ -31,6 +31,9 @@ if platform in ('win', 'linux', 'linux2', 'macos'):
 
 import tools.common_vars as common_vars
 
+class DatabaseFormatError(Exception):
+    pass
+
 class UpdatingDict(dict[K, V], Generic[K, V]):
     """
     Dictionary that updates the database whenever modified
@@ -90,8 +93,8 @@ class TrackInfo(TypedDict):
     cover: str
     album: str
     genre: str
-    year: int
-    bpm: int
+    year: int | None
+    bpm: int | None
     play_count: int
     play_date: float
 
@@ -187,9 +190,8 @@ class MusicDatabase():
 
         if yaml_object is None:
             raise OSError(f"No yaml data in {database_file}")
-        if (err := self._verify_format(yaml_object)):
-            raise ValueError(f"Incorrectly formatted MusicDatabase: {err}")
-        
+        self._verify_format(yaml_object)
+
         return yaml_object
     
     @staticmethod
@@ -201,24 +203,54 @@ class MusicDatabase():
                                "size", "rate", "date_added", "date_modified", 
                                "bit_rate", "name", "artist", "cover", "album", 
                                "genre", "year", "bpm", "play_count", "play_date")
+        
+        track_key_types = {
+            "id": int,
+            "persistent_id": str,
+            "file": str,
+            "length": int,
+            "size": int,
+            "rate": int,
+            "date_added": float,
+            "date_modified": float,
+            "bit_rate": int,
+            "name": str,
+            "artist": str,
+            "cover": str,
+            "album": str,
+            "genre": str,
+            "year": int | None,
+            "bpm": int | None,
+            "play_count": int,
+            "play_date": float,
+        }
 
         if not isinstance(yaml_object, dict):
-            return "MusicDatabase is not a dictionary at the tree level"
+            raise DatabaseFormatError("MusicDatabase is not a dictionary at the tree level")
         
-        for key in yaml_object.keys():
-            if key not in required_base_keys:
-                return f"MusicDatabase is missing required tree level key: {key}"
+        for key in required_base_keys:
+            if key not in yaml_object.keys():
+                raise DatabaseFormatError(f"MusicDatabase is missing required tree level key: {key}")
             if not isinstance(yaml_object[key], dict):
-                return f"MusicDatabase['tracks'][{key}] is not a dictionary"
-            
+                raise DatabaseFormatError(f"MusicDatabase['tracks'][{key}] is not a dictionary")
+                    
         for track_id in yaml_object["tracks"].keys():
             if not isinstance(track_id, int):
-                return f"MusicDatabase['tracks'] key: {track_id} is not an integer"
+                raise DatabaseFormatError(f"MusicDatabase['tracks'] key: {track_id} is not an integer")
             if not all(key in yaml_object["tracks"][track_id].keys() for key in required_track_keys):
                 missing_keys = [key for key in required_track_keys if key not in yaml_object["tracks"][track_id].keys()]
-                return f"MusicDatabase is missing required track_id level keys: {missing_keys}"
+                raise DatabaseFormatError(f"MusicDatabase is missing required track_id level key(s): {missing_keys}")
+            try:
+                if not all(isinstance(value, track_key_types[key]) for key, value in yaml_object["tracks"][track_id].items()):
+                    incorrect_keys = [key for key, value in yaml_object["tracks"][track_id].items() if not isinstance(value, track_key_types[key])]
+                    raise DatabaseFormatError(f"MusicDatabase['tracks'][{track_id}] contains key(s) with incorrect type(s): {incorrect_keys}")
+            except KeyError:
+                extraneous_keys = [key for key in yaml_object["tracks"][track_id].keys() if key not in required_track_keys]
+                raise DatabaseFormatError(f"MusicDatabase['tracks'][{track_id}] contains extraneous key(s): {extraneous_keys}")
+            if yaml_object["tracks"][track_id]["id"] != track_id:
+                raise DatabaseFormatError(f"MusicDatabase['tracks'][{track_id}]['id'] ({yaml_object["tracks"][track_id]["id"]}) doesn't match track_id!")
+
             
-        return False # no errors
 
     def set_shuffle_state(self, shuffle):
         self._shuffle = shuffle
