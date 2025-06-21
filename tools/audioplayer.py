@@ -801,21 +801,27 @@ class AudioPlayer():
     
 
 
-    def skip(self, next_track_id):
+    def skip(self, next_track_id, start_pos=0):
         """
         Skips to another track, cutting out the crossfade entirely
         """
         del self.chunk_generator
         if self.reverse_audio:
             next_track_len, next_track_frame_len = self.get_track_length(next_track_id)
-            self.chunk_generator = self.load_chunks(next_track_id, start_pos=next_track_len)
-            self.pos = next_track_len
-            self.frame_pos = next_track_frame_len
+            if start_pos == 0:
+                self.chunk_generator = self.load_chunks(next_track_id, start_pos=next_track_len)
+                self.pos = next_track_len
+                self.frame_pos = next_track_frame_len
+            else:
+                self.chunk_generator = self.load_chunks(next_track_id, start_pos=start_pos)
+                self.pos = start_pos
+                self.frame_pos = round(start_pos / 1000 * self.track_data[self.track_id]["rate"])
+            
         else:
-            self.chunk_generator = self.load_chunks(next_track_id)
-            self.pos = 0
-            self.frame_pos = 0
-        self.seek_pos = 0
+            self.chunk_generator = self.load_chunks(next_track_id, start_pos=start_pos)
+            self.pos = start_pos
+            self.frame_pos = round(start_pos / 1000 * self.track_data[self.track_id]["rate"])
+        self.seek_pos = start_pos
         self.track_id = next_track_id
         # This sets the next_track_id to be whatever's next in the database
         self.call_music_database_func("peek_right", 1, "&next_track_id")
@@ -988,7 +994,7 @@ class AudioPlayer():
                 
                 elif self.status == "skip": # If we change tracks via a skip during a transition, just go to the next track
                     if (self.reverse_audio and next_track_len - new_pos <= fade_duration/2) or (not self.reverse_audio and new_pos <= fade_duration/2):
-                        self.skip(next_track_id)
+                        self.skip(next_track_id, new_pos)
                         self.call_music_database_func("set_track", next_track_id) # Resync music_database pointer, otherwise we will be one track ahead/behind
                     elif self.next_track_id is not None:
                         self.skip(self.next_track_id)
