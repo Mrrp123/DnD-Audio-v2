@@ -349,9 +349,9 @@ class MainDisplay(EffectWidget):
 
         else:
             self.shuffle_button.background_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_inactive_normal.png"
-            self.shuffle_button.background_disabled_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_active_normal.png"
+            self.shuffle_button.background_disabled_normal = f"{common_vars.app_folder}/assets/buttons/shuffle_inactive_normal.png"
             self.shuffle_button.background_down = f"{common_vars.app_folder}/assets/buttons/shuffle_inactive_pressed.png"
-            self.shuffle_button.background_disabled_down = f"{common_vars.app_folder}/assets/buttons/shuffle_active_pressed.png"
+            self.shuffle_button.background_disabled_down = f"{common_vars.app_folder}/assets/buttons/shuffle_inactive_pressed.png"
             
     def update_time_text(self, pos, speed, track_length):
         pos_time, neg_time = self._format_time(pos/1000/speed, track_length/1000/speed)
