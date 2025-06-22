@@ -423,7 +423,13 @@ class MusicDatabase():
             bpm=None,
             ):
         
+        persistent_id = self._get_hash_from_file(file)
+        
         if len(self) != 0:
+            for pointer in self.valid_pointers:
+                # If the exact file already exists in the database, don't add it
+                if self.data["tracks"][pointer]["persistent_id"] == persistent_id:
+                    return
             new_id = max(self.valid_pointers) + 1
         else:
             new_id = 1
@@ -446,7 +452,7 @@ class MusicDatabase():
 
         new_dict_entry = {
             "id" : new_id,
-            "persistent_id" : self._get_hash_from_file(file),
+            "persistent_id" : persistent_id,
             "file" : os.path.normpath(file),
             "length" : track_info["length"],
             "size" : os.path.getsize(file),
