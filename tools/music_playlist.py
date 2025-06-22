@@ -430,7 +430,7 @@ class MusicDatabase():
                 # If the exact file already exists in the database, don't add it
                 if self.data["tracks"][pointer]["persistent_id"] == persistent_id:
                     return
-            new_id = max(self.valid_pointers) + 1
+            new_id = max(self.valid_pointers) + 2
         else:
             new_id = 1
         track_info = self.get_track_info(file)
@@ -648,9 +648,9 @@ class MusicDatabase():
     def add_playlist(self, playlist_name: str, track_list: list[int] | None = None):
 
         if len(self.data["playlists"].keys()) != 0:
-            new_id = max(self.data["playlists"].keys()) + 1
+            new_id = max(self.data["playlists"].keys()) + 2
         else:
-            new_id = 1
+            new_id = 2
 
         if track_list is None:
             track_list = []
