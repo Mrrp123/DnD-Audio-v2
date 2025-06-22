@@ -60,15 +60,12 @@ class UpdatingDict(dict[K, V], Generic[K, V]):
         self.locked = True # Won't cause any writes if locked
 
     def __setitem__(self, key, value):
-        if value:
-            super().__setitem__(key, value)
-            if not self.setup:
-                if isinstance(self.parent, UpdatingDict):
-                    self.parent.__setitem__(self.parent_key, self)
-                elif not self.locked:
-                    Thread(target=self.update_file(), daemon=False).start()
-        else:
-            raise ValueError("Value is empty!")
+        super().__setitem__(key, value)
+        if not self.setup:
+            if isinstance(self.parent, UpdatingDict):
+                self.parent.__setitem__(self.parent_key, self)
+            elif not self.locked:
+                Thread(target=self.update_file(), daemon=False).start()
     
     def update(self, *args, **kwargs):
         for key, value in dict(*args, **kwargs).items():
@@ -97,6 +94,13 @@ class TrackInfo(TypedDict):
     bpm: int | None
     play_count: int
     play_date: float
+
+class PlaylistInfo(TypedDict):
+    id: int
+    persistent_id: str
+    name: str
+    track_list: list[int]
+
 
 class MusicDatabase():
     """
@@ -127,12 +131,24 @@ class MusicDatabase():
                 "play_date" : UTC timestamp of when the song was last played (float) [sec]
                 }
             }
+        "playlists" : {
+            id (int) : {
+                "id" : numerical id (int),
+                "persistent_id" : unique id based on the sha256 hash of name and creation date (str),
+                "name" : Playlist title (str),
+                "track_list" : A list of all the track ids contained in the playlist (list[int])
+                }
+            }
     }
     """
 
     def __init__(self, database_file) -> None:
+        
+        # I don't like how lists look in yaml :( so I make them inline
+        yaml.SafeDumper.add_representer(list, lambda dumper, data : dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True))
+
         try:
-            self.data: UpdatingDict[str, UpdatingDict[int, TrackInfo]] = UpdatingDict(self.load_yaml(database_file))
+            self.data: UpdatingDict[str, UpdatingDict[int, TrackInfo|PlaylistInfo]] = UpdatingDict(self.load_yaml(database_file))
             self.track_pointer = list(self.data["tracks"].keys())[0] # id pointer to a song in self.database["tracks"]
             self.valid_pointers = list(self.data["tracks"].keys())
             
@@ -197,12 +213,14 @@ class MusicDatabase():
     @staticmethod
     def _verify_format(yaml_object: dict[str, dict[int, dict[str, int|float|str|None]]]):
 
-        required_base_keys = ("tracks",)
+        required_base_keys = ("tracks", "playlists") # playlists keys can be empty, but it still needs to be there
 
         required_track_keys = ("id", "persistent_id", "file", "length", 
                                "size", "rate", "date_added", "date_modified", 
                                "bit_rate", "name", "artist", "cover", "album", 
                                "genre", "year", "bpm", "play_count", "play_date")
+        
+        required_playlist_keys = ("id", "persistent_id", "name", "track_list")
         
         track_key_types = {
             "id": int,
@@ -224,6 +242,16 @@ class MusicDatabase():
             "play_count": int,
             "play_date": float,
         }
+
+        playlist_key_types = {
+            "id": int,
+            "persistent_id": str,
+            "name": str,
+            "track_list" : list,
+            # track_list_ids : int (I can't set track_list to be list[int], so check the actual ids seperately)
+        }
+
+        
 
         if not isinstance(yaml_object, dict):
             raise DatabaseFormatError("MusicDatabase is not a dictionary at the tree level")
@@ -250,6 +278,28 @@ class MusicDatabase():
             if yaml_object["tracks"][track_id]["id"] != track_id:
                 raise DatabaseFormatError(f"MusicDatabase['tracks'][{track_id}]['id'] ({yaml_object["tracks"][track_id]["id"]}) doesn't match track_id!")
 
+        if len(yaml_object["playlists"].keys()) != 0:
+            for playlist_id in yaml_object["playlists"].keys():
+                if not isinstance(playlist_id, int):
+                    raise DatabaseFormatError(f"MusicDatabase['playlists'] key: {playlist_id} is not an integer")
+                if not all(key in yaml_object["playlists"][playlist_id].keys() for key in required_playlist_keys):
+                    missing_keys = [key for key in required_playlist_keys if key not in yaml_object["playlists"][playlist_id].keys()]
+                    raise DatabaseFormatError(f"MusicDatabase is missing required playlist_id level key(s): {missing_keys}")
+                try:
+                    if not all(isinstance(value, playlist_key_types[key]) for key, value in yaml_object["playlists"][playlist_id].items()):
+                        incorrect_keys = [key for key, value in yaml_object["playlists"][playlist_id].items() if not isinstance(value, track_key_types[key])]
+                        raise DatabaseFormatError(f"MusicDatabase['playlists'][{playlist_id}] contains key(s) with incorrect type(s): {incorrect_keys}")
+                except KeyError:
+                    extraneous_keys = [key for key in yaml_object["playlists"][playlist_id].keys() if key not in required_playlist_keys]
+                    raise DatabaseFormatError(f"MusicDatabase['playlists'][{playlist_id}] contains extraneous key(s): {extraneous_keys}")
+                if not all(isinstance(track_id, int) for track_id in yaml_object["playlists"][playlist_id]["track_list"]):
+                    incorrect_ids = [track_id for track_id in yaml_object["playlists"][playlist_id]["track_list"] if not isinstance(track_id, int)]
+                    raise DatabaseFormatError(f"MusicDatabase['playlists'][{playlist_id}]['track_list'] contains track_id(s) with incorrect type(s): {incorrect_ids}")
+                if not all(track_id in yaml_object["tracks"].keys() for track_id in yaml_object["playlists"][playlist_id]["track_list"]):
+                    invalid_ids = [track_id for track_id in yaml_object["playlists"][playlist_id]["track_list"] if not (track_id in yaml_object["tracks"].keys())]
+                    raise DatabaseFormatError(f"MusicDatabase['playlists'][{playlist_id}]['track_list'] contains invalid track_id(s): {invalid_ids}")
+                if yaml_object["playlists"][playlist_id]["id"] != playlist_id:
+                    raise DatabaseFormatError(f"MusicDatabase['playlists'][{playlist_id}]['id'] ({yaml_object["playlists"][playlist_id]["id"]}) doesn't match playlist_id!")
             
 
     def set_shuffle_state(self, shuffle):
@@ -311,6 +361,14 @@ class MusicDatabase():
                 sha256.update(data)
         hash_out = sha256.hexdigest()
         # Truncate and XOR our hash so we don't use so much path length
+        return hex(int(hash_out[:32], 16) ^ int(hash_out[32:], 16))[2:]
+
+    @staticmethod
+    def _get_hash_from_args(*args):
+        sha256 = hashlib.sha256()
+        for arg in args:
+            sha256.update(arg)
+        hash_out = sha256.hexdigest()
         return hex(int(hash_out[:32], 16) ^ int(hash_out[32:], 16))[2:]
     
     def cache_covers(self, track_ids=None):
@@ -415,7 +473,7 @@ class MusicDatabase():
             self.data.locked = True
         
         else:
-            new_dict_entry = {"tracks" : {new_id : new_dict_entry}}
+            new_dict_entry = {"tracks" : {new_id : new_dict_entry}, "playlists" : {}}
             self.data = UpdatingDict(new_dict_entry)
             self.data.update_file()
 
@@ -580,3 +638,31 @@ class MusicDatabase():
         
         
         return track_info, metadata
+    
+    def add_playlist(self, playlist_name: str, track_list: list[int] | None = None):
+
+        if len(self.data["playlists"].keys()) != 0:
+            new_id = max(self.data["playlists"].keys()) + 1
+        else:
+            new_id = 1
+
+        if track_list is None:
+            track_list = []
+        
+        new_dict_entry = {
+            "id" : new_id,    # I dunno, come up with something to base the hash on
+            "persistent_id" : self._get_hash_from_args(playlist_name.encode("utf-8"), str(datetime.now().timestamp()).encode("utf-8")),
+            "name" : playlist_name,
+            "track_list" : track_list
+        }
+
+        # Not sure how to handle trying to create a playlist with no songs to choose from, for now just raise error
+        if len(self) != 0:
+            self.data.locked = True
+            self.data["playlists"][new_id] = 1 # Add new key to UpdatingDict with temp bogus entry
+            self.data.locked = False
+            self.data["playlists"][new_id] = UpdatingDict(new_dict_entry, parent=self.data["playlists"], parent_key=new_id)
+            self.data.locked = True
+        else:
+            raise ValueError("Attempting to create a playlist without any tracks!")
+        
