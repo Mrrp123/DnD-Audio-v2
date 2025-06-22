@@ -937,7 +937,7 @@ class DndAudio(App):
     def start_service(self):
         if platform == "android":
             from jnius import autoclass
-            self.audio_service = autoclass('org.zeberle.dndaudioplayer.ServiceAudioplayer')
+            self.audio_service = autoclass('org.mrrp.dndaudioplayer.ServiceAudioplayer')
             mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
             argument = ''
             self.audio_service.start(mActivity, argument)
@@ -955,9 +955,8 @@ class DndAudio(App):
     def stop_service(self):
         if platform == "android":
             from jnius import autoclass
-            service = autoclass('your.service.name.ClassName')
             mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
-            service.stop(mActivity)
+            self.audio_service.stop(mActivity)
         
         else:
             self.audio_service.kill()
