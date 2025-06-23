@@ -1013,6 +1013,8 @@ class DndAudio(App):
                 fp.write(int(track_pos).to_bytes(4, "little"))
                 fp.write(int(total_frames).to_bytes(8, "little"))
                 fp.write(int(reverse_audio).to_bytes(1, "little"))
+                fp.write(int(self.music_database._shuffle).to_bytes(1, "little"))
+                fp.write(int(self.music_database.repeat).to_bytes(1, "little"))
                 fp.write(self.sort_by_bytemap[self.root.get_screen("songs").songs_display.sort_by])
                 fp.write(int(fade_duration).to_bytes(2, "little"))
                 fp.write(struct.pack("3d", track_length, speed, volume))
@@ -1028,6 +1030,8 @@ class DndAudio(App):
                 track_pos = int.from_bytes(fp.read(4), "little")
                 total_frames = int.from_bytes(fp.read(8), "little")
                 reverse_audio = int.from_bytes(fp.read(1), "little")
+                shuffle = int.from_bytes(fp.read(1), "little")
+                repeat = int.from_bytes(fp.read(1), "little")
                 sort_by = self.reverse_sort_by_bytemap[fp.read(1)]
                 fade_duration = int.from_bytes(fp.read(2), "little")
                 track_length, speed, volume = struct.unpack("3d", fp.read(24))
@@ -1052,6 +1056,13 @@ class DndAudio(App):
             self.set_audioplayer_attr("fade_duration", int(fade_duration * speed))
             self.set_audioplayer_attr("volume", volume)
             self.set_audioplayer_attr("reverse_audio", reverse_audio)
+
+            main_display: MainDisplay = self.root.get_screen("main").main_display
+            if shuffle: # MusicDatabase._shuffle is set to False by default, so if shuffle is true, flip value
+                main_display.toggle_shuffle_mode()
+            if repeat: # MusicDatabase.repeat is set to False by default, so if repeat is true, flip value
+                main_display.toggle_repeat_mode()
+
             songs_display: SongsDisplay = self.root.get_screen("songs").songs_display
             songs_display.sort_by = sort_by
             songs_display.reverse_sort = sort_by in ("date_added", "play_date", "play_count")
