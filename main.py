@@ -122,10 +122,10 @@ class MainDisplay(EffectWidget):
         self.update_time_pos = True # Stops time values from updating when grabbing the time slider
         self.song_cover_path = None
 
-        self.c1 = "060606"
-        self.c2 = "111111"
+        self.c1 = get_color_from_hex("060606")
+        self.c2 = get_color_from_hex("111111")
 
-        self.background_img.texture = Gradient.vertical(get_color_from_hex(self.c1), get_color_from_hex(self.c2))
+        self.background_img.texture = Gradient.vertical(self.c1, self.c2)
         self.time_slider_anim = Animation(pos=(0, 0), size=(0, 0))
         self.volume_slider_anim = Animation(pos=(0, 0), size=(0, 0))
 
@@ -409,7 +409,8 @@ class MainDisplay(EffectWidget):
             if self.song_cover.source != f"{common_vars.app_folder}/assets/covers/default_cover.png":
                 new_colors = self.get_average_color()
             else:
-                new_colors = ("060606", "111111")
+                new_colors = (get_color_from_hex("060606"), 
+                              get_color_from_hex("111111"))
 
             self._color_updater = self._generate_background_color((self.c1, self.c2), new_colors)
             self.background_updater = Clock.schedule_interval(self._update_background_color, 0.0333)
@@ -419,31 +420,23 @@ class MainDisplay(EffectWidget):
     def get_average_color(self):
 
         color_array = np.ndarray(shape=(len(self.song_cover.texture.pixels)//4,4), dtype=np.uint8, buffer=self.song_cover.texture.pixels,  order="C").T
-        avg_red = np.mean(color_array[0])
-        avg_green = np.mean(color_array[1])
-        avg_blue = np.mean(color_array[2])
-        return f"{round(avg_red*.2):02x}{round(avg_green*.2):02x}{round(avg_blue*.2):02x}", \
-               f"{round(avg_red*.5):02x}{round(avg_green*.5):02x}{round(avg_blue*.5):02x}"
+
+        avg_red = np.mean(color_array[0]) / 255
+        avg_green = np.mean(color_array[1]) / 255
+        avg_blue = np.mean(color_array[2]) / 255
+
+        return ([avg_red*.2, avg_green*.2, avg_blue*.2, 1.0],
+                [avg_red*.5, avg_green*.5, avg_blue*.5, 1.0])
 
     @staticmethod
     def _generate_background_color(old_color, new_color, *args):
-        old_c1 = get_color_from_hex(old_color[0])
-        old_c2 = get_color_from_hex(old_color[1])
-        new_c1 = get_color_from_hex(new_color[0])
-        new_c2 = get_color_from_hex(new_color[1])
+        old_c1, old_c2 = old_color
+        new_c1, new_c2 = new_color
 
-        c1_red_transition = np.linspace(old_c1[0], new_c1[0], num=25, endpoint=True)
-        c1_green_transition = np.linspace(old_c1[1], new_c1[1], num=25, endpoint=True)
-        c1_blue_transition = np.linspace(old_c1[2], new_c1[2], num=25, endpoint=True)
+        c1_transition = np.linspace(old_c1, new_c1, num=25, endpoint=True)
+        c2_transition = np.linspace(old_c2, new_c2, num=25, endpoint=True)
 
-        c2_red_transition = np.linspace(old_c2[0], new_c2[0], num=25, endpoint=True)
-        c2_green_transition = np.linspace(old_c2[1], new_c2[1], num=25, endpoint=True)
-        c2_blue_transition = np.linspace(old_c2[2], new_c2[2], num=25, endpoint=True)
-
-        for c1, c2 in zip(zip(c1_red_transition, c1_green_transition, c1_blue_transition), zip(c2_red_transition, c2_green_transition, c2_blue_transition)):
-            c1 = f"{round(c1[0]*255):02x}{round(c1[1]*255):02x}{round(c1[2]*255):02x}"
-            c2 = f"{round(c2[0]*255):02x}{round(c2[1]*255):02x}{round(c2[2]*255):02x}"
-
+        for c1, c2 in zip(c1_transition, c2_transition):
             yield c1, c2
         
     def _update_background_color(self, dt):
@@ -453,7 +446,7 @@ class MainDisplay(EffectWidget):
         except StopIteration:
             Clock.unschedule(self.background_updater)
         else:
-            self.background_img.texture = Gradient.vertical(get_color_from_hex(c1), get_color_from_hex(c2))
+            self.background_img.texture = Gradient.vertical(c1, c2)
 
 
     @staticmethod
