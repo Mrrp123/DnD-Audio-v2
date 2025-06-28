@@ -661,6 +661,8 @@ class SongButton(Widget):
                 self.app.set_audioplayer_attr("track_id", self.track_id)
                 self.app.set_audioplayer_attr("init_pos", 0)
                 self.app.set_audioplayer_attr("pos", 0)
+                # Need this to properly align the audioplayer since we not in the audio mainloop yet
+                self.app.set_audioplayer_attr("next_track_id", self.app.music_database.peek_right(1))
                 
                 # Counterintuitively, pause_music() actually starts the music since audioplayer status is idle
                 self.main_display.pause_music()
