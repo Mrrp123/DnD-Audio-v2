@@ -706,7 +706,8 @@ class SettingsScreen(Screen):
 
     def __init__(self, **kw):
         super().__init__(**kw)
-        self.add_widget(SettingsDisplay())
+        self.settings_display = SettingsDisplay()
+        self.add_widget(self.settings_display)
     
 class SettingsDisplay(Widget):
 
@@ -722,24 +723,9 @@ class SettingsDisplay(Widget):
 
         self.app: DndAudio = App.get_running_app()
 
-
-        if os.path.exists(f"{common_vars.app_folder}/config"):
-            try:
-                with open(f"{common_vars.app_folder}/config", "rb") as fp:
-                    #offset = int.from_bytes(fp.read(2), "little") + 20
-                    fp.seek(-26, 2)
-
-                    fade_duration = int.from_bytes(fp.read(2), "little")
-                    track_length, speed, volume = struct.unpack("3d", fp.read(24))
-
-                    self.fade_slider.value = fade_duration
-                    self.speed_slider.value = speed * 100
-            except (OSError, struct.error):
-                self.speed_slider.value = 100
-                self.fade_slider.value = 3000
-        else:
-            self.speed_slider.value = 100
-            self.fade_slider.value = 3000
+        # These will get overridden by config if the values exist
+        self.speed_slider.value = 100
+        self.fade_slider.value = 3000
     
     def change_speed(self, touch: MotionEvent):
         if touch.grab_current == self.speed_slider:
@@ -1070,6 +1056,10 @@ class DndAudio(App):
             songs_display.reverse_sort = sort_by in ("date_added", "play_date", "play_count")
             songs_display.sort_buttons[f"sort_{sort_by}"].sort_checkbox.active = True
             songs_display.refresh_tracks()
+
+            settings_display: SettingsDisplay = self.root.get_screen("settings").settings_display
+            settings_display.speed_slider.value = speed * 100
+            settings_display.fade_slider.value = fade_duration
 
             # This waits until the audioplayer has fully received all of the config messages
             while self.get_audioplayer_attr("reverse_audio") == ():
