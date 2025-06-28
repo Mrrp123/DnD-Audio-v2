@@ -979,7 +979,7 @@ class DndAudio(App):
         self.osc_server.handle_request()
         return self.osc_returns
 
-    def save_audioplayer_config(self):
+    def save_config(self):
         if len(self.music_database) == 0:
             return
         try:
@@ -1004,7 +1004,7 @@ class DndAudio(App):
             if os.path.exists(f"{common_vars.app_folder}/config"):
                 os.remove(f"{common_vars.app_folder}/config")
     
-    def load_audioplayer_config(self):
+    def load_config(self):
         try:
             with open(f"{common_vars.app_folder}/config", "rb") as fp:
                 file_tag = fp.read(4)
@@ -1066,7 +1066,7 @@ class DndAudio(App):
                 time.sleep(0.001)
 
     def on_pause(self, *args):
-        self.save_audioplayer_config()
+        self.save_config()
         return True
     
     def on_start(self, *args):
@@ -1087,7 +1087,7 @@ class DndAudio(App):
         self.reverse_sort_by_bytemap = {v : k for k, v in self.sort_by_bytemap.items()}
 
         if os.path.exists(f"{common_vars.app_folder}/config") and len(self.music_database) != 0:
-            self.load_audioplayer_config()
+            self.load_config()
         if len(self.music_database) != 0:
             self.set_audioplayer_attr("track_id", self.music_database.track_pointer)
             self.set_audioplayer_attr("next_track_id", self.music_database.peek_right(1))
@@ -1100,7 +1100,7 @@ class DndAudio(App):
                                                      "speed", "base_fade_duration", "volume", "reverse_audio")
 
     def on_stop(self, *args):
-        self.save_audioplayer_config()
+        self.save_config()
 
 if __name__ == '__main__':
     from kivy.core.window import Window
