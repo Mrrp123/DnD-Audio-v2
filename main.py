@@ -1000,6 +1000,7 @@ class DndAudio(App):
             with open(f"{common_vars.app_folder}/config", "wb") as fp:
                 (track_id, track_pos, track_length, total_frames, 
                  speed, fade_duration, volume, reverse_audio) = self.config_vars
+                main_display: MainDisplay = self.root.get_screen("main").main_display
                 # Add special code so we know the file format is ok
                 fp.write(bytes([0x6D, 0x72, 0x72, 0x70])) # mrrp
                 fp.write(int(track_id).to_bytes(4, "little"))
@@ -1009,6 +1010,8 @@ class DndAudio(App):
                 fp.write(int(self.music_database._shuffle).to_bytes(1, "little"))
                 fp.write(int(self.music_database.repeat).to_bytes(1, "little"))
                 fp.write(self.sort_by_bytemap[self.root.get_screen("songs").songs_display.sort_by])
+                for channel_val in main_display.c1 + main_display.c2: # c1 and c2 should be lists of floats
+                    fp.write(round(channel_val * 255).to_bytes(1, "little"))
                 fp.write(int(fade_duration).to_bytes(2, "little"))
                 fp.write(struct.pack("3d", track_length, speed, volume))
         except Exception as err:
@@ -1026,6 +1029,8 @@ class DndAudio(App):
                 shuffle = int.from_bytes(fp.read(1), "little")
                 repeat = int.from_bytes(fp.read(1), "little")
                 sort_by = self.reverse_sort_by_bytemap[fp.read(1)]
+                c1 = np.ndarray(shape=(4,), dtype=np.uint8, buffer=fp.read(4)) / 255
+                c2 = np.ndarray(shape=(4,), dtype=np.uint8, buffer=fp.read(4)) / 255
                 fade_duration = int.from_bytes(fp.read(2), "little")
                 track_length, speed, volume = struct.unpack("3d", fp.read(24))
                 
@@ -1038,19 +1043,23 @@ class DndAudio(App):
         else:
             found_track = False
         if file_tag == bytes([0x6D, 0x72, 0x72, 0x70]):
+
+            main_display: MainDisplay = self.root.get_screen("main").main_display
+
             if found_track:
                 # If we can't find the track, don't set track position values since these aren't valid
                 self.set_audioplayer_attr("init_pos", track_pos)
                 self.set_audioplayer_attr("pos", track_pos) # This (technically) shouldn't do anything, but it prevents time slider visual glitches on startup
                 self.set_audioplayer_attr("total_frames", total_frames)
                 self.set_audioplayer_attr("track_length", track_length)
+                main_display.c1 = list(c1) # main_display has it's own default values on init, but these will override that
+                main_display.c2 = list(c2)
             self.set_audioplayer_attr("speed", speed)
             self.set_audioplayer_attr("base_fade_duration", fade_duration)
             self.set_audioplayer_attr("fade_duration", int(fade_duration * speed))
             self.set_audioplayer_attr("volume", volume)
             self.set_audioplayer_attr("reverse_audio", reverse_audio)
 
-            main_display: MainDisplay = self.root.get_screen("main").main_display
             if shuffle: # MusicDatabase._shuffle is set to False by default, so if shuffle is true, flip value
                 main_display.toggle_shuffle_mode()
             if repeat: # MusicDatabase.repeat is set to False by default, so if repeat is true, flip value
