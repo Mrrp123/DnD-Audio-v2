@@ -18,8 +18,8 @@ class AudioSegment():
         self.min_val = np.iinfo(self.dt).min
         self.max_val = np.iinfo(self.dt).max
             
-        self._data: np.ndarray = np.fromstring(data, dtype=self.dt)
-        self._data.shape = (self._data.size//channels, channels)
+        # make sure buffer is a bytearray, else we won't be able to write to the array
+        self._data = np.ndarray(shape=(len(data)//channels//sample_width, channels), dtype=self.dt, buffer=bytearray(data), order="C")
 
         self.frame_rate = frame_rate
         self.channels = channels

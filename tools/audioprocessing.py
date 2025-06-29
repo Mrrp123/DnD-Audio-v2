@@ -148,7 +148,7 @@ def resample(channel_samples, scale=1.0):
             channel_samples, # known data points
             )
 
-def change_speed(song_data, speed, sos=None, zf=np.zeros(shape=(15, 2, 2)), dt=np.int16):
+def change_speed(song_data: bytes, speed: float, sos=None, zf=np.zeros(shape=(15, 2, 2)), dt=np.int16):
     """
     This function manipulates the raw audio data to speed up or slow down a song by averaging audio samples
     or by cutting out audio samples. This process is slow when upsampling
@@ -163,8 +163,8 @@ def change_speed(song_data, speed, sos=None, zf=np.zeros(shape=(15, 2, 2)), dt=n
 
         return np.clip(y, a_min=-32768, a_max=32767), zf
     
-    channels: np.ndarray = np.fromstring(bytes(song_data), dtype=dt) # Convert bytes to numpy array (faster to deal with)
-    channels.shape = (len(song_data)//4, 2)
+    # Convert bytes to numpy array (faster to deal with)
+    channels = np.ndarray(shape=(len(song_data)//2//2, 2), dtype=dt, buffer=song_data, order="C")
 
     channels = np.apply_along_axis(resample, axis=0, arr=channels, scale=1/speed)
 
