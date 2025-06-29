@@ -721,6 +721,9 @@
         viewclass: "SongButton"
         width: root.width
         height: track_search.y - track_search.height
+        bar_width: dp(10)
+        scroll_type: ["bars", "content"]
+        scroll_distance: 1
         RecycleBoxLayout:
             default_size: None, size_indicator.size[1]*2
             default_size_hint: 1, None
