@@ -8,11 +8,16 @@ from kivy.uix.widget import Widget
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.screenmanager import ScreenManager, Screen, CardTransition, NoTransition, SlideTransition
 from kivy.uix.effectwidget import EffectWidget
+from kivy.uix.label import Label
+
 from kivy.clock import Clock
 from kivy.animation import Animation
 from kivy.utils import get_color_from_hex, platform
 from tools.kivy_gradient import Gradient
 from tools.shaders import TimeStop
+from kivy.properties import StringProperty
+from kivy.core.text import Label as CoreLabel
+from kivy.metrics import dp
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -24,6 +29,7 @@ if TYPE_CHECKING:
     from kivy.uix.recycleview import RecycleView
     from kivy.uix.textinput import TextInput
     from kivy.uix.dropdown import DropDown
+    from kivy.uix.scrollview import ScrollView
     from kivy.input.motionevent import MotionEvent
     
 
@@ -36,6 +42,7 @@ import time
 import struct
 from glob import glob
 from threading import Thread
+from functools import partial
 
 
 
@@ -46,6 +53,82 @@ from pythonosc.udp_client import SimpleUDPClient
 from kivy.graphics import (RenderContext, Fbo, Color, Rectangle,
                            Translate, PushMatrix, PopMatrix, ClearColor,
                            ClearBuffers)
+
+class TrackLabelShader(Label):
+    fs = StringProperty(None)
+    vs = StringProperty(None)
+    norm_text = StringProperty("") # This just holds the "normal" text that we wish to display
+                                   # Otherwise if a string is being scrolled through, we set the text to
+                                   # {some text} + " "*8 + {some text}
+    label_type = StringProperty("")
+    
+
+    def __init__(self, **kwargs):
+        """
+        This label is assumed to be embedded in a ScrollView
+        """
+        super().__init__(**kwargs)
+        self.canvas = RenderContext(use_parent_projection=True,
+                                    use_parent_modelview=True)
+        with open(f"{common_vars.app_folder}/tools/shaders/default_vertex_shader.glsl") as vs_fp:
+            self.canvas.shader.vs = vs_fp.read()
+        with open(f"{common_vars.app_folder}/tools/shaders/alpha_fade.glsl") as fs_fp:
+            self.canvas.shader.fs = fs_fp.read()
+        self.canvas["left_edge"] = 1.0
+        self.canvas["right_edge"] = 2.0
+        self.canvas.ask_update()
+        self.max_width = 1
+        self.is_animated = False
+        self.animation_complete = False
+    
+    def on_parent(self, *args, **kwargs):
+        self.main_display: MainDisplay = self.parent.parent
+        self.scroll_view: ScrollView = self.parent
+    
+    def on_size(self, *args, **kwargs):
+        self._update_alpha_fade_extents()
+    
+    def _update_alpha_fade_extents(self):
+        max_width = self.main_display.width - 2 * (self.main_display.width * (1/2) - (self.main_display.width * (11/12) - dp(32)) / 2 + dp(2))
+        if self.width > max_width:
+            offset = self.scroll_view.scroll_x * (self.width - max_width)
+            self.canvas["right_edge"] = (max_width + offset) / self.width
+            self.canvas["left_edge"] = self.canvas["right_edge"] - (CoreLabel(font_size=self.main_display.height/35, bold=True).get_extents("...")[0] / self.width)
+        else:
+            self.canvas["left_edge"] = 1.0
+            self.canvas["right_edge"] = 2.0
+    
+    def on_anim_start(self, *args):
+        self.is_animated = True
+        self.animation_complete = False
+            
+    def on_anim_progress(self, *args):
+        self._update_alpha_fade_extents()
+    
+    def on_anim_complete(self, *args):
+        self.scroll_view.scroll_x = 0
+        self._update_alpha_fade_extents()
+        self.animation_complete = True
+        if self.label_type == "name":
+            # Check if the artist name is animating and if so, make sure it is complete before restarting animations so that
+            # both the name and artist animations are synced up
+            if self.main_display.track_artist_label.is_animated and self.main_display.track_artist_label.animation_complete:
+                self.main_display.track_name_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_name_anim, self.norm_text), 5)
+                self.main_display.track_artist_anim_clock = (
+                    Clock.schedule_once(partial(self.main_display.trigger_track_artist_anim, self.main_display.track_artist_label.norm_text), 5)
+                    )
+            elif not self.main_display.track_artist_label.is_animated:
+                self.main_display.track_name_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_name_anim, self.norm_text), 5)
+        elif self.label_type == "artist":
+            # Check if the track name is animating and if so, make sure it is complete before restarting animations so that
+            # both the name and artist animations are synced up
+            if self.main_display.track_name_label.is_animated and self.main_display.track_name_label.animation_complete:
+                self.main_display.track_name_anim_clock = (
+                    Clock.schedule_once(partial(self.main_display.trigger_track_name_anim, self.main_display.track_name_label.norm_text), 5)
+                    )
+                self.main_display.track_artist_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_artist_anim, self.norm_text), 5)
+            elif not self.main_display.track_name_label.is_animated:
+                self.main_display.track_artist_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_artist_anim, self.norm_text), 5)
 
 class MainScreen(Screen):
     
@@ -66,6 +149,8 @@ class MainDisplay(EffectWidget):
     previous_track_event = None
     time_stop_event = False
     audio_clock = None
+    track_name_anim_clock = None
+    track_artist_anim_clock = None
     time_stop_effect = TimeStop()
 
     def __init__(self, **kwargs):
@@ -115,8 +200,10 @@ class MainDisplay(EffectWidget):
         self.repeat_button: Button = self.ids.repeat
         self.track_pos_label: Label = self.ids.track_pos
         self.neg_track_pos_label: Label = self.ids.neg_track_pos
-        self.track_name_label: Label = self.ids.track_name
-        self.track_artist_label: Label = self.ids.track_artist
+        self.track_name_label: TrackLabelShader = self.ids.track_name
+        self.track_artist_label: TrackLabelShader = self.ids.track_artist
+        self.track_name_scrollview: ScrollView = self.ids.track_name_scrollview
+        self.track_artist_scrollview: ScrollView = self.ids.track_artist_scrollview
 
         self.stop_move = False # Stops gestures from working when grabbing the time slider
         self.update_time_pos = True # Stops time values from updating when grabbing the time slider
@@ -128,6 +215,18 @@ class MainDisplay(EffectWidget):
         self.background_img.texture = Gradient.vertical(self.c1, self.c2)
         self.time_slider_anim = Animation(pos=(0, 0), size=(0, 0))
         self.volume_slider_anim = Animation(pos=(0, 0), size=(0, 0))
+        
+        # only animate at 40fps since these animations are *expensive* operations on the poor cpu :(
+        self.track_name_anim = Animation(scroll_x=0, duration=20, transition="linear", step=1/40)
+        self.track_name_anim.on_start    = self.track_name_label.on_anim_start
+        self.track_name_anim.on_progress = self.track_name_label.on_anim_progress
+        self.track_name_anim.on_complete = self.track_name_label.on_anim_complete
+
+        # only animate at 40fps since these animations are *expensive* operations on the poor cpu :(
+        self.track_artist_anim = Animation(scroll_x=0, duration=20, transition="linear", step=1/40)
+        self.track_artist_anim.on_start    = self.track_artist_label.on_anim_start
+        self.track_artist_anim.on_progress = self.track_artist_label.on_anim_progress
+        self.track_artist_anim.on_complete = self.track_artist_label.on_anim_complete
 
         # Clock.schedule_once(self._frame_zero_init, 0)
 
@@ -381,12 +480,42 @@ class MainDisplay(EffectWidget):
             self.update_time_text(pos, speed, track_length)
 
         # Update track name / artist (and position if user is holding the time slider)
-        if ((self.track_name_label.text   != track["name"] 
-        or   self.track_artist_label.text != track["artist"]) 
+        if ((self.track_name_label.norm_text   != track["name"] 
+        or   self.track_artist_label.norm_text != track["artist"]) 
         and  status in ("playing", "idle", "fade_in")):
             
-            self.track_name_label.text = track["name"]
-            self.track_artist_label.text = track["artist"]
+            max_width = (self.width - 2 * (self.width * (1/2) - (self.width * (11/12) - dp(32)) / 2 + dp(2)))
+            self.track_name_anim.stop(self.track_name_scrollview)
+            self.track_artist_anim.stop(self.track_artist_scrollview)
+
+            if self.track_name_anim_clock is not None:
+                self.track_name_anim_clock.cancel()
+            if self.track_artist_anim_clock is not None:
+                self.track_artist_anim_clock.cancel()
+
+            if CoreLabel(font_size=self.height/35, bold=True).get_extents(track["name"])[0] > max_width:
+                self.track_name_label.is_animated = True
+                self.track_name_label.animation_complete = False
+                self.track_name_label.text = track["name"] + " "*8 + track["name"]
+                self.track_name_anim_clock = Clock.schedule_once(partial(self.trigger_track_name_anim, track["name"]), 5)
+            else:
+                self.track_name_label.is_animated = False
+                self.track_name_label.animation_complete = False
+                self.track_name_label.text = track["name"]
+            
+            if CoreLabel(font_size=self.height/35, bold=True).get_extents(track["artist"])[0] > max_width:
+                self.track_artist_label.is_animated = True
+                self.track_artist_label.animation_complete = False
+                self.track_artist_label.text = track["artist"] + " "*8 + track["artist"]
+                self.track_artist_anim_clock = Clock.schedule_once(partial(self.trigger_track_artist_anim, track["artist"]), 5)
+            else:
+                self.track_artist_label.is_animated = False
+                self.track_artist_label.animation_complete = False
+                self.track_artist_label.text = track["artist"]
+
+            self.track_name_label.norm_text = track["name"]
+            self.track_artist_label.norm_text = track["artist"]
+            
             if not self.update_time_pos:
                 self.update_time_text(self.time_slider.value * track_length / 1000, speed, track_length)
         
@@ -416,6 +545,30 @@ class MainDisplay(EffectWidget):
             self.background_updater = Clock.schedule_interval(self._update_background_color, 0.0333)
             self.c1, self.c2 = new_colors
 
+    
+    def trigger_track_name_anim(self, track_name, dt):
+        scroll_px_distance = CoreLabel(font_size=self.height/35, bold=True).get_extents(track_name + " "*8)[0]
+
+        # Choose A for the letter because why not
+        approx_letter_size = CoreLabel(font_size=self.height/35, bold=True).get_extents("A")[0]
+        new_scroll_x = self.track_name_scrollview.convert_distance_to_scroll(scroll_px_distance, 0)[0]
+        self.track_name_anim._animated_properties = {"scroll_x" : new_scroll_x}
+
+        # We want to scroll at about ~3 letters per second since that visually looks like a reasonable speed
+        self.track_name_anim._duration = scroll_px_distance / (3*approx_letter_size)
+        self.track_name_anim.start(self.track_name_scrollview)
+    
+    def trigger_track_artist_anim(self, track_artist, dt):
+        scroll_px_distance = CoreLabel(font_size=self.height/35, bold=True).get_extents(track_artist + " "*8)[0]
+
+        # Choose A for the letter because why not
+        approx_letter_size = CoreLabel(font_size=self.height/35, bold=True).get_extents("A")[0]
+        new_scroll_x = self.track_artist_scrollview.convert_distance_to_scroll(scroll_px_distance, 0)[0]
+        self.track_artist_anim._animated_properties = {"scroll_x" : new_scroll_x}
+
+        # We want to scroll at about ~3 letters per second since that visually looks like a reasonable speed
+        self.track_artist_anim._duration = scroll_px_distance / (3*approx_letter_size)
+        self.track_artist_anim.start(self.track_artist_scrollview)
 
     def get_average_color(self):
 
