@@ -166,6 +166,12 @@ class FIRLowpassFilter():
         self.filter_len = len(self.fir_filter)
         self.padding = np.zeros(shape=(0,num_channels))
     
+    def set_new_filter(self, cutoff_freq, sample_rate=44_100, num_taps=201):
+        # This is just to change the filter without changing the padding samples
+        _fir_filter = np.sinc(2 * cutoff_freq * np.arange(-num_taps//2+1, num_taps//2+1) / sample_rate) * np.hamming(num_taps)
+        self.fir_filter = _fir_filter / np.sum(_fir_filter)
+        self.filter_len = len(self.fir_filter)
+    
     def filter_signal(self, data: np.ndarray):
         """
         Expects data in the shape of [num_samples, num_channels]

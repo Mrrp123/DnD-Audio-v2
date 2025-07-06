@@ -654,7 +654,10 @@ class AudioPlayer():
     @speed.setter
     def speed(self, value):
         if value < 1:
-            self.filter = FIRLowpassFilter(round(value*self.rate/2), self.rate, 201)
+            if self.filter is None:
+                self.filter = FIRLowpassFilter(round(value*self.rate/2), self.rate, 201)
+            else:
+                self.filter.set_new_filter(round(value*self.rate/2), self.rate, 201)
         else:
             self.filter = None
         self.fade_duration = int(self.base_fade_duration * value)
