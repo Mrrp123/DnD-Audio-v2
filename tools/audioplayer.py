@@ -9,7 +9,6 @@ import wave
 from glob import glob
 from threading import Thread, Lock
 import time
-from scipy.signal import iirfilter
 from functools import reduce
 import yaml
 
@@ -553,9 +552,7 @@ class AudioPlayer():
         self.fade_duration = self.base_fade_duration
         self.chunk_len = 50 # sets a size for how large audio chunks are (ms)
 
-        self.sos = None
-        self.filter_state = np.zeros(shape=(15, 2, 2))
-        self.ease_filter = False
+        self.filter = None
 
         self.volume = 1
 
@@ -657,10 +654,9 @@ class AudioPlayer():
     @speed.setter
     def speed(self, value):
         if value < 1:
-            self.sos = iirfilter(30, round(value*self.rate/2), fs=self.rate, btype="lowpass", analog=False, ftype="butter", output="sos")
-            self.filter_state = np.zeros(shape=(15, 2, 2))
+            self.filter = FIRLowpassFilter(round(value*self.rate/2), self.rate, 201)
         else:
-            self.sos = None
+            self.filter = None
         self.fade_duration = int(self.base_fade_duration * value)
         self._speed = value
 
@@ -1052,7 +1048,7 @@ class AudioPlayer():
             audio = audio + amp_to_db(self.volume)
         data = audio.data
         if self.speed != 1 or audio.frame_rate != self.rate:
-            data, self.filter_state = change_speed(data, self.speed * audio.frame_rate/self.rate, self.sos, zf=self.filter_state, dt=audio.dt)
+            data = change_speed(data, self.speed * audio.frame_rate/self.rate, filter=self.filter, dt=audio.dt)
         self.get_debug_info()
         self.stream.write(data)
         if self.pause_flag == True:

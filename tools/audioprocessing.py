@@ -2,7 +2,6 @@ from __future__ import annotations
 from math import log10, ceil
 import time
 import numpy as np
-from scipy.signal import sosfilt
 from typing import TYPE_CHECKING, Generator
 if TYPE_CHECKING:
     from tools.audiosegment import AudioSegment
@@ -148,28 +147,51 @@ def resample(channel_samples, scale=1.0):
             channel_samples, # known data points
             )
 
-def change_speed(song_data: bytes, speed: float, sos=None, zf=np.zeros(shape=(15, 2, 2)), dt=np.int16):
+class FIRLowpassFilter():
+
+    """
+    Creates and handles low pass filtering. Can in theory be used for other signal filtering in the future
+    """
+
+    def __init__(self, cutoff_freq, sample_rate=44_100, num_taps=201, num_channels=2):
+        
+        if cutoff_freq <= 0 or cutoff_freq >= sample_rate / 2:
+            raise ValueError("Cutoff frequency must be between 0 < freq < sample_rate/2")
+        if num_taps % 2 == 0:
+            raise ValueError("num_taps must be an odd number!")
+        
+        # The time domain equivalent of a frequency cutoff is the sinc function, hence its use here
+        _fir_filter = np.sinc(2 * cutoff_freq * np.arange(-num_taps//2+1, num_taps//2+1) / sample_rate) * np.hamming(num_taps)
+        self.fir_filter = _fir_filter / np.sum(_fir_filter)
+        self.filter_len = len(self.fir_filter)
+        self.padding = np.zeros(shape=(0,num_channels))
+    
+    def filter_signal(self, data: np.ndarray):
+        """
+        Expects data in the shape of [num_samples, num_channels]
+        """
+        num_samples = data.shape[0]
+        padded_data = np.concatenate([self.padding, data])
+        self.padding = padded_data[-(self.filter_len - 1):]
+        start = self.filter_len + 1
+        end = start + num_samples
+        if data.ndim > 1:
+            return np.apply_along_axis(np.convolve, 0, padded_data, self.fir_filter, mode="full")[start:end]
+        else:
+            return np.convolve(padded_data, self.fir_filter, mode="full")[start:end]
+
+def change_speed(song_data: bytes, speed: float, filter: FIRLowpassFilter | None = None, dt=np.int16):
     """
     This function manipulates the raw audio data to speed up or slow down a song by averaging audio samples
     or by cutting out audio samples. This process is slow when upsampling
     """
-    
-    def filter_signal(data, sos, zf):
-        y, zf = sosfilt(sos, data, axis=0, zi=zf)
 
-        # This prevents pops and cracking, sosfilt returns a np.float64 array 
-        # which sometimes exceeds the 16 bit signed int limit.
-        # This needs to be constrained to fit in our range.
-
-        return np.clip(y, a_min=-32768, a_max=32767), zf
-    
     # Convert bytes to numpy array (faster to deal with)
     channels = np.ndarray(shape=(len(song_data)//2//2, 2), dtype=dt, buffer=song_data, order="C")
 
     channels = np.apply_along_axis(resample, axis=0, arr=channels, scale=1/speed)
 
-    if sos is not None and speed < 1: # If we're slowing down, we need to apply a low pass filter to the outgoing audio
-        channels, zf = filter_signal(channels, sos, zf)
+    if filter is not None and speed < 1: # If we're slowing down, we need to apply a low pass filter to the outgoing audio
+        channels = filter.filter_signal(channels)
 
-
-    return channels.astype(dt).tobytes(), zf # return as bytes and get last filter state
+    return channels.astype(dt).tobytes() # return as bytes
