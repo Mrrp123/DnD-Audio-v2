@@ -276,7 +276,7 @@ class MusicDatabase():
                 extraneous_keys = [key for key in yaml_object["tracks"][track_id].keys() if key not in required_track_keys]
                 raise DatabaseFormatError(f"MusicDatabase['tracks'][{track_id}] contains extraneous key(s): {extraneous_keys}")
             if yaml_object["tracks"][track_id]["id"] != track_id:
-                raise DatabaseFormatError(f"MusicDatabase['tracks'][{track_id}]['id'] ({yaml_object["tracks"][track_id]["id"]}) doesn't match track_id!")
+                raise DatabaseFormatError(f"MusicDatabase['tracks'][{track_id}]['id'] ({yaml_object['tracks'][track_id]['id']}) doesn't match track_id!")
 
         if len(yaml_object["playlists"].keys()) != 0:
             for playlist_id in yaml_object["playlists"].keys():
@@ -299,7 +299,7 @@ class MusicDatabase():
                     invalid_ids = [track_id for track_id in yaml_object["playlists"][playlist_id]["track_list"] if not (track_id in yaml_object["tracks"].keys())]
                     raise DatabaseFormatError(f"MusicDatabase['playlists'][{playlist_id}]['track_list'] contains invalid track_id(s): {invalid_ids}")
                 if yaml_object["playlists"][playlist_id]["id"] != playlist_id:
-                    raise DatabaseFormatError(f"MusicDatabase['playlists'][{playlist_id}]['id'] ({yaml_object["playlists"][playlist_id]["id"]}) doesn't match playlist_id!")
+                    raise DatabaseFormatError(f"MusicDatabase['playlists'][{playlist_id}]['id'] ({yaml_object['playlists'][playlist_id]['id']}) doesn't match playlist_id!")
             
 
     def set_shuffle_state(self, shuffle):
