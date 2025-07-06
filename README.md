@@ -5,7 +5,6 @@ pyyaml
 miniaudio
 mutagen
 numpy
-scipy
 python-osc
 pillow
 ```
