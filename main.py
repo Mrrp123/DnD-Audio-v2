@@ -89,14 +89,15 @@ class TrackLabelShader(Label):
         self._update_alpha_fade_extents()
     
     def _update_alpha_fade_extents(self):
-        max_width = self.main_display.width - 2 * (self.main_display.width * (1/2) - (self.main_display.width * (11/12) - dp(32)) / 2 + dp(2))
-        if self.width > max_width:
-            offset = self.scroll_view.scroll_x * (self.width - max_width)
-            self.canvas["right_edge"] = (max_width + offset) / self.width
-            self.canvas["left_edge"] = self.canvas["right_edge"] - (CoreLabel(font_size=self.main_display.height/35, bold=True).get_extents("...")[0] / self.width)
-        else:
-            self.canvas["left_edge"] = 1.0
-            self.canvas["right_edge"] = 2.0
+        if self.width > 0:
+            max_width = self.main_display.width - 2 * (self.main_display.width * (1/2) - (self.main_display.width * (11/12) - dp(32)) / 2 + dp(2))
+            if self.width > max_width:
+                offset = self.scroll_view.scroll_x * (self.width - max_width)
+                self.canvas["right_edge"] = (max_width + offset) / self.width
+                self.canvas["left_edge"] = self.canvas["right_edge"] - (CoreLabel(font_size=self.main_display.height/35, bold=True).get_extents("...")[0] / self.width)
+            else:
+                self.canvas["left_edge"] = 1.0
+                self.canvas["right_edge"] = 2.0
     
     def on_anim_start(self, *args):
         self.is_animated = True
