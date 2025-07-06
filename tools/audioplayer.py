@@ -1087,7 +1087,7 @@ class AudioPlayer():
                 data = next(self.chunk_generator).data # Get track data bytes
 
                 # Change the speed of the audio to whatever the user has set, taking into account the sampling rate of the output data
-                data, _ = change_speed(data, self.speed * self.track_data[self.track_id]["rate"]/self.rate)
+                data = change_speed(data, self.speed * self.track_data[self.track_id]["rate"]/self.rate)
 
                 # Frame rate is 44.1 kHz because the audio we use in the assets is 44.1 kHz, not necessaryily self.rate
                 zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume)
@@ -1143,7 +1143,7 @@ class AudioPlayer():
                 data = extra_track_audio[:chunk_len].data # We cut based on milliseconds here, so sample rate shouldn't affect these
                 extra_track_audio = extra_track_audio[chunk_len:]
                 
-                data, _ = change_speed(data, speed) # No need to resample here since extra_track_audio will have done that automatically
+                data = change_speed(data, speed) # No need to resample here since extra_track_audio will have done that automatically
 
                 zw = zwfp.readframes(round(self.chunk_len*44_100/1000))
                 
@@ -1195,7 +1195,7 @@ class AudioPlayer():
                 data = extra_track_audio[:chunk_len].data # We cut based on milliseconds here, so sample rate shouldn't affect these
                 extra_track_audio = extra_track_audio[chunk_len:]
 
-                data, _ = change_speed(data, speed) # No need to resample here since extra_track_audio will have done that automatically
+                data = change_speed(data, speed) # No need to resample here since extra_track_audio will have done that automatically
 
                 zw = zwfp.readframes(round(self.chunk_len*44_100/1000))
 
