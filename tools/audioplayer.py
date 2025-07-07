@@ -246,6 +246,7 @@ class AudioDecoder():
 
             self.buffer_info = BufferInfo()
             self.extra_pcm_buffer = bytearray(0)
+            self.eof = False
             
             if start_frame > 0:
                 self.seek(start_frame)
@@ -257,45 +258,46 @@ class AudioDecoder():
         
         def get_buffer(self):
             pcm_output_buffer = self.extra_pcm_buffer
-            eof = False
 
             if len(pcm_output_buffer) >= self.frames_to_read * self.bytes_per_sample:
                 self.extra_pcm_buffer = pcm_output_buffer[self.frames_to_read * self.bytes_per_sample:]
                 return bytes(pcm_output_buffer[:self.frames_to_read * self.bytes_per_sample])
+            elif self.eof:
+                pcm_output_buffer = bytes(pcm_output_buffer)
+                del self.extra_pcm_buffer[:]
+                return pcm_output_buffer
 
 
-            while len(pcm_output_buffer) < self.frames_to_read * self.bytes_per_sample:
+            while (len(pcm_output_buffer) < self.frames_to_read * self.bytes_per_sample) and not self.eof:
 
-                if not eof:
-                    input_buffer_id = self.decoder.dequeueInputBuffer(100_000)
+                input_buffer_id = self.decoder.dequeueInputBuffer(100_000)
 
-                    if input_buffer_id >= 0:
-                        input_buffer = self.decoder.getInputBuffer(input_buffer_id)
-                        total_sample_bytes = 0
-                        presentation_time_us = 0
+                if input_buffer_id >= 0:
+                    input_buffer = self.decoder.getInputBuffer(input_buffer_id)
+                    total_sample_bytes = 0
+                    presentation_time_us = 0
 
-                        while total_sample_bytes < 2048:
-                            num_encoded_bytes = self.media_extractor.readSampleData(input_buffer, total_sample_bytes)
+                    while total_sample_bytes < 1024:
+                        num_encoded_bytes = self.media_extractor.readSampleData(input_buffer, total_sample_bytes)
 
-                            if num_encoded_bytes < 0:
-                                eof = True
-                                self.decoder.queueInputBuffer(input_buffer_id, 0, 0, 0, self.BUFFER_FLAG_END_OF_STREAM)
-                                break
+                        if num_encoded_bytes < 0:
+                            self.eof = True
+                            self.decoder.queueInputBuffer(input_buffer_id, 0, 0, 0, self.BUFFER_FLAG_END_OF_STREAM)
+                            break
+                    
+                        else:
+                            total_sample_bytes += num_encoded_bytes
+                            presentation_time_us = self.media_extractor.getSampleTime()
+                            self.media_extractor.advance()
                         
-                            else:
-                                total_sample_bytes += num_encoded_bytes
-                                presentation_time_us = self.media_extractor.getSampleTime()
-                                self.media_extractor.advance()
-                            
-                            if total_sample_bytes >= 2048:
-                                self.decoder.queueInputBuffer(input_buffer_id, 0, total_sample_bytes, presentation_time_us, 0)
-                                break
+                        if total_sample_bytes >= 1024:
+                            self.decoder.queueInputBuffer(input_buffer_id, 0, total_sample_bytes, presentation_time_us, 0)
+                            break
                                     
                 output_buffer_id = self.decoder.dequeueOutputBuffer(self.buffer_info, 100_000)
 
                 if output_buffer_id >= 0:
                     output_buffer = self.decoder.getOutputBuffer(output_buffer_id)
-                    buffer_format = self.decoder.getOutputFormat(output_buffer_id)
 
                     pcm_chunk = bytearray(self.buffer_info.size)
                     output_buffer.get(pcm_chunk)
