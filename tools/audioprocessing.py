@@ -172,19 +172,21 @@ class FIRLowpassFilter():
         self.fir_filter = _fir_filter / np.sum(_fir_filter)
         self.filter_len = len(self.fir_filter)
     
-    def filter_signal(self, data: np.ndarray):
+    def filter_signal(self, data: np.ndarray, dt):
         """
         Expects data in the shape of [num_samples, num_channels]
         """
+        min_val = np.iinfo(dt).min
+        max_val = np.iinfo(dt).max
         num_samples = data.shape[0]
         padded_data = np.concatenate([self.padding, data])
         self.padding = padded_data[-(self.filter_len - 1):]
         start = self.filter_len + 1
         end = start + num_samples
         if data.ndim > 1:
-            return np.apply_along_axis(np.convolve, 0, padded_data, self.fir_filter, mode="full")[start:end]
+            return np.clip(np.apply_along_axis(np.convolve, 0, padded_data, self.fir_filter, mode="full")[start:end], min_val, max_val)
         else:
-            return np.convolve(padded_data, self.fir_filter, mode="full")[start:end]
+            return np.clip(np.convolve(padded_data, self.fir_filter, mode="full")[start:end], min_val, max_val)
 
 def change_speed(song_data: bytes, speed: float, filter: FIRLowpassFilter | None = None, dt=np.int16):
     """
@@ -198,6 +200,6 @@ def change_speed(song_data: bytes, speed: float, filter: FIRLowpassFilter | None
     channels = np.apply_along_axis(resample, axis=0, arr=channels, scale=1/speed)
 
     if filter is not None and speed < 1: # If we're slowing down, we need to apply a low pass filter to the outgoing audio
-        channels = filter.filter_signal(channels)
+        channels = filter.filter_signal(channels, dt)
 
     return channels.astype(dt).tobytes() # return as bytes
