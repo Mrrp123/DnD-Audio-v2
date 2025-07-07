@@ -374,9 +374,9 @@ class MusicDatabase():
     def cache_covers(self, track_ids=None):
 
         # Create cache folder if it doesn't exist
-        os.makedirs("./cache/covers", exist_ok=True)
-        os.makedirs("./cache/small_covers", exist_ok=True)
-        os.makedirs("./cache/audio", exist_ok=True)
+        os.makedirs(f"{common_vars.app_folder}/cache/covers", exist_ok=True)
+        os.makedirs(f"{common_vars.app_folder}/cache/small_covers", exist_ok=True)
+        os.makedirs(f"{common_vars.app_folder}/cache/audio", exist_ok=True)
         if track_ids is None:
             track_ids = self.data["tracks"].keys()
         for track_id in track_ids:
