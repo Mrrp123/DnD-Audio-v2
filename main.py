@@ -828,6 +828,11 @@ class SongButton(Widget):
                 self.app.change_track(self.track_id, transition="fade_in")
             else:
                 self.app.change_track(self.track_id, transition="crossfade")
+
+            # This won't change the shuffle state, but it will re-shuffle the tracks when a new track is selected
+            if self.app.music_database._shuffle:
+                self.app.music_database.set_shuffle_state(self.app.music_database._shuffle)
+            
             return True
         self.touch_down_called = False
 
