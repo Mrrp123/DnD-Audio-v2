@@ -3,6 +3,7 @@
 #:import dp kivy.metrics.dp
 #:import shaders tools.shaders
 #:import app_folder tools.common_vars.app_folder 
+#:import CoreLabel kivy.core.text.Label
 
 <MainDisplay>:
 
@@ -696,6 +697,23 @@
                         size: self.size
                         pos: self.pos
                         radius: 0, 0, self.height/3, self.height/3
+    
+
+    Button:
+        id: add_song
+        bold: True
+        size_hint: None, None
+        width: root.height * (11/224)
+        height: self.width
+        disabled_color: 1,1,1,1
+        background_color: 0.23137254901960785,1,0.333,1 #3bff55ff
+        disabled_background_color:0.23137254901960785,1,0.333,1
+        x: song_label.padding[0] * 2 + CoreLabel(font_size=song_label.font_size, bold=True).get_extents("Songs")[0]
+        center_y: song_label.center_y
+        text: "Add Song"
+        on_release: app.filechooser.open_file(multiple=True, filters=["*.mp3;*.ogg;*.wav"], on_selection=app._add_file_handler)
+
+        border: (0,0,0,0)
             
 
     TextInput: # This exists only to help the rounded rectangle figure out its height, it mimics the settings of track_search

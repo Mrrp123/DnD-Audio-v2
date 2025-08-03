@@ -19,6 +19,8 @@ from kivy.properties import StringProperty
 from kivy.core.text import Label as CoreLabel
 from kivy.metrics import dp
 
+import plyer
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from kivy.uix.button import Button
@@ -925,6 +927,8 @@ class DndAudio(App):
         self.osc_server = BlockingOSCUDPServer(("127.0.0.1", 8000), self.dispatcher)
         self.osc_client = SimpleUDPClient("127.0.0.1", 8001)
 
+        self.filechooser: plyer.facades.FileChooser = plyer.filechooser
+
         #self.reload_songs()
 
         # We haven't been using reload_songs for quite some time, leave it for later reworks
@@ -932,6 +936,9 @@ class DndAudio(App):
         # This won't work on android
         if platform in ('linux', 'linux2', 'macos', 'win') and len(self.music_database) != 0:
             self.music_database.cache_covers()
+        elif platform == "android":
+            from android.permissions import request_permissions, Permission
+            request_permissions([Permission.READ_EXTERNAL_STORAGE, Permission.WRITE_EXTERNAL_STORAGE])
         
         self.start_service()     
 
@@ -1106,6 +1113,12 @@ class DndAudio(App):
         self.music_database.add_track(file_path.decode("utf-8"))
         self.call_audioplayer_func("reload_track_data")
         self.root.get_screen("songs").songs_display.refresh_tracks()
+    
+    def _add_file_handler(self, file_paths: list[str]):
+        for file_path in file_paths:
+            self.music_database.add_track(file_path)
+        self.call_audioplayer_func("reload_track_data")
+        self.root.get_screen("songs").songs_display.refresh_tracks()
 
 
     def _return_message(self, address: str, *values):
@@ -1227,7 +1240,6 @@ class DndAudio(App):
                 time.sleep(0.001)
 
     def on_pause(self, *args):
-        self.save_config()
         return True
     
     def on_start(self, *args):
