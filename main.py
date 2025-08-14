@@ -1114,11 +1114,12 @@ class DndAudio(App):
         self.call_audioplayer_func("reload_track_data")
         self.root.get_screen("songs").songs_display.refresh_tracks()
     
-    def _add_file_handler(self, file_paths: list[str]):
-        for file_path in file_paths:
-            self.music_database.add_track(file_path)
-        self.call_audioplayer_func("reload_track_data")
-        self.root.get_screen("songs").songs_display.refresh_tracks()
+    def _add_file_handler(self, file_paths: list[str] | None):
+        if file_paths is not None:
+            for file_path in file_paths:
+                self.music_database.add_track(file_path)
+            self.call_audioplayer_func("reload_track_data")
+            self.root.get_screen("songs").songs_display.refresh_tracks()
 
 
     def _return_message(self, address: str, *values):
