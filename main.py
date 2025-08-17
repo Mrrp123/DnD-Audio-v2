@@ -15,7 +15,7 @@ from kivy.animation import Animation
 from kivy.utils import get_color_from_hex, platform
 from tools.kivy_gradient import Gradient
 from tools.shaders import TimeStop
-from kivy.properties import StringProperty
+from kivy.properties import StringProperty, NumericProperty
 from kivy.core.text import Label as CoreLabel
 from kivy.metrics import dp
 
@@ -1123,6 +1123,9 @@ class PlaylistButton(ScreenSelectionButton):
         self.touch_down_called = False
 
 class DndAudio(App):
+
+    height = NumericProperty(0)
+    width = NumericProperty(0)
 
     def build(self):
 
