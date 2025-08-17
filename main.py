@@ -1073,6 +1073,10 @@ class ScreenSelectionButton(Widget):
 
     # The text displayed for the button
     display_name = StringProperty("")
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.touch_down_called = False
     
     # Wait until labels are initialized to set values
     def on_kv_post(self, *args):
