@@ -14,3 +14,4 @@ cache/*
 *.md
 conv.py
 *xml_to_yaml.py
+*.xml
