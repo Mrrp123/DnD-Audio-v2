@@ -918,7 +918,7 @@
     Label:
         id: screen_label
         pos: 0, root.y
-        size: root.size[0] * 2/3, root.size[1]
+        size: root.size[0] - arrow_indicator.width, root.size[1]
         bold: True
         halign: "left"
         valign: "middle"
@@ -933,7 +933,7 @@
     Label:
         id: arrow_indicator
         pos: root.width - self.width, root.y
-        size: root.size[0] * 1/3, root.size[1]
+        size: root.size[1]/2, root.size[1]
         bold: True
         halign: "right"
         valign: "middle"
