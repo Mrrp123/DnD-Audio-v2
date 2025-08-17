@@ -2,7 +2,7 @@
 
 #:import dp kivy.metrics.dp
 #:import shaders tools.shaders
-#:import app_folder tools.common_vars.app_folder 
+#:import app_folder tools.common_vars.app_folder
 #:import CoreLabel kivy.core.text.Label
 
 <MainDisplay>:
@@ -26,7 +26,7 @@
         x: root.width - self.width
         y: root.height - self.height
         size_hint: None, None
-        text: "Songs \u203A"
+        text: "Library \u203A"
         halign: "right"
         valign: "top"
         text_size: self.size
@@ -36,7 +36,7 @@
         on_touch_up: self.color = 0, 1, 1, 1
         on_release:
             root.parent.manager.transition.direction = "left"
-            root.parent.manager.current = "songs"
+            root.parent.manager.current = "library"
 
     Button:
         id: settings
@@ -464,7 +464,7 @@
         halign: "left"
         valign: "bottom"
         text_size: self.size
-        font_size: app.root.children[0].height / 40
+        font_size: app.height / 40
         shorten: True
         shorten_from: "right"
         size_hint: 1, None
@@ -478,7 +478,7 @@
         halign: "left"
         valign: "top"
         text_size: self.size
-        font_size: app.root.children[0].height / 50
+        font_size: app.height / 50
         color: 2/3, 2/3, 2/3, 1
         shorten: True
         shorten_from: "right"
@@ -542,9 +542,11 @@
         height: root.height
         padding: 0, 0, 0, 0
 
-<SongsDisplay>:
+
+
+<SongsDisplayBase>:
     Button:
-        id: song_page
+        id: back_button
         bold: True
         width: min(root.height / 4, root.width / 3)
         height: root.height / 10
@@ -552,7 +554,7 @@
         color: 0, 1, 1, 1
         x: 0
         y: root.height - self.height
-        text: "\u2039 Back"
+        # text: "\u2039 Library"
         halign: "left"
         valign: "top"
         text_size: self.size
@@ -561,21 +563,18 @@
         padding: ("12dp", "15dp", 0, 0)
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
-        on_release:
-            root.parent.manager.transition.direction = "right"
-            root.parent.manager.current = "main"
-
+        on_release: root.back_button_on_release()
 
     Label:
-        id: song_label
+        id: main_label
         bold: True
         color: 1,1,1,1
-        width: root.width/2
+        width: root.width
         height: root.height/20
         x: 0
         y: root.height - root.height / 6
         halign: "left"
-        text: "Songs"
+        # text: "Songs"
         text_size: self.size
         #size: self.texture_size
         font_size: root.height/20
@@ -587,7 +586,7 @@
         halign: "center"
         valign: "center"
         x: root.width - self.width*2
-        center_y: song_page.center_y - 2
+        center_y: back_button.center_y - 2
         size: root.height/20, root.height/20
         #background_normal: "./assets/icon/icon.png"
         on_release: 
@@ -697,24 +696,6 @@
                         size: self.size
                         pos: self.pos
                         radius: 0, 0, self.height/3, self.height/3
-    
-
-    Button:
-        id: add_song
-        bold: True
-        size_hint: None, None
-        width: root.height * (11/224)
-        height: self.width
-        disabled_color: 1,1,1,1
-        background_color: 0.23137254901960785,1,0.333,1 #3bff55ff
-        disabled_background_color:0.23137254901960785,1,0.333,1
-        x: song_label.padding[0] * 2 + CoreLabel(font_size=song_label.font_size, bold=True).get_extents("Songs")[0]
-        center_y: song_label.center_y
-        text: "Add Song"
-        on_release: app.filechooser.open_file(multiple=True, filters=["*.mp3;*.ogg;*.wav"], on_selection=app._add_file_handler)
-
-        border: (0,0,0,0)
-            
 
     TextInput: # This exists only to help the rounded rectangle figure out its height, it mimics the settings of track_search
         id: size_indicator
@@ -722,7 +703,7 @@
         foreground_color: 0,0,0,0
         disabled: True
         visible: False
-        width: root.width - song_label.padding[0]*2
+        width: root.width - main_label.padding[0]*2
         height: self.minimum_height
         text_size: self.size 
         font_size: root.height/40
@@ -735,22 +716,22 @@
                 rgba: .2,.2,.2,.3
             RoundedRectangle:
                 size: size_indicator.width + size_indicator.height / 2, size_indicator.size[1]
-                pos: song_label.x + song_label.padding[0] - size_indicator.height / 4, root.height * (3/4)
+                pos: main_label.x + main_label.padding[0] - size_indicator.height / 4, root.height * (3/4)
                 radius: size_indicator.height / 2,
 
     TextInput:
         id: track_search
         bold: True
-        width: root.width - song_label.padding[0]*2
+        width: root.width - main_label.padding[0]*2
         height: self.minimum_height
         background_color: 0,0,0,0
         foreground_color: 1,1,1,1
         cursor_color: 1,1,1,1
         multiline: False
-        x: song_label.x + song_label.padding[0]
+        x: main_label.x + main_label.padding[0]
         y: root.height * (3/4)
         halign: "left"
-        hint_text: "Search in Songs"
+        # hint_text: "Search in Songs"
         text_size: self.size 
         font_size: root.height/40
         padding: size_indicator.padding
@@ -772,6 +753,22 @@
             width: root.width
             orientation:  "vertical"
             background_color: 1,1,1,0.3
+
+<SongsDisplay>:
+    Button:
+        id: add_song
+        bold: True
+        size_hint: None, None
+        width: root.height * (11/224)
+        height: self.width
+        disabled_color: 1,1,1,1
+        background_color: 0.23137254901960785,1,0.333,1 #3bff55ff
+        disabled_background_color:0.23137254901960785,1,0.333,1
+        x: dp(23) * 2 + CoreLabel(font_size=root.height/20, bold=True).get_extents("Songs")[0]
+        center_y: (root.height - root.height / 6) + root.height/40 #self.main_label.center_y
+        text: "Add Song"
+        on_release: app.filechooser.open_file(multiple=True, filters=["*.mp3;*.ogg;*.wav"], on_selection=app._add_file_handler)
+        border: (0,0,0,0)
 
 <SettingsDisplay>:
 
@@ -898,3 +895,238 @@
         on_release:
             root.parent.manager.transition.direction = "left"
             root.parent.manager.current = "main"
+
+
+<ScreenSelectionButton>:
+    image: ""
+    background_color: 0,0,0,1
+    canvas.before:
+        Color:
+            rgba: self.background_color
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    canvas.after:
+        Color:
+            rgba: 1,1,1,0.5
+        Line:
+            width: 1
+            # For some goofy, fuck ass reason, opengl lines are defined on half pixel boundaries
+            # offset line by 0.5 to get true 1 px lines
+            points: (self.height, round(self.y) + 0.5, self.width, round(self.y) + 0.5)
+
+    Label:
+        id: screen_label
+        pos: 0, root.y
+        size: root.size[0] * 2/3, root.size[1]
+        bold: True
+        halign: "left"
+        valign: "middle"
+        text_size: self.size
+        font_size: app.height / 35
+        color: 1, 1, 1, 1
+        shorten: True
+        shorten_from: "right"
+        size_hint: 1, None
+        padding: root.height, 0, root.width / 12, 0
+    
+    Label:
+        id: arrow_indicator
+        pos: root.width - self.width, root.y
+        size: root.size[0] * 1/3, root.size[1]
+        bold: True
+        halign: "right"
+        valign: "middle"
+        text: "\u203A"
+        text_size: self.size
+        font_size: app.height / 30
+        color: 1, 1, 1, 0.5
+        size_hint: 1, None
+        padding: 0, 0, root.height/4, 0
+
+    Image:
+        id: screen_icon
+        source: root.image#"./assets/covers/default_cover.png"
+        size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
+        x: -root.width
+        fit_mode: "scale-down"
+        mipmap: True
+        canvas:
+            # Create mask for rounded rectangle for song cover
+            StencilPush 
+            Color:
+                rgba: 1,1,1,1
+            RoundedRectangle:
+                size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
+                pos: self.parent.x + root.height * (1/6), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))) / 2
+                radius: self.size[1] / 12,
+            
+            # Draw song cover
+            StencilUse
+            Rectangle:
+                texture: self.texture
+                size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
+                pos: self.parent.x + root.height * (1/6), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))) / 2
+
+            # Remove mask (so that we can draw the rest of the frame)
+            StencilUnUse
+            Color:
+                rgba: 1,1,1,1
+            RoundedRectangle:
+                size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
+                pos: self.parent.x + root.height * (1/6), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))) / 2
+                radius: self.size[1] / 12,
+
+            # Clear the stencil object
+            StencilPop
+
+<LibraryDisplay>:
+
+    Button:
+        id: library_back
+        bold: True
+        width: min(root.height / 4, root.width / 3)
+        height: root.height / 10
+        background_color: 1,1,1,0
+        color: 0, 1, 1, 1
+        x: 0
+        y: root.height - self.height
+        text: "\u2039 Back"
+        halign: "left"
+        valign: "top"
+        text_size: self.size
+        # size: self.texture_size
+        font_size: root.height/32
+        padding: ("12dp", "15dp", 0, 0)
+        on_press: self.color = 0, 0.5, 0.5, 1
+        on_touch_up: self.color = 0, 1, 1, 1
+        on_release:
+            root.parent.manager.transition.direction = "right"
+            root.parent.manager.current = "main"
+
+    Label:
+        id: library_label
+        bold: True
+        color: 1,1,1,1
+        width: root.width/2
+        height: root.height/20
+        x: 0
+        y: root.height - root.height / 6
+        halign: "left"
+        text: "Library"
+        text_size: self.size
+        #size: self.texture_size
+        font_size: root.height/20
+        padding: ("23dp", "15dp", 0, 0)
+
+    BoxLayout:
+        orientation: "vertical"
+        width: root.width
+        height: (CoreLabel(font_size=root.height/40).get_extents("_")[1]+12)*4 # Same size as size_indicator.height * 4 (what we use for songs page)
+        x: 0
+        y: round(library_label.y - self.height - library_label.height / 4) # round position else seperator lines look funny
+
+        ScreenSelectionButton:
+            id: playlists_button
+            screen_link_name: "playlists"
+            display_name: "Playlists"
+            
+        
+        ScreenSelectionButton:
+            id: songs_button
+            screen_link_name: "songs"
+            display_name: "Songs"
+
+<PlaylistsDisplay>:
+    Button:
+        id: playlists_back
+        bold: True
+        width: min(root.height / 4, root.width / 3)
+        height: root.height / 10
+        background_color: 1,1,1,0
+        color: 0, 1, 1, 1
+        x: 0
+        y: root.height - self.height
+        text: "\u2039 Library"
+        halign: "left"
+        valign: "top"
+        text_size: self.size
+        # size: self.texture_size
+        font_size: root.height/32
+        padding: ("12dp", "15dp", 0, 0)
+        on_press: self.color = 0, 0.5, 0.5, 1
+        on_touch_up: self.color = 0, 1, 1, 1
+        on_release:
+            root.parent.manager.transition.direction = "right"
+            root.parent.manager.current = "library"
+    
+    Label:
+        id: playlists_label
+        bold: True
+        color: 1,1,1,1
+        width: root.width/2
+        height: root.height/20
+        x: 0
+        y: root.height - root.height / 6
+        halign: "left"
+        text: "Playlists"
+        text_size: self.size
+        font_size: root.height/20
+        padding: ("23dp", "15dp", 0, 0)
+    
+    TextInput: # This exists only to help the rounded rectangle figure out its height, it mimics the settings of playlist_search
+        id: size_indicator
+        background_color: 0,0,0,0
+        foreground_color: 0,0,0,0
+        disabled: True
+        visible: False
+        width: root.width - playlists_label.padding[0]*2
+        height: self.minimum_height
+        text_size: self.size 
+        font_size: root.height/40
+        padding: 6,6,6,6
+
+    Widget:
+        id: text_box_background
+        canvas:
+            Color:
+                rgba: .2,.2,.2,.3
+            RoundedRectangle:
+                size: size_indicator.width + size_indicator.height / 2, size_indicator.size[1]
+                pos: playlists_label.x + playlists_label.padding[0] - size_indicator.height / 4, root.height * (3/4)
+                radius: size_indicator.height / 2,
+
+    TextInput:
+        id: playlist_search
+        bold: True
+        width: root.width - playlists_label.padding[0]*2
+        height: self.minimum_height
+        background_color: 0,0,0,0
+        foreground_color: 1,1,1,1
+        cursor_color: 1,1,1,1
+        multiline: False
+        x: playlists_label.x + playlists_label.padding[0]
+        y: root.height * (3/4)
+        halign: "left"
+        hint_text: "Search in Playlists"
+        text_size: self.size 
+        font_size: root.height/40
+        padding: size_indicator.padding
+        on_text: root.on_text()
+    
+    RecycleView:
+        id: playlists
+        viewclass: "PlaylistButton"
+        width: root.width
+        height: playlist_search.y - playlist_search.height
+        bar_width: dp(10)
+        scroll_type: ["bars", "content"]
+        scroll_distance: 1
+        RecycleBoxLayout:
+            default_size: None, size_indicator.size[1]*2
+            default_size_hint: 1, None
+            size_hint: None, None
+            height: self.minimum_height
+            width: root.width
+            orientation:  "vertical"
+            background_color: 1,1,1,0.3

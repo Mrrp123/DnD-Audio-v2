@@ -684,7 +684,7 @@ class SongsScreen(Screen):
     #     else:
     #         print("Not adding data...")
 
-class SongsDisplay(Widget):
+class SongsDisplayBase(Widget):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -704,18 +704,21 @@ class SongsDisplay(Widget):
         self.sort_by = "date_added"
         self.reverse_sort = True
         self.sort_buttons[f"sort_{self.sort_by}"].sort_checkbox.active = True
-        
-        if len(self.app.music_database) != 0:
-            self.track_list.data = [
-                {"track_id" : self.app.music_database.data["tracks"][track]["id"]} 
-                for track in self.app.music_database.data["tracks"].keys()
-                ]
-            
-            self.track_list.data.sort(
-                key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
-            self.app.music_database.valid_pointers.sort(
-                key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
         self.update_clock = None
+
+        self.initalize_tracks()
+    
+    def back_button_on_release(self, *args):
+        """
+        Defined by subclass to choose what the back button does
+        """
+
+    def initalize_tracks(self):
+        """
+        Defined by subclass to load in items to recycleview
+        """
+        pass
+        
 
     def on_text(self):
         """
@@ -755,16 +758,54 @@ class SongsDisplay(Widget):
         self.track_list.scroll_y = 1
     
     def refresh_tracks(self):
+        """
+        Defined by subclass to load in items to recycleview
+        """
+        pass
 
+
+class SongsDisplay(SongsDisplayBase):
+
+    def on_parent(self, *args):
+
+        self.back_button: Button = self.ids.back_button
+        self.back_button.text = "\u2039 Library"
+
+        self.song_label: Label = self.ids.main_label
+        self.song_label.text = "Songs"
+
+        self.track_search.hint_text = "Search in Songs"
+    
+    def back_button_on_release(self, *args):
+        self.parent.manager.transition.direction = "right"
+        self.parent.manager.current = "library"
+
+
+    def initalize_tracks(self):
+        if len(self.app.music_database) != 0:
+            self.track_list.data = [
+                {   "track_id" : self.app.music_database.data["tracks"][track]["id"],
+                 "playlist_id" : 0} 
+                for track in self.app.music_database.data["tracks"].keys()
+                ]
+            
+            self.track_list.data.sort(
+                key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
+            self.app.music_database.valid_pointers.sort(
+                key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
+    
+    def refresh_tracks(self):
         if self.track_search.text == "":
             self.track_list.data = [
-            {"track_id" : self.app.music_database.data["tracks"][track]["id"]} 
+            {   "track_id" : self.app.music_database.data["tracks"][track]["id"],
+             "playlist_id" : 0} 
             for track in self.app.music_database.data["tracks"].keys()
             ]
         
         else:
             self.track_list.data = [
-            {"track_id" : self.app.music_database.data["tracks"][track]["id"]} 
+            {   "track_id" : self.app.music_database.data["tracks"][track]["id"],
+             "playlist_id" : 0}
             for track in self.app.music_database.data["tracks"].keys()
             if self.track_search.text.lower() in self.app.music_database.data["tracks"][track]["name"].lower()
             or self.track_search.text.lower() in self.app.music_database.data["tracks"][track]["artist"].lower()
@@ -775,6 +816,7 @@ class SongsDisplay(Widget):
         self.app.music_database.valid_pointers.sort(
             key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
 
+
 class SongButton(Widget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -783,7 +825,8 @@ class SongButton(Widget):
         self.app: DndAudio = App.get_running_app()
         self.main_display: MainDisplay = self.app.root.get_screen("main").main_display
         self.touch_down_called = False
-        self.track_id: int # This gets set by the SongsDisplay init
+        self.track_id: int # This gets set by the SongsDisplay/PlaylistSongsDisplay init
+        self.playlist_id: int # This also gets set by the SongsDisplayBase/PlaylistSongsDisplay init
 
         self.name_label: Label = self.ids.name_label
         self.artist_label: Label = self.ids.artist_label
@@ -811,6 +854,8 @@ class SongButton(Widget):
         self.background_color = 0, 0, 0, 1
         if self.y < touch.y < self.y + self.height and self.touch_down_called:
             status, pause_flag = self.app.get_audioplayer_attr("status", "pause_flag")
+
+            self.app.music_database.set_playlist(self.playlist_id)
 
             if status == "idle":
                 self.app.music_database.set_track(self.track_id)
@@ -907,11 +952,171 @@ class SettingsDisplay(Widget):
     
     def get_debug_info(self, dt):
         try:
-            self.debug_info_label.text = "Debug Info:" + self.app.get_audioplayer_attr("debug_string")
+            if self.app.music_database.current_playlist_id:
+                self.debug_info_label.text = (
+                "Debug Info:\n" +
+                f"Current Playlist: {self.app.music_database.data["playlists"][self.app.music_database.current_playlist_id]["name"]}" +
+                self.app.get_audioplayer_attr("debug_string")
+                )
+            else:
+                self.debug_info_label.text = (
+                "Debug Info:\n" +
+                f"Current Playlist: None" +
+                self.app.get_audioplayer_attr("debug_string")
+                )
         except:
             pass
 
+class LibraryScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.library_display = LibraryDisplay()
+        self.add_widget(self.library_display)
 
+class LibraryDisplay(Widget):
+    pass
+
+
+class PlaylistsScreen(Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.playlist_display = PlaylistsDisplay()
+        self.add_widget(self.playlist_display)
+
+
+class PlaylistsDisplay(Widget):
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.app: DndAudio = App.get_running_app()
+        self.playlists: RecycleView = self.ids.playlists
+        
+        if len(self.app.music_database) != 0:
+            self.playlists.data = [
+                {"playlist_id" : playlist_id} 
+                for playlist_id in self.app.music_database.data["playlists"].keys()
+                ]
+            
+
+class PlaylistSongsScreen(Screen):
+    def __init__(self, playlist_id, **kwargs):
+        super().__init__(**kwargs)
+        self.playlist_songs_display = PlaylistSongsDisplay(playlist_id)
+        self.add_widget(self.playlist_songs_display)
+    
+    def on_leave(self, *args):
+        self.manager.remove_widget(self)
+
+class PlaylistSongsDisplay(SongsDisplayBase):
+
+    def __init__(self, playlist_id, **kwargs):
+        self.playlist_id = playlist_id
+        super().__init__(**kwargs)
+    
+    def on_parent(self, *args):
+
+        self.back_button: Button = self.ids.back_button
+        self.back_button.text = "\u2039 Playlists"
+
+        self.playlist_label: Label = self.ids.main_label
+        self.playlist_label.text = self.app.music_database.data["playlists"][self.playlist_id]["name"]
+
+        self.track_search.hint_text = "Search in Playlist"
+    
+    def back_button_on_release(self, *args):
+        self.parent.manager.transition.direction = "right"
+        self.parent.manager.current = "playlists"
+        
+
+    def initalize_tracks(self):
+        if len(self.app.music_database) != 0:
+            self.track_list.data = [
+                {   "track_id" : track_id,
+                 "playlist_id" : self.playlist_id}
+                for track_id in self.app.music_database.data["playlists"][self.playlist_id]["track_list"]
+                ]
+            
+            self.track_list.data.sort(
+                key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
+            self.app.music_database.valid_pointers.sort(
+                key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
+    
+    def refresh_tracks(self):
+        if self.track_search.text == "":
+            self.track_list.data = [
+            {   "track_id" : track_id,
+             "playlist_id" : self.playlist_id} 
+            for track_id in self.app.music_database.data["playlists"][self.playlist_id]["track_list"]
+            ]
+        
+        else:
+            self.track_list.data = [
+            {   "track_id" : track_id,
+             "playlist_id" : self.playlist_id} 
+            for track_id in self.app.music_database.data["playlists"][self.playlist_id]["track_list"]
+            if self.track_search.text.lower() in self.app.music_database.data["tracks"][track_id]["name"].lower()
+            or self.track_search.text.lower() in self.app.music_database.data["tracks"][track_id]["artist"].lower()
+            ]
+            
+        self.track_list.data.sort(
+            key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
+        self.app.music_database.valid_pointers.sort(
+            key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
+
+
+class ScreenSelectionButton(Widget):
+
+    # This is just the name of the screen that we link to
+    screen_link_name = StringProperty("")
+    transition_direction = StringProperty("left")
+
+    # The text displayed for the button
+    display_name = StringProperty("")
+    
+    # Wait until labels are initialized to set values
+    def on_kv_post(self, *args):
+        
+        self.app: DndAudio = App.get_running_app()
+        self.display_label: Label = self.ids.screen_label
+        self.display_label.text = self.display_name
+        
+    def on_touch_down(self, touch: MotionEvent):
+        if self.y < touch.y < self.y + self.height:
+            self.touch_down_called = True
+            self.background_color = 0.52941176, 0.52941176, 0.52941176, 0.71372549 # hex 878787B6
+            return True
+
+    def on_touch_up(self, touch: MotionEvent):
+        self.background_color = 0, 0, 0, 1
+        if self.y < touch.y < self.y + self.height and self.touch_down_called:
+            self.app.root.transition.direction = self.transition_direction
+            self.app.root.current = self.screen_link_name
+            return True
+        self.touch_down_called = False
+
+class PlaylistButton(ScreenSelectionButton):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.playlist_id: int # this gets set by PlaylistDisplay init
+
+    def on_parent(self, *args):
+        self.app: DndAudio = App.get_running_app()
+
+        self.display_label: Label = self.ids.screen_label
+        self.display_label.text = self.app.music_database.data["playlists"][self.playlist_id]["name"]
+        self.screen_link_name = self.app.music_database.data["playlists"][self.playlist_id]["persistent_id"]
+
+    def on_touch_up(self, touch: MotionEvent):
+        self.background_color = 0, 0, 0, 1
+        if self.y < touch.y < self.y + self.height and self.touch_down_called:
+            self.app.root.add_widget(PlaylistSongsScreen(self.playlist_id, name=self.screen_link_name))
+            self.app.root.transition.direction = self.transition_direction
+            self.app.root.current = self.screen_link_name
+            return True
+        self.touch_down_called = False
 
 class DndAudio(App):
 
@@ -951,20 +1156,28 @@ class DndAudio(App):
         # so the on_drop_file event works correctly.
         Window.on_dropfile = nothing
         Window.bind(on_drop_file=self._file_drop_handler)
+        Window.bind(on_resize=self.on_resize)
         if platform != "android":
             Window.size = (375, 700)
+        
+        self.width = Window.width
+        self.height = Window.height
         
         self.root: ScreenManager
         sm = ScreenManager(transition=NoTransition())
         sm.add_widget(SongsScreen(name="songs"))
         sm.add_widget(MainScreen(name="main"))
         sm.add_widget(SettingsScreen(name="settings"))
+        sm.add_widget(LibraryScreen(name="library"))
+        sm.add_widget(PlaylistsScreen(name="playlists"))
         sm.transition.direction = "right"
         sm.current = "main"
         sm.transition = SlideTransition()
         return sm
 
-
+    def on_resize(self, window, width, height):
+        self.width = width
+        self.height = height
 
     def start_audio_player(self):
         self.set_audioplayer_attr("status", "playing")

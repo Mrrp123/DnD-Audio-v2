@@ -12,6 +12,7 @@ from io import BytesIO
 from ast import literal_eval
 import random
 import hashlib
+import copy
 from typing import TypeVar, Generic, TypedDict
 K = TypeVar("K")
 V = TypeVar("V")
@@ -150,14 +151,20 @@ class MusicDatabase():
         try:
             self.data: UpdatingDict[str, UpdatingDict[int, TrackInfo|PlaylistInfo]] = UpdatingDict(self.load_yaml(database_file))
             self.track_pointer = list(self.data["tracks"].keys())[0] # id pointer to a song in self.database["tracks"]
-            self.valid_pointers = list(self.data["tracks"].keys())
+            self.playlist_pointer_dict = {0 : list(self.data["tracks"].keys())} # 0 is a special playlist id for all songs
+            self.playlist_pointer_dict.update({playlist_id : self.data["playlists"][playlist_id]["track_list"] for playlist_id in self.data["playlists"].keys()})
+
+            self.valid_pointers = self.playlist_pointer_dict[0]
+            self.current_playlist_id = 0
             
-            # We don't want to modify self.valid_pointers directly when we shuffle, make an identical copy that we can use for later
+            # We don't want to modify pointer list directly when we shuffle, make an identical copy that we can use for later
             self.shuffled_valid_pointers = list(self.data["tracks"].keys())
         
         except OSError:
             self.data = {}
             self.track_pointer = None
+            self.current_playlist_id = None
+            self.playlist_pointer_dict = {}
             self.valid_pointers = []
             self.shuffled_valid_pointers = []
 
@@ -306,6 +313,14 @@ class MusicDatabase():
         self._shuffle = shuffle
         if shuffle:
             random.shuffle(self.shuffled_valid_pointers)
+    
+    def set_playlist(self, playlist_id):
+        """
+        Sets the playlist from which to play tracks from. Set playlist_id to zero to return to all tracks
+        """
+        self.current_playlist_id = playlist_id
+        self.valid_pointers = self.playlist_pointer_dict[playlist_id]
+        self.shuffled_valid_pointers = copy.deepcopy(self.playlist_pointer_dict[playlist_id])
 
     def next(self):
         return self >> 1
