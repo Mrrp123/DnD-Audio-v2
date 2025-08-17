@@ -18,19 +18,19 @@
     Button:
         id: song_page
         bold: True
-        width: min(root.height / 4, root.width / 3)
-        height: root.height / 10
+        width: min(app.height / 4, app.width / 3)
+        height: app.height / 10
         background_color: 1,1,1,0
         color: 0, 1, 1, 1
         disabled_color: 0, 1, 1, 1
-        x: root.width - self.width
-        y: root.height - self.height
+        x: app.width - self.width
+        y: app.height - self.height
         size_hint: None, None
         text: "Library \u203A"
         halign: "right"
         valign: "top"
         text_size: self.size
-        font_size: root.height/32
+        font_size: app.height/32
         padding: (0, "15dp", "12dp", 0)
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
@@ -41,19 +41,19 @@
     Button:
         id: settings
         bold: True
-        width: min(root.height / 4, root.width / 3)
-        height: root.height / 10
+        width: min(app.height / 4, app.width / 3)
+        height: app.height / 10
         background_color: 1,1,1,0
         color: 0, 1, 1, 1
         disabled_color: 0, 1, 1, 1
         x: 0
-        y: root.height - self.height
+        y: app.height - self.height
         size_hint: None, None
         text: "\u2039 Settings"
         halign: "left"
         valign: "top"
         text_size: self.size
-        font_size: root.height/32
+        font_size: app.height/32
         padding: ("12dp", "15dp", 0, 0)
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
@@ -66,8 +66,8 @@
         source: f"{app_folder}/assets/covers/default_cover.png"
         #color: 1,1,1,0.5
         size_hint: None, None
-        size: root.height * (1/3), min(1/self.image_ratio * root.height * (1/3), root.height * (1/3))
-        x: -root.width * 2
+        size: app.height * (1/3), min(1/self.image_ratio * app.height * (1/3), app.height * (1/3))
+        x: -app.width * 2
         fit_mode: "scale-down"
         mipmap: True
         canvas:
@@ -77,7 +77,7 @@
                 rgba: 1,1,1,1
             RoundedRectangle:
                 size: self.size
-                pos: root.width / 2 - self.size[0] / 2, root.height - self.size[1] / 2 - root.height * (1/3)
+                pos: app.width / 2 - self.size[0] / 2, app.height - self.size[1] / 2 - app.height * (1/3)
                 radius: self.size[1] / 12,
             
             # Draw song cover
@@ -85,7 +85,7 @@
             Rectangle:
                 texture: self.texture
                 size: self.size
-                pos: root.width / 2 - self.size[0] / 2, root.height - self.size[1] / 2 - root.height * (1/3)
+                pos: app.width / 2 - self.size[0] / 2, app.height - self.size[1] / 2 - app.height * (1/3)
 
             # Remove mask (so that we can draw the rest of the frame)
             StencilUnUse
@@ -93,7 +93,7 @@
                 rgba: 1,1,1,1
             RoundedRectangle:
                 size: self.size
-                pos: root.width / 2 - self.size[0] / 2, root.height - self.size[1] / 2 - root.height * (1/3)
+                pos: app.width / 2 - self.size[0] / 2, app.height - self.size[1] / 2 - app.height * (1/3)
                 radius: self.size[1] / 12,
 
             # Clear the stencil object
@@ -105,15 +105,15 @@
         min: 0
         max: 1000
         size_hint: None, None
-        width: root.width * (11/12) - dp(32)
+        width: app.width * (11/12) - dp(32)
         height: "48dp"
         disabled: True
         background_horizontal: f"{app_folder}/assets/buttons/empty.png"
         cursor_image: f"{app_folder}/assets/buttons/empty.png"
         background_disabled_horizontal: f"{app_folder}/assets/buttons/empty.png"
         cursor_disabled_image: f"{app_folder}/assets/buttons/empty.png"
-        center_x: root.width * (1/2)
-        center_y: root.height * (1/3)
+        center_x: app.width * (1/2)
+        center_y: app.height * (1/3)
         padding: 0
         on_touch_down: root.begin_seek(args[1])
         on_touch_move: root.update_seek(args[1])
@@ -157,15 +157,15 @@
         min: 0
         max: 100
         size_hint: None, None
-        width: root.width * (3/4) - dp(32)
+        width: app.width * (3/4) - dp(32)
         height: "48dp"
         # disabled: False
         background_horizontal: f"{app_folder}/assets/buttons/empty.png"
         cursor_image: f"{app_folder}/assets/buttons/empty.png"
         background_disabled_horizontal: f"{app_folder}/assets/buttons/empty.png"
         cursor_disabled_image: f"{app_folder}/assets/buttons/empty.png"
-        center_x: root.width * (1/2)
-        center_y: root.height * (1/7)
+        center_x: app.width * (1/2)
+        center_y: app.height * (1/7)
         padding: 0
         on_touch_down: root.begin_change_volume(args[1])
         on_touch_move: root.update_volume(args[1])
@@ -236,12 +236,12 @@
         size_hint: None, None
         x: 0
         y: audio_position_slider.center_y - dp(12) - self.height
-        #center_y: root.height * (13/48)
+        #center_y: app.height * (13/48)
         halign: "left"
         text: "0:00"
-        text_size: root.width/2 - 1, None
+        text_size: app.width/2 - 1, None
         size: self.texture_size
-        font_size: root.height/46
+        font_size: app.height/46
         padding: audio_position_slider.x + dp(2), 0, 0, 0
 
     
@@ -251,23 +251,23 @@
         color: 1,1,1,1
         disabled_color: 1,1,1,1
         size_hint: None, None
-        x: root.width/2
+        x: app.width/2
         y: audio_position_slider.center_y - dp(12) - self.height
-        #center_y: root.height * (13/48)
+        #center_y: app.height * (13/48)
         halign: "right"
         text: "-0:00"
-        text_size: root.width/2, None
+        text_size: app.width/2, None
         size: self.texture_size
-        font_size: root.height/46
+        font_size: app.height/46
         padding: 0, 0, audio_position_slider.x + dp(2), 0
 
 
     ScrollView:
         id: track_artist_scrollview
-        x: round(root.width * (1/2) - (root.width * (11/12) - dp(32)) / 2 + dp(2))
-        y: root.height * (1/3) + dp(24)
+        x: round(app.width * (1/2) - (app.width * (11/12) - dp(32)) / 2 + dp(2))
+        y: app.height * (1/3) + dp(24)
         size_hint: None, None
-        size: root.width - 2 * self.x, root.height/30
+        size: app.width - 2 * self.x, app.height/30
         do_scroll_x: False # We just want to scroll, but don't want the user to do it
         do_scroll_y: False
         bar_color: 0,0,0,0
@@ -286,14 +286,14 @@
             halign: "left"
             text: ""
             size: self.texture_size
-            font_size: root.height/35
+            font_size: app.height/35
 
     ScrollView:
         id: track_name_scrollview
-        x: round(root.width * (1/2) - (root.width * (11/12) - dp(32)) / 2 + dp(2))
-        center_y: (track_artist_scrollview.center_y + root.height/30)# + root.height/35
+        x: round(app.width * (1/2) - (app.width * (11/12) - dp(32)) / 2 + dp(2))
+        center_y: (track_artist_scrollview.center_y + app.height/30)# + app.height/35
         size_hint: None, None
-        size: root.width - 2 * self.x, root.height/30
+        size: app.width - 2 * self.x, app.height/30
         do_scroll_x: False # We just want to scroll, but don't want the user to do it
         do_scroll_y: False
         bar_color: 0,0,0,0
@@ -312,20 +312,20 @@
             halign: "left"
             text: ""
             size: self.texture_size
-            font_size: root.height/35
+            font_size: app.height/35
         
 
     Button:
         id: previous_track
         bold: True
         size_hint: None, None
-        width: root.height * (15/224)
+        width: app.height * (15/224)
         height: self.width
-        x: root.width * (1/4) - self.width / 2
+        x: app.width * (1/4) - self.width / 2
         y: (audio_position_slider.center_y + volume_slider.center_y) / 2 - self.height / 2
         disabled: True
-        # center_x: root.width * (1/4)
-        # center_y: root.height * (1/6)
+        # center_x: app.width * (1/4)
+        # center_y: app.height * (1/6)
         on_touch_up: root.get_tap_type(args[1])
 
         background_normal: f"{app_folder}/assets/buttons/backward_skip_normal.png"
@@ -338,13 +338,13 @@
         id: next_track
         bold: True
         size_hint: None, None
-        width: root.height * (15/224)
+        width: app.height * (15/224)
         height: self.width
-        x: root.width * (3/4) - self.width / 2
+        x: app.width * (3/4) - self.width / 2
         y: (audio_position_slider.center_y + volume_slider.center_y) / 2 - self.height / 2
         disabled: True
-        # center_x: root.width * (3/4)
-        # center_y: root.height * (1/6)
+        # center_x: app.width * (3/4)
+        # center_y: app.height * (1/6)
         on_touch_up: root.get_tap_type(args[1])
         
         background_normal: f"{app_folder}/assets/buttons/forward_skip_normal.png"
@@ -357,12 +357,12 @@
         id: pause
         bold: True
         size_hint: None, None
-        width: root.height * (15/224)
+        width: app.height * (15/224)
         height: self.width
-        x: root.width * (1/2) - self.width / 2
+        x: app.width * (1/2) - self.width / 2
         y: (audio_position_slider.center_y + volume_slider.center_y) / 2 - self.height / 2
-        # center_x: root.width * (1/2)
-        # center_y: root.height * (1/6)
+        # center_x: app.width * (1/2)
+        # center_y: app.height * (1/6)
         on_release: root.pause_music()
 
         background_normal: f"{app_folder}/assets/buttons/play_normal.png"
@@ -375,7 +375,7 @@
         id: reverse
         bold: True
         size_hint: None, None
-        width: root.height * (12/224)
+        width: app.height * (12/224)
         height: self.width
         center_x: previous_track.center_x
         center_y: volume_slider.center_y / 2
@@ -391,14 +391,14 @@
         id: zawarudo
         bold: True
         size_hint: None, None
-        width: root.height * (15/224)
+        width: app.height * (15/224)
         height: self.width
         disabled_color: 1,1,1,1
         background_color: 0,1,1,1
         disabled_background_color: 0,1,1,1
-        x: root.width * (1/2) - self.width/2
-        center_x: root.width * (1/2)
-        center_y: root.height * (11/12)
+        x: app.width * (1/2) - self.width/2
+        center_x: app.width * (1/2)
+        center_y: app.height * (11/12)
         text: "ZA WARUDO!!!"
         on_release: root.stop_time()
 
@@ -408,7 +408,7 @@
         id: shuffle
         bold: True
         size_hint: None, None
-        width: root.height * (15/224)
+        width: app.height * (15/224)
         height: self.width
         center_x: pause.center_x
         center_y: volume_slider.center_y / 2
@@ -424,7 +424,7 @@
         id: repeat
         bold: True
         size_hint: None, None
-        width: root.height * (15/224)
+        width: app.height * (15/224)
         height: self.width
         center_x: next_track.center_x
         center_y: volume_slider.center_y / 2
@@ -548,18 +548,18 @@
     Button:
         id: back_button
         bold: True
-        width: min(root.height / 4, root.width / 3)
-        height: root.height / 10
+        width: min(app.height / 4, app.width / 3)
+        height: app.height / 10
         background_color: 1,1,1,0
         color: 0, 1, 1, 1
         x: 0
-        y: root.height - self.height
+        y: app.height - self.height
         # text: "\u2039 Library"
         halign: "left"
         valign: "top"
         text_size: self.size
         # size: self.texture_size
-        font_size: root.height/32
+        font_size: app.height/32
         padding: ("12dp", "15dp", 0, 0)
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
@@ -569,15 +569,15 @@
         id: main_label
         bold: True
         color: 1,1,1,1
-        width: root.width
-        height: root.height/20
+        width: app.width
+        height: app.height/20
         x: 0
-        y: root.height - root.height / 6
+        y: app.height - app.height / 6
         halign: "left"
         # text: "Songs"
         text_size: self.size
         #size: self.texture_size
-        font_size: root.height/20
+        font_size: app.height/20
         padding: ("23dp", "15dp", 0, 0)
 
 
@@ -585,9 +585,9 @@
         text: "Song Sort"
         halign: "center"
         valign: "center"
-        x: root.width - self.width*2
+        x: app.width - self.width*2
         center_y: back_button.center_y - 2
-        size: root.height/20, root.height/20
+        size: app.height/20, app.height/20
         #background_normal: "./assets/icon/icon.png"
         on_release: 
             dropdown.open(self)
@@ -601,7 +601,7 @@
         DropDown:
             id: dropdown
             auto_width: False
-            width: root.width * 0.5
+            width: app.width * 0.5
             # Prevent the dropdown from opening on startup and eating the first input
             on_kv_post: self.dismiss()
             
@@ -703,10 +703,10 @@
         foreground_color: 0,0,0,0
         disabled: True
         visible: False
-        width: root.width - main_label.padding[0]*2
+        width: app.width - main_label.padding[0]*2
         height: self.minimum_height
         text_size: self.size 
-        font_size: root.height/40
+        font_size: app.height/40
         padding: 6,6,6,6
 
     Widget:
@@ -716,31 +716,31 @@
                 rgba: .2,.2,.2,.3
             RoundedRectangle:
                 size: size_indicator.width + size_indicator.height / 2, size_indicator.size[1]
-                pos: main_label.x + main_label.padding[0] - size_indicator.height / 4, root.height * (3/4)
+                pos: main_label.x + main_label.padding[0] - size_indicator.height / 4, app.height * (3/4)
                 radius: size_indicator.height / 2,
 
     TextInput:
         id: track_search
         bold: True
-        width: root.width - main_label.padding[0]*2
+        width: app.width - main_label.padding[0]*2
         height: self.minimum_height
         background_color: 0,0,0,0
         foreground_color: 1,1,1,1
         cursor_color: 1,1,1,1
         multiline: False
         x: main_label.x + main_label.padding[0]
-        y: root.height * (3/4)
+        y: app.height * (3/4)
         halign: "left"
         # hint_text: "Search in Songs"
         text_size: self.size 
-        font_size: root.height/40
+        font_size: app.height/40
         padding: size_indicator.padding
         on_text: root.on_text()
     
     RecycleView:
         id: track_list
         viewclass: "SongButton"
-        width: root.width
+        width: app.width
         height: track_search.y - track_search.height
         bar_width: dp(10)
         scroll_type: ["bars", "content"]
@@ -750,7 +750,7 @@
             default_size_hint: 1, None
             size_hint: None, None
             height: self.minimum_height
-            width: root.width
+            width: app.width
             orientation:  "vertical"
             background_color: 1,1,1,0.3
 
@@ -759,13 +759,13 @@
         id: add_song
         bold: True
         size_hint: None, None
-        width: root.height * (11/224)
+        width: app.height * (11/224)
         height: self.width
         disabled_color: 1,1,1,1
         background_color: 0.23137254901960785,1,0.333,1 #3bff55ff
         disabled_background_color:0.23137254901960785,1,0.333,1
-        x: dp(23) * 2 + CoreLabel(font_size=root.height/20, bold=True).get_extents("Songs")[0]
-        center_y: (root.height - root.height / 6) + root.height/40 #self.main_label.center_y
+        x: dp(23) * 2 + CoreLabel(font_size=app.height/20, bold=True).get_extents("Songs")[0]
+        center_y: (app.height - app.height / 6) + app.height/40 #self.main_label.center_y
         text: "Add Song"
         on_release: app.filechooser.open_file(multiple=True, filters=["*.mp3;*.ogg;*.wav"], on_selection=app._add_file_handler)
         border: (0,0,0,0)
@@ -785,12 +785,12 @@
         bold: True
         color: 1,1,1,1
         x: 0
-        y: root.height * (40/48)
+        y: app.height * (40/48)
         halign: "left"
         text: "Crossfade Duration:"
-        text_size: root.width, None
+        text_size: app.width, None
         size: self.texture_size
-        font_size: root.height/32
+        font_size: app.height/32
         padding: "32dp", 0, 0, 0
     
     Slider:
@@ -798,11 +798,11 @@
         min: 0
         max: 12000
         step: 1000
-        width: root.width * (3/4)
+        width: app.width * (3/4)
         height: "48dp"
         background_color: 1,1,1,1
         x: "16dp"
-        center_y: root.height * (38/48)
+        center_y: app.height * (38/48)
         on_touch_up: root.change_fade_duration(args[1])
         padding: "16dp"
     
@@ -811,12 +811,12 @@
         bold: True
         color: 1,1,1,1
         x: fade_slider.x + fade_slider.width
-        y: root.height * (38/48) - self.height/2
+        y: app.height * (38/48) - self.height/2
         halign: "left"
         text: f"{int(fade_slider.value / 1000)}s"
-        text_size: root.width, None
+        text_size: app.width, None
         size: self.texture_size
-        font_size: root.height/32
+        font_size: app.height/32
         padding: "8dp", 0, 0, 0
     
     Label:
@@ -824,12 +824,12 @@
         bold: True
         color: 1,1,1,1
         x: 0
-        y: root.height * (33/48)
+        y: app.height * (33/48)
         halign: "left"
         text: "Playback Speed:"
-        text_size: root.width, None
+        text_size: app.width, None
         size: self.texture_size
-        font_size: root.height/32
+        font_size: app.height/32
         padding: "32dp", 0, 0, 0
 
     Slider:
@@ -837,11 +837,11 @@
         min: 50
         max: 200
         step: 5
-        width: root.width * (3/4)
+        width: app.width * (3/4)
         height: 35
         #background_color: 1,1,1,1
         x: "16dp"
-        center_y: root.height * (31/48)
+        center_y: app.height * (31/48)
         on_touch_up: root.change_speed(args[1])
         padding: "16dp"
     
@@ -850,45 +850,45 @@
         bold: True
         color: 1,1,1,1
         x: speed_slider.x + speed_slider.width
-        y: root.height * (31/48) - self.height/2
+        y: app.height * (31/48) - self.height/2
         halign: "left"
         text: f"{speed_slider.value / 100:.2f}x"
-        text_size: root.width, None
+        text_size: app.width, None
         size: self.texture_size
-        font_size: root.height/32
+        font_size: app.height/32
         padding: "8dp", 0, 0, 0
     
     Label:
         id: fps
         bold: True
         color: 1,1,0,1
-        center_x: root.width * (1/2)
-        center_y: root.height * (1/2)
+        center_x: app.width * (1/2)
+        center_y: app.height * (1/2)
         text: "0"
     
     Label:
         id: debug_info
         bold: True
         color: 0,0.7,1,1
-        center_x: root.width * (2/4)
-        center_y: root.height * (3/16)
+        center_x: app.width * (2/4)
+        center_y: app.height * (3/16)
         halign: "left"
         text: "Audio player currently not active"
-        text_size: root.width * (11/12), None
+        text_size: app.width * (11/12), None
     
     Button:
         bold: True
-        width: min(root.height / 4, root.width / 3)
-        height: root.height / 10
+        width: min(app.height / 4, app.width / 3)
+        height: app.height / 10
         background_color: 1,1,1,0
         color: 0, 1, 1, 1
-        x: root.width - self.width
-        y: root.height - self.height
+        x: app.width - self.width
+        y: app.height - self.height
         text: "Back \u203A"
         halign: "right"
         valign: "top"
         text_size: self.size
-        font_size: root.height/32
+        font_size: app.height/32
         padding: (0, "15dp", "12dp", 0)
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
@@ -985,18 +985,18 @@
     Button:
         id: library_back
         bold: True
-        width: min(root.height / 4, root.width / 3)
-        height: root.height / 10
+        width: min(app.height / 4, app.width / 3)
+        height: app.height / 10
         background_color: 1,1,1,0
         color: 0, 1, 1, 1
         x: 0
-        y: root.height - self.height
+        y: app.height - self.height
         text: "\u2039 Back"
         halign: "left"
         valign: "top"
         text_size: self.size
         # size: self.texture_size
-        font_size: root.height/32
+        font_size: app.height/32
         padding: ("12dp", "15dp", 0, 0)
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
@@ -1008,21 +1008,21 @@
         id: library_label
         bold: True
         color: 1,1,1,1
-        width: root.width/2
-        height: root.height/20
+        width: app.width/2
+        height: app.height/20
         x: 0
-        y: root.height - root.height / 6
+        y: app.height - app.height / 6
         halign: "left"
         text: "Library"
         text_size: self.size
         #size: self.texture_size
-        font_size: root.height/20
+        font_size: app.height/20
         padding: ("23dp", "15dp", 0, 0)
 
     BoxLayout:
         orientation: "vertical"
-        width: root.width
-        height: (CoreLabel(font_size=root.height/40).get_extents("_")[1]+12)*4 # Same size as size_indicator.height * 4 (what we use for songs page)
+        width: app.width
+        height: (CoreLabel(font_size=app.height/40).get_extents("_")[1]+12)*4 # Same size as size_indicator.height * 4 (what we use for songs page)
         x: 0
         y: round(library_label.y - self.height - library_label.height / 4) # round position else seperator lines look funny
 
@@ -1041,18 +1041,18 @@
     Button:
         id: playlists_back
         bold: True
-        width: min(root.height / 4, root.width / 3)
-        height: root.height / 10
+        width: min(app.height / 4, app.width / 3)
+        height: app.height / 10
         background_color: 1,1,1,0
         color: 0, 1, 1, 1
         x: 0
-        y: root.height - self.height
+        y: app.height - self.height
         text: "\u2039 Library"
         halign: "left"
         valign: "top"
         text_size: self.size
         # size: self.texture_size
-        font_size: root.height/32
+        font_size: app.height/32
         padding: ("12dp", "15dp", 0, 0)
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
@@ -1064,14 +1064,14 @@
         id: playlists_label
         bold: True
         color: 1,1,1,1
-        width: root.width/2
-        height: root.height/20
+        width: app.width/2
+        height: app.height/20
         x: 0
-        y: root.height - root.height / 6
+        y: app.height - app.height / 6
         halign: "left"
         text: "Playlists"
         text_size: self.size
-        font_size: root.height/20
+        font_size: app.height/20
         padding: ("23dp", "15dp", 0, 0)
     
     TextInput: # This exists only to help the rounded rectangle figure out its height, it mimics the settings of playlist_search
@@ -1080,10 +1080,10 @@
         foreground_color: 0,0,0,0
         disabled: True
         visible: False
-        width: root.width - playlists_label.padding[0]*2
+        width: app.width - playlists_label.padding[0]*2
         height: self.minimum_height
         text_size: self.size 
-        font_size: root.height/40
+        font_size: app.height/40
         padding: 6,6,6,6
 
     Widget:
@@ -1093,31 +1093,31 @@
                 rgba: .2,.2,.2,.3
             RoundedRectangle:
                 size: size_indicator.width + size_indicator.height / 2, size_indicator.size[1]
-                pos: playlists_label.x + playlists_label.padding[0] - size_indicator.height / 4, root.height * (3/4)
+                pos: playlists_label.x + playlists_label.padding[0] - size_indicator.height / 4, app.height * (3/4)
                 radius: size_indicator.height / 2,
 
     TextInput:
         id: playlist_search
         bold: True
-        width: root.width - playlists_label.padding[0]*2
+        width: app.width - playlists_label.padding[0]*2
         height: self.minimum_height
         background_color: 0,0,0,0
         foreground_color: 1,1,1,1
         cursor_color: 1,1,1,1
         multiline: False
         x: playlists_label.x + playlists_label.padding[0]
-        y: root.height * (3/4)
+        y: app.height * (3/4)
         halign: "left"
         hint_text: "Search in Playlists"
         text_size: self.size 
-        font_size: root.height/40
+        font_size: app.height/40
         padding: size_indicator.padding
         on_text: root.on_text()
     
     RecycleView:
         id: playlists
         viewclass: "PlaylistButton"
-        width: root.width
+        width: app.width
         height: playlist_search.y - playlist_search.height
         bar_width: dp(10)
         scroll_type: ["bars", "content"]
@@ -1127,6 +1127,6 @@
             default_size_hint: 1, None
             size_hint: None, None
             height: self.minimum_height
-            width: root.width
+            width: app.width
             orientation:  "vertical"
             background_color: 1,1,1,0.3
