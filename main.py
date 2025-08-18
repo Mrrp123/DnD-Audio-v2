@@ -1167,9 +1167,6 @@ class DndAudio(App):
         if platform != "android":
             Window.size = (375, 700)
         
-        self.width = Window.width
-        self.height = Window.height
-        
         self.root: ScreenManager
         sm = ScreenManager(transition=NoTransition())
         sm.add_widget(SongsScreen(name="songs"))
