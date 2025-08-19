@@ -524,10 +524,11 @@
 <SortButton>:
     orientation: "horizontal"
     text: ""
+    checkbox_group: ""
     sort_by: "date_added"
     CheckBox:
         id: sort_checkbox
-        group: "sort_checkbox"
+        group: root.checkbox_group
         size_hint_x: .2
         on_parent: root.sort_checkbox = self
     Label:

@@ -888,6 +888,7 @@ class SortButton(BoxLayout):
     text = StringProperty()
     sort_by = StringProperty("date_added")
     background_color = ColorProperty()
+    checkbox_group = StringProperty()
 
     def on_parent(self, widget, parent):
         # This function gets called (for some reason???) when removing widgets as well I guess
@@ -1558,6 +1559,7 @@ if __name__ == '__main__':
                 button.text = settings["text"]
                 button.sort_by = settings["sort_by"]
                 button.background_color = (0.2, 0.2, 0.2, 1)
+                button.checkbox_group = hex(id(widget))
 
                 self.add_widget(button)
             
