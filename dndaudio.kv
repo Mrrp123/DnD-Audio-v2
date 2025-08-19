@@ -899,7 +899,8 @@
 
 <ScreenSelectionButton>:
     image: ""
-    background_color: 0,0,0,1
+    image_color: 1, 1, 1, 1
+    background_color: 0, 0, 0, 1
     canvas.before:
         Color:
             rgba: self.background_color
@@ -954,8 +955,6 @@
         canvas:
             # Create mask for rounded rectangle for song cover
             StencilPush 
-            Color:
-                rgba: 1,1,1,1
             RoundedRectangle:
                 size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
                 pos: self.parent.x + root.height * (1/6), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))) / 2
@@ -963,6 +962,8 @@
             
             # Draw song cover
             StencilUse
+            Color:
+                rgba: root.image_color
             Rectangle:
                 texture: self.texture
                 size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
@@ -970,8 +971,6 @@
 
             # Remove mask (so that we can draw the rest of the frame)
             StencilUnUse
-            Color:
-                rgba: 1,1,1,1
             RoundedRectangle:
                 size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
                 pos: self.parent.x + root.height * (1/6), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))) / 2
@@ -1028,12 +1027,16 @@
 
         ScreenSelectionButton:
             id: playlists_button
+            image: f"{app_folder}/assets/covers/playlists_icon.png"
+            image_color: 0, 1, 1, 1
             screen_link_name: "playlists"
             display_name: "Playlists"
             
         
         ScreenSelectionButton:
             id: songs_button
+            image: f"{app_folder}/assets/covers/songs_icon.png"
+            image_color: 0, 1, 1, 1
             screen_link_name: "songs"
             display_name: "Songs"
 
