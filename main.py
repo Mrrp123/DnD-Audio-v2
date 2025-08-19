@@ -703,7 +703,10 @@ class SongsDisplayBase(Widget):
 
         self.sort_by = "date_added"
         self.reverse_sort = True
-        self.sort_buttons[self.sort_by].sort_checkbox.active = True
+        try:
+            self.sort_buttons[self.sort_by].sort_checkbox.active = True
+        except KeyError:
+            self.sort_buttons[self.sort_buttons.keys()[0]].sort_checkbox.active = True
         self.update_clock = None
 
         self.initalize_tracks()
@@ -763,6 +766,12 @@ class SongsDisplayBase(Widget):
         """
         pass
 
+    def sort_tracks(self, display=True):
+        """
+        Defined by subclass to sort displayed tracks (recycleview) and the valid_pointers list (music database)
+        """
+        pass
+
 
 class SongsDisplay(SongsDisplayBase):
 
@@ -789,10 +798,7 @@ class SongsDisplay(SongsDisplayBase):
                 for track in self.app.music_database.data["tracks"].keys()
                 ]
             
-            self.track_list.data.sort(
-                key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
-            self.app.music_database.valid_pointers.sort(
-                key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
+            self.sort_tracks()
     
     def refresh_tracks(self):
         if self.track_search.text == "":
@@ -811,10 +817,16 @@ class SongsDisplay(SongsDisplayBase):
             or self.track_search.text.lower() in self.app.music_database.data["tracks"][track]["artist"].lower()
             ]
             
-        self.track_list.data.sort(
-            key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
-        self.app.music_database.valid_pointers.sort(
-            key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
+        self.sort_tracks()
+    
+    def sort_tracks(self, display=True):
+        
+        if display:
+            self.track_list.data.sort(
+                key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
+        if self.app.music_database.current_playlist_id == 0:
+            self.app.music_database.valid_pointers.sort(
+                key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
 
 
 class SongButton(Widget):
@@ -832,17 +844,20 @@ class SongButton(Widget):
         self.artist_label: Label = self.ids.artist_label
         self.song_cover: Image = self.ids.song_cover
 
-    def on_parent(self, *args):
-        self.name = self.app.music_database.data["tracks"][self.track_id]["name"]
-        self.artist = self.app.music_database.data["tracks"][self.track_id]["artist"]
-        self.persistent_id = self.app.music_database.data["tracks"][self.track_id]["persistent_id"]
+    def on_parent(self, widget, parent):
+        if parent is not None:
+            self.name = self.app.music_database.data["tracks"][self.track_id]["name"]
+            self.artist = self.app.music_database.data["tracks"][self.track_id]["artist"]
+            self.persistent_id = self.app.music_database.data["tracks"][self.track_id]["persistent_id"]
 
-        self.name_label.text = self.name
-        self.artist_label.text = self.artist
-        if os.path.isfile(f"{common_vars.app_folder}/cache/small_covers/{self.persistent_id}.jpg"):
-            self.song_cover.source = f"{common_vars.app_folder}/cache/small_covers/{self.persistent_id}.jpg"
-        else:
-            self.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover_small.png"
+            self.name_label.text = self.name
+            self.artist_label.text = self.artist
+            if os.path.isfile(f"{common_vars.app_folder}/cache/small_covers/{self.persistent_id}.jpg"):
+                self.song_cover.source = f"{common_vars.app_folder}/cache/small_covers/{self.persistent_id}.jpg"
+            else:
+                self.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover_small.png"
+
+            self.songs_display: SongsDisplay | PlaylistSongsDisplay = self.parent.parent.parent
     
     def on_touch_down(self, touch: MotionEvent):
         if self.y < touch.y < self.y + self.height:
@@ -856,6 +871,7 @@ class SongButton(Widget):
             status, pause_flag = self.app.get_audioplayer_attr("status", "pause_flag")
 
             self.app.music_database.set_playlist(self.playlist_id)
+            self.songs_display.sort_tracks(display=False)
 
             if status == "idle":
                 self.app.music_database.set_track(self.track_id)
@@ -1046,10 +1062,7 @@ class PlaylistSongsDisplay(SongsDisplayBase):
                 for track_id in self.app.music_database.data["playlists"][self.playlist_id]["track_list"]
                 ]
             
-            self.track_list.data.sort(
-                key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
-            self.app.music_database.valid_pointers.sort(
-                key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
+            self.sort_tracks()
     
     def refresh_tracks(self):
         if self.track_search.text == "":
@@ -1068,10 +1081,25 @@ class PlaylistSongsDisplay(SongsDisplayBase):
             or self.track_search.text.lower() in self.app.music_database.data["tracks"][track_id]["artist"].lower()
             ]
             
-        self.track_list.data.sort(
-            key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
-        self.app.music_database.valid_pointers.sort(
-            key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
+        self.sort_tracks()
+    
+    def sort_tracks(self, display=True):
+        if self.sort_by == "order":
+            if display:
+                self.track_list.data.sort(
+                    key=lambda x : self.app.music_database.data["playlists"][self.playlist_id]["track_list"].index(x["track_id"]), reverse=self.reverse_sort)
+            if self.app.music_database.current_playlist_id == self.playlist_id:
+                self.app.music_database.valid_pointers.sort(
+                    key=lambda x : self.app.music_database.data["playlists"][self.playlist_id]["track_list"].index(x), reverse=self.reverse_sort)
+        else:
+            if display:
+                self.track_list.data.sort(
+                    key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
+            if self.app.music_database.current_playlist_id == self.playlist_id:
+                self.app.music_database.valid_pointers.sort(
+                    key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
+    
+    
 
 
 class ScreenSelectionButton(Widget):
