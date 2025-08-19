@@ -545,6 +545,14 @@
 
 
 <SongsDisplayBase>:
+
+    dropdown_sort_settings:
+        {"text" : "Name", "sort_by" : "name"},\
+        {"text" : "Artist", "sort_by" : "artist"},\
+        {"text" : "Date Added", "sort_by" : "date_added"},\
+        {"text" : "Last Played", "sort_by" : "play_date"},\
+        {"text" : "Plays", "sort_by" : "play_count"}
+
     Button:
         id: back_button
         bold: True
@@ -598,104 +606,12 @@
         __safe_id: [dropdown.__self__]
 
         border: (0,0,0,0)
-        DropDown:
+        SortDropDown:
             id: dropdown
             auto_width: False
             width: app.width * 0.5
-            # Prevent the dropdown from opening on startup and eating the first input
             on_kv_post: self.dismiss()
-            
-            SortButton:
-                id: sort_name
-                text: "Name"
-                sort_by: "name"
-                size_hint_y: None
-                height: size_indicator.size[1]
-                background_color: 0.2, 0.2, 0.2, 1
-                canvas.before:
-                    Color:
-                        rgba: self.background_color
-                    RoundedRectangle:
-                        size: self.size
-                        pos: self.pos
-                        radius: self.height / 3, self.height / 3, 0, 0
-                    Color:
-                        rgba: 1, 1, 1, 1
-                    Line:
-                        width: 1
-                        points: (self.x, self.y, self.x + self.width, self.y)
-            
-            SortButton:
-                id: sort_artist
-                text: "Artist"
-                sort_by: "artist"
-                size_hint_y: None
-                height: size_indicator.size[1]
-                background_color: 0.2, 0.2, 0.2, 1
-                canvas.before:
-                    Color:
-                        rgba: self.background_color
-                    Rectangle:
-                        size: self.size
-                        pos: self.pos
-                    Color:
-                        rgba: 1, 1, 1, 1
-                    Line:
-                        width: 1
-                        points: (self.x, self.y, self.x + self.width, self.y)
-            
-            SortButton:
-                id: sort_date_added
-                text: "Date Added"
-                sort_by: "date_added"
-                size_hint_y: None
-                height: size_indicator.size[1]
-                background_color: 0.2, 0.2, 0.2, 1
-                canvas.before:
-                    Color:
-                        rgba: self.background_color
-                    Rectangle:
-                        size: self.size
-                        pos: self.pos
-                    Color:
-                        rgba: 1, 1, 1, 1
-                    Line:
-                        width: 1
-                        points: (self.x, self.y, self.x + self.width, self.y)
-            
-            SortButton:
-                id: sort_play_date
-                text: "Last Played"
-                sort_by: "play_date"
-                size_hint_y: None
-                height: size_indicator.size[1]
-                background_color: 0.2, 0.2, 0.2, 1
-                canvas.before:
-                    Color:
-                        rgba: self.background_color
-                    Rectangle:
-                        size: self.size
-                        pos: self.pos
-                    Color:
-                        rgba: 1, 1, 1, 1
-                    Line:
-                        width: 1
-                        points: (self.x, self.y, self.x + self.width, self.y)
-            
-            SortButton:
-                id: sort_play_count
-                text: "Plays"
-                sort_by: "play_count"
-                size_hint_y: None
-                height: size_indicator.size[1]
-                background_color: 0.2, 0.2, 0.2, 1
-                canvas.before:
-                    Color:
-                        rgba: self.background_color
-                    RoundedRectangle:
-                        size: self.size
-                        pos: self.pos
-                        radius: 0, 0, self.height/3, self.height/3
+            sort_settings: root.dropdown_sort_settings
 
     TextInput: # This exists only to help the rounded rectangle figure out its height, it mimics the settings of track_search
         id: size_indicator

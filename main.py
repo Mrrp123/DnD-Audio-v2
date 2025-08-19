@@ -10,12 +10,14 @@ from kivy.uix.screenmanager import ScreenManager, Screen, CardTransition, NoTran
 from kivy.uix.effectwidget import EffectWidget
 from kivy.uix.label import Label
 
+from kivy.graphics import Color, Rectangle, RoundedRectangle, Line
+
 from kivy.clock import Clock
 from kivy.animation import Animation
 from kivy.utils import get_color_from_hex, platform
 from tools.kivy_gradient import Gradient
 from tools.shaders import TimeStop
-from kivy.properties import StringProperty, NumericProperty
+from kivy.properties import StringProperty, NumericProperty, ListProperty, ColorProperty
 from kivy.core.text import Label as CoreLabel
 from kivy.metrics import dp
 
@@ -30,7 +32,6 @@ if TYPE_CHECKING:
     from kivy.uix.checkbox import CheckBox
     from kivy.uix.recycleview import RecycleView
     from kivy.uix.textinput import TextInput
-    from kivy.uix.dropdown import DropDown
     from kivy.uix.scrollview import ScrollView
     from kivy.input.motionevent import MotionEvent
     
@@ -686,6 +687,9 @@ class SongsScreen(Screen):
 
 class SongsDisplayBase(Widget):
 
+    # Same ListProperty as SortDropDown, see that for details
+    dropdown_sort_settings = ListProperty()
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -694,16 +698,12 @@ class SongsDisplayBase(Widget):
         self.track_list: RecycleView = self.ids.track_list
         self.track_search: TextInput = self.ids.track_search
         self.sort_buttons: dict[str, SortButton] = {
-                  "sort_name" : self.ids.sort_name,
-                "sort_artist" : self.ids.sort_artist,
-            "sort_date_added" : self.ids.sort_date_added,
-            " sort_play_date" : self.ids.sort_play_date,
-            "sort_play_count" : self.ids.sort_play_count
-        }
+            button.sort_by : button for button in self.ids.dropdown.container.children
+            }
 
         self.sort_by = "date_added"
         self.reverse_sort = True
-        self.sort_buttons[f"sort_{self.sort_by}"].sort_checkbox.active = True
+        self.sort_buttons[self.sort_by].sort_checkbox.active = True
         self.update_clock = None
 
         self.initalize_tracks()
@@ -885,17 +885,25 @@ class SongButton(Widget):
 
 class SortButton(BoxLayout):
 
-    def on_parent(self, *args):
+    text = StringProperty()
+    sort_by = StringProperty("date_added")
+    background_color = ColorProperty()
+
+    def on_parent(self, widget, parent):
+        # This function gets called (for some reason???) when removing widgets as well I guess
+        # If this happens, ignore the rest of the function
+        if parent is None: 
+            return
+        
         # self.songs_display = self.app.root.get_screen("songs").songs_display
 
-        # fucked up way of getting the songs display since the above line doesn't work
-        self.songs_display: SongsDisplay = args[0].parent.parent.parent.parent
+        # fucked up way of getting the songs display since the above line doesn't work during init
+        self.songs_display: SongsDisplay | PlaylistSongsDisplay = self.parent.parent.parent.parent
 
         # Reference to the dropdown in SongsDisplay
         self.songs_display_dropdown: DropDown = self.songs_display.ids.dropdown
 
-        # These are handled in the dndaudio.kv file
-        self.sort_by: str
+        # This is handled in the dndaudio.kv file
         self.sort_checkbox: CheckBox
     
     def on_touch_down(self, touch: MotionEvent):
@@ -1446,7 +1454,7 @@ class DndAudio(App):
             songs_display: SongsDisplay = self.root.get_screen("songs").songs_display
             songs_display.sort_by = sort_by
             songs_display.reverse_sort = sort_by in ("date_added", "play_date", "play_count")
-            songs_display.sort_buttons[f"sort_{sort_by}"].sort_checkbox.active = True
+            songs_display.sort_buttons[sort_by].sort_checkbox.active = True
             songs_display.refresh_tracks()
 
             settings_display: SettingsDisplay = self.root.get_screen("settings").settings_display
@@ -1495,5 +1503,96 @@ class DndAudio(App):
 
 if __name__ == '__main__':
     from kivy.core.window import Window
+    from kivy.uix.dropdown import DropDown
+
+
+    # Because DropDown secretly calls `from kivy.core.window import Window`
+    # We need to place the DropDown stuff in the if __name__ == "__main__" block so when
+    # we start the audioplayer (since it will rerun this script), it won't create a second blank window
+    class SortDropDown(DropDown):
+
+        sort_settings = ListProperty()
+        """
+        sort_settings expects a list of dictionaries of the following format:
+
+        {
+               "text" : text to display for the SortButton,
+            "sort_by" : sort_by parameter for the SortButton
+        }
+
+        Example for 3 buttons:
+        sort_settings = [
+            {"text" : "Name", "sort_by" : "name"},
+            {"text" : "Artist", "sort_by" : "artist"},
+            {"text" : "Date Added", "sort_by" : "date_added"}
+        ]
+
+        Buttons are added in order top to bottom for the sort_settings list
+        """
+
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+            self.app: DndAudio = App.get_running_app()
+            self.canvas_initialized = False
+
+            # Basically scheduling the canvas update for frame 1
+            Clock.schedule_once(self._frame_zero_init, 0)
+
+        def _frame_zero_init(self, dt):
+            
+            # Basically scheduling the canvas update for frame 1
+            Clock.schedule_once(lambda dt: self._update_canvas(), 0)
+        
+        def on_sort_settings(self, widget, new_sort_settings):
+            self.dismiss()
+
+            for child in self.container.children.copy():
+                self.remove_widget(child)
+
+            for settings in new_sort_settings:
+                button = SortButton(
+                    size_hint_y=None,
+                    height=(CoreLabel(font_size=self.app.height/40).get_extents("_")[1]+12),
+                )
+
+                button.text = settings["text"]
+                button.sort_by = settings["sort_by"]
+                button.background_color = (0.2, 0.2, 0.2, 1)
+
+                self.add_widget(button)
+            
+            if self.canvas_initialized:
+                self._update_canvas()
+        
+        def _update_canvas(self):
+            self.canvas_initialized = True
+            for i, button in enumerate(self.container.children):
+                button: SortButton
+
+                # Child widgets are listed backwards relative to how they were added, so 
+                # i == 0 is the bottom widget and i == num_children is the top widget
+                if len(self.container.children) > 1: 
+                    if i == 0:
+                        with button.canvas.before:
+                            Color(*button.background_color)
+                            RoundedRectangle(size=button.size, pos=button.pos, radius=(0, 0, button.height/3, button.height/3))
+
+                    elif i < len(self.container.children) - 1:
+                        with button.canvas.before:
+                            Color(*button.background_color)
+                            Rectangle(size=button.size, pos=button.pos)
+                            Color(1, 1, 1, 1)
+                            Line(width=1, points=(button.x, button.y, button.x + button.width, button.y))
+                    else:
+                        with button.canvas.before:
+                            Color(*button.background_color)
+                            RoundedRectangle(size=button.size, pos=button.pos, radius=(button.height/3, button.height/3, 0, 0))
+                            Color(1, 1, 1, 1)
+                            Line(width=1, points=(button.x, button.y, button.x + button.width, button.y))
+                else:
+                    with button.canvas.before:
+                        Color(*button.background_color)
+                        RoundedRectangle(size=button.size, pos=button.pos, radius=(button.height/3, button.height/3, button.height/3, button.height/3))
+
     DndAudio().run()
         
