@@ -1019,15 +1019,15 @@ class PlaylistsDisplay(Widget):
         
         if len(self.app.music_database) != 0:
             self.playlists.data = [
-                {"playlist_id" : playlist_id} 
+                {"playlist_id" : playlist_id, "sort_by" : "order", "reverse_sort" : False}
                 for playlist_id in self.app.music_database.data["playlists"].keys()
                 ]
             
 
 class PlaylistSongsScreen(Screen):
-    def __init__(self, playlist_id, **kwargs):
+    def __init__(self, playlist_id, sort_by="order", reverse_sort=False, **kwargs):
         super().__init__(**kwargs)
-        self.playlist_songs_display = PlaylistSongsDisplay(playlist_id)
+        self.playlist_songs_display = PlaylistSongsDisplay(playlist_id, sort_by=sort_by, reverse_sort=reverse_sort)
         self.add_widget(self.playlist_songs_display)
     
     def on_leave(self, *args):
@@ -1035,9 +1035,28 @@ class PlaylistSongsScreen(Screen):
 
 class PlaylistSongsDisplay(SongsDisplayBase):
 
-    def __init__(self, playlist_id, **kwargs):
+    def __init__(self, playlist_id, sort_by="order", reverse_sort=False, **kwargs):
         self.playlist_id = playlist_id
-        super().__init__(**kwargs)
+        super(SongsDisplayBase, self).__init__(**kwargs)
+
+        self.app: DndAudio = App.get_running_app()
+
+        self.track_list: RecycleView = self.ids.track_list
+        self.track_search: TextInput = self.ids.track_search
+        self.sort_buttons: dict[str, SortButton] = {
+            button.sort_by : button for button in self.ids.dropdown.container.children
+            }
+        
+
+        self.sort_by = sort_by
+        self.reverse_sort = reverse_sort
+        try:
+            self.sort_buttons[self.sort_by].sort_checkbox.active = True
+        except KeyError:
+            self.sort_buttons[self.sort_buttons.keys()[0]].sort_checkbox.active = True
+        self.update_clock = None
+
+        self.initalize_tracks()
     
     def on_parent(self, *args):
 
@@ -1099,7 +1118,13 @@ class PlaylistSongsDisplay(SongsDisplayBase):
                 self.app.music_database.valid_pointers.sort(
                     key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
     
-    
+    def change_sort(self, sort_by, reverse_sort):
+        super().change_sort(sort_by, reverse_sort)
+        recycleview_index = next((i for i, data in enumerate(self.app.root.get_screen("playlists").playlist_display.playlists.data) if data["playlist_id"] == self.playlist_id), None)
+        if recycleview_index is not None:
+            self.app.root.get_screen("playlists").playlist_display.playlists.data[recycleview_index] = (
+            {"playlist_id" : self.playlist_id, "sort_by" : self.sort_by, "reverse_sort" : self.reverse_sort}
+            )
 
 
 class ScreenSelectionButton(Widget):
@@ -1141,7 +1166,9 @@ class PlaylistButton(ScreenSelectionButton):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.playlist_id: int # this gets set by PlaylistDisplay init
+        self.playlist_id: int # these get set by PlaylistsDisplay init
+        self.sort_by: str
+        self.reverse_sort: bool
 
     def on_parent(self, *args):
         self.app: DndAudio = App.get_running_app()
@@ -1153,7 +1180,8 @@ class PlaylistButton(ScreenSelectionButton):
     def on_touch_up(self, touch: MotionEvent):
         self.background_color = 0, 0, 0, 1
         if self.y < touch.y < self.y + self.height and self.touch_down_called:
-            self.app.root.add_widget(PlaylistSongsScreen(self.playlist_id, name=self.screen_link_name))
+            self.app.root.add_widget(PlaylistSongsScreen(self.playlist_id, sort_by=self.sort_by, 
+                                                         reverse_sort=self.reverse_sort, name=self.screen_link_name))
             self.app.root.transition.direction = self.transition_direction
             self.app.root.current = self.screen_link_name
             return True

@@ -319,7 +319,7 @@ class MusicDatabase():
         Sets the playlist from which to play tracks from. Set playlist_id to zero to return to all tracks
         """
         self.current_playlist_id = playlist_id
-        self.valid_pointers = self.playlist_pointer_dict[playlist_id]
+        self.valid_pointers = copy.deepcopy(self.playlist_pointer_dict[playlist_id])
         self.shuffled_valid_pointers = copy.deepcopy(self.playlist_pointer_dict[playlist_id])
 
     def next(self):
