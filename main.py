@@ -1016,12 +1016,66 @@ class PlaylistsDisplay(Widget):
 
         self.app: DndAudio = App.get_running_app()
         self.playlists: RecycleView = self.ids.playlists
+        self.playlist_search: TextInput = self.ids.playlist_search
         
         if len(self.app.music_database) != 0:
             self.playlists.data = [
                 {"playlist_id" : playlist_id, "sort_by" : "order", "reverse_sort" : False}
                 for playlist_id in self.app.music_database.data["playlists"].keys()
                 ]
+            
+            # We'll lose the sorting information when searching, keep a seperate dictionary for it
+            self.sort_info = {playlist_id : ("order", False) for playlist_id in self.app.music_database.data["playlists"].keys()}
+        
+        self.update_clock = None
+    
+    def on_text(self):
+        """
+        Only do our text searches after the user has stopped typing for 0.5 seconds (or if text field is empty, update immediately)
+        """
+
+        if self.playlist_search.text == "":
+            dt = 0
+        else:
+            dt = 0.5
+
+        if len(self.app.music_database) != 0:
+            if self.update_clock is None:
+                self.update_clock = Clock.schedule_once(self.update_playlist, dt)
+            else:
+                self.update_clock.cancel()
+                self.update_clock = Clock.schedule_once(self.update_playlist, dt)
+        
+        width = self.playlist_search.width - self.playlist_search.padding[0] - self.playlist_search.padding[2]
+
+        if self.playlist_search._lines_labels[0].size[0] < width:
+            self.playlist_search.halign = "left"
+            self.playlist_search.scroll_x = 0
+        else:
+            self.playlist_search.halign = "right"
+    
+    def update_playlist(self, dt):
+        
+        self.refresh_playlists()
+        self.playlists.scroll_y = 1
+    
+    def refresh_playlists(self):
+
+        if self.playlist_search.text == "":
+            self.playlists.data = [
+                {"playlist_id" : playlist_id, "sort_by" : self.sort_info[playlist_id][0], "reverse_sort" : self.sort_info[playlist_id][1]}
+                for playlist_id in self.app.music_database.data["playlists"].keys()
+                ]
+        
+        else:
+            self.playlists.data = [
+                {"playlist_id" : playlist_id, "sort_by" : self.sort_info[playlist_id][0], "reverse_sort" : self.sort_info[playlist_id][1]}
+                for playlist_id in self.app.music_database.data["playlists"].keys()
+                if self.playlist_search.text.lower() in self.app.music_database.data["playlists"][playlist_id]["name"].lower()
+            ]
+
+
+
             
 
 class PlaylistSongsScreen(Screen):
@@ -1059,6 +1113,8 @@ class PlaylistSongsDisplay(SongsDisplayBase):
         self.initalize_tracks()
     
     def on_parent(self, *args):
+
+        self.playlists_display: PlaylistsDisplay = self.app.root.get_screen("playlists").playlist_display
 
         self.back_button: Button = self.ids.back_button
         self.back_button.text = "\u2039 Playlists"
@@ -1120,11 +1176,12 @@ class PlaylistSongsDisplay(SongsDisplayBase):
     
     def change_sort(self, sort_by, reverse_sort):
         super().change_sort(sort_by, reverse_sort)
-        recycleview_index = next((i for i, data in enumerate(self.app.root.get_screen("playlists").playlist_display.playlists.data) if data["playlist_id"] == self.playlist_id), None)
+        recycleview_index = next((i for i, data in enumerate(self.playlists_display.playlists.data) if data["playlist_id"] == self.playlist_id), None)
         if recycleview_index is not None:
-            self.app.root.get_screen("playlists").playlist_display.playlists.data[recycleview_index] = (
+            self.playlists_display.playlists.data[recycleview_index] = (
             {"playlist_id" : self.playlist_id, "sort_by" : self.sort_by, "reverse_sort" : self.reverse_sort}
             )
+            self.playlists_display.sort_info[self.playlist_id] = (self.sort_by, self.reverse_sort)
 
 
 class ScreenSelectionButton(Widget):
