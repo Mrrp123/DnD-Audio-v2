@@ -7,7 +7,8 @@ from mutagen.oggvorbis import OggVorbis
 from mutagen.wave import WAVE
 from mutagen.id3 import ID3
 from mutagen.id3._util import ID3NoHeaderError
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageOps, ImageChops, UnidentifiedImageError
+import numpy as np
 from io import BytesIO
 from ast import literal_eval
 import random
@@ -386,14 +387,38 @@ class MusicDatabase():
         hash_out = sha256.hexdigest()
         return hex(int(hash_out[:32], 16) ^ int(hash_out[32:], 16))[2:]
     
-    def cache_covers(self, track_ids=None):
+    def cache_covers(self, track_ids=None, playlist_ids=None):
+
+        def get_img_from_file(file):
+            try:
+                metadata = ID3(file)
+                if (apic := metadata.getall("APIC")) != []:
+                    img_data = apic[0].data
+            except ID3NoHeaderError:
+                try:
+                    with open(file, "rb") as fp:
+                        img_data = fp.read()
+                except OSError:
+                    print(f"Failed to read image for track {track_id}!")
+                    return None, None
+            try:
+                img: Image.Image = Image.open(BytesIO(img_data))
+            except UnidentifiedImageError:
+                print(f"Cannot identify image file: {file}")
+                return None, None
+
+            return img
 
         # Create cache folder if it doesn't exist
         os.makedirs(f"{common_vars.app_folder}/cache/covers", exist_ok=True)
         os.makedirs(f"{common_vars.app_folder}/cache/small_covers", exist_ok=True)
         os.makedirs(f"{common_vars.app_folder}/cache/audio", exist_ok=True)
+        os.makedirs(f"{common_vars.app_folder}/cache/playlist_covers", exist_ok=True)
+
         if track_ids is None:
             track_ids = self.data["tracks"].keys()
+        if playlist_ids is None:
+            playlist_ids = self.data["playlists"].keys()
         for track_id in track_ids:
             persistent_id = self.data["tracks"][track_id]["persistent_id"]
             cover = self.data["tracks"][track_id]["cover"]
@@ -401,30 +426,64 @@ class MusicDatabase():
                 continue
             elif (not os.path.isfile(cached_img := f"{common_vars.app_folder}/cache/covers/{persistent_id}.jpg")
                 and os.path.isfile(cover)):
-                try:
-                    metadata = ID3(cover)
-                    if (apic := metadata.getall("APIC")) != []:
-                        img_data = apic[0].data
-                except ID3NoHeaderError:
-                    try:
-                        with open(cover, "rb") as fp:
-                            img_data = fp.read()
-                    except OSError:
-                        print(f"Failed to read image for track {track_id}!")
-                        continue
-                try:
-                    img: Image.Image = Image.open(BytesIO(img_data))
-                except UnidentifiedImageError:
-                    print(f"Cannot identify image file: {cover}")
+                
+                img = get_img_from_file(cover)
+                if img is None:
                     continue
+
                 try:
-                    with open(cached_img, "wb") as fp:
-                        fp.write(img_data)
+                    img.save(cached_img, img.format)
                     if img.mode in ("RGBA", "P"): img = img.convert("RGB")
                     img = ImageOps.contain(img, (128,128), Image.Resampling.LANCZOS)
                     img.save(f"{common_vars.app_folder}/cache/small_covers/{persistent_id}.jpg", "JPEG", quality=100)
                 except OSError:
                     print(f"Failed to save image for track {track_id}!")
+        
+        for playlist_id in playlist_ids:
+
+            track_list = self.data["playlists"][playlist_id]["track_list"]
+            playlist_persistent_id = self.data["playlists"][playlist_id]["persistent_id"]
+            
+            if not os.path.isfile(f"{common_vars.app_folder}/cache/playlist_covers/{playlist_persistent_id}.jpg"):
+
+                img_list: list[Image.Image] = []
+
+                for track_id in track_list:
+                    if len(img_list) >= 4:
+                        break
+
+                    cover = self.data["tracks"][track_id]["cover"]
+                    img = get_img_from_file(cover)
+
+                    if img is None:
+                        img = Image.open(f"{common_vars.app_folder}/assets/covers/default_cover.png")
+
+                    if img.mode in ("RGBA", "P"): img = img.convert("RGB")
+                    img = ImageOps.contain(img, (256,256), Image.Resampling.LANCZOS)
+
+                    if len(img_list) > 1: # prevent identical images from showing up in image mosaic
+                        for old_img in img_list:
+                            # Check for >5% difference, we assume that if the images are different sizes, then they're probably different images
+                            if old_img.size == img.size and np.sum(np.asarray(ImageChops.difference(old_img, img).getdata())) > (img.size[0] * img.size[1] * 0.05):
+                                continue
+
+                    img_list.append(img)
+                                
+                if len(img_list) >= 4:
+                    img_mosaic = Image.new("RGB", size=(256,256))
+                    for i, img in enumerate(img_list):
+                        img = ImageOps.contain(img, (128,128), Image.Resampling.LANCZOS)
+                        img_mosaic.paste(img, box=((i % 2) * 128, (i // 2) * 128))
+                else:
+                    img_mosaic = img_list[0]
+                
+                try:
+                    img_mosaic.save(f"{common_vars.app_folder}/cache/playlist_covers/{playlist_persistent_id}.jpg", "JPEG", quality=100)
+                except OSError:
+                    print(f"Failed to save image for playlist {playlist_id}!")
+
+                    
+            
 
     def add_track(
             self, 

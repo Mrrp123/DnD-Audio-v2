@@ -1192,6 +1192,7 @@ class ScreenSelectionButton(Widget):
 
     # The text displayed for the button
     display_name = StringProperty("")
+    image = StringProperty("")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1233,6 +1234,11 @@ class PlaylistButton(ScreenSelectionButton):
         self.display_label: Label = self.ids.screen_label
         self.display_label.text = self.app.music_database.data["playlists"][self.playlist_id]["name"]
         self.screen_link_name = self.app.music_database.data["playlists"][self.playlist_id]["persistent_id"]
+
+        if os.path.exists((img_path := f"{common_vars.app_folder}/cache/playlist_covers/{self.screen_link_name}.jpg")):
+            self.image = img_path
+        else:
+            self.image = f"{common_vars.app_folder}/assets/covers/playlist_cover.png"
 
     def on_touch_up(self, touch: MotionEvent):
         self.background_color = 0, 0, 0, 1
