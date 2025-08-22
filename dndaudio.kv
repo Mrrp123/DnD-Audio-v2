@@ -544,6 +544,51 @@
         padding: 0, 0, 0, 0
 
 
+<TopSortButton>:
+    canvas.before:
+        Color:
+            rgba: self.background_color
+        RoundedRectangle:
+            size: self.size
+            pos: self.pos
+            radius: self.height/3, self.height/3, 0, 0
+        Color:
+            rgba: 1, 1, 1, 1
+        Line:
+            width: 1
+            points: self.x, self.y, self.x + self.width, self.y
+
+<MiddleSortButton>:
+    canvas.before:
+        Color:
+            rgba: self.background_color
+        Rectangle:
+            size: self.size
+            pos: self.pos
+        Color:
+            rgba: 1, 1, 1, 1
+        Line:
+            width: 1
+            points: self.x, self.y, self.x + self.width, self.y
+
+<BottomSortButton>:
+    canvas.before:
+        Color:
+            rgba: self.background_color
+        RoundedRectangle:
+            size: self.size
+            pos: self.pos
+            radius: 0, 0, self.height/3, self.height/3
+
+<SoloSortButton>:
+    canvas.before:
+        Color:
+            rgba: self.background_color
+        RoundedRectangle:
+            size: self.size
+            pos: self.pos
+            radius: self.height/3, self.height/3, self.height/3, self.height/3
+
 
 <SongsDisplayBase>:
 

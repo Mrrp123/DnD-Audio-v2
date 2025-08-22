@@ -935,6 +935,21 @@ class SortButton(BoxLayout):
     def on_touch_up(self, touch: MotionEvent):
         self.background_color = 0.2, 0.2, 0.2, 1
 
+
+# The sole purpose for these classes is so that I can do
+# canvas stuff in the kv file
+class TopSortButton(SortButton):
+    pass
+
+class MiddleSortButton(SortButton):
+    pass
+
+class BottomSortButton(SortButton):
+    pass
+
+class SoloSortButton(SortButton):
+    pass
+
 class SettingsScreen(Screen):
 
     def __init__(self, **kw):
@@ -1653,15 +1668,6 @@ if __name__ == '__main__':
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
             self.app: DndAudio = App.get_running_app()
-            self.canvas_initialized = False
-
-            # Basically scheduling the canvas update for frame 1
-            Clock.schedule_once(self._frame_zero_init, 0)
-
-        def _frame_zero_init(self, dt):
-            
-            # Basically scheduling the canvas update for frame 1
-            Clock.schedule_once(lambda dt: self._update_canvas(), 0)
         
         def on_sort_settings(self, widget, new_sort_settings):
             self.dismiss()
@@ -1669,11 +1675,20 @@ if __name__ == '__main__':
             for child in self.container.children.copy():
                 self.remove_widget(child)
 
-            for settings in new_sort_settings:
-                button = SortButton(
-                    size_hint_y=None,
-                    height=(CoreLabel(font_size=self.app.height/40).get_extents("_")[1]+12),
-                )
+            for i, settings in enumerate(new_sort_settings):
+                if len(new_sort_settings) == 1:
+                    button_cls = SoloSortButton
+                elif i == 0:
+                    button_cls = TopSortButton
+                elif i < len(new_sort_settings) - 1:
+                    button_cls = MiddleSortButton
+                else:
+                    button_cls = BottomSortButton
+                
+                button = button_cls(
+                        size_hint_y=None,
+                        height=(CoreLabel(font_size=self.app.height/40).get_extents("_")[1]+12),
+                    )
 
                 button.text = settings["text"]
                 button.sort_by = settings["sort_by"]
@@ -1681,39 +1696,6 @@ if __name__ == '__main__':
                 button.checkbox_group = hex(id(widget))
 
                 self.add_widget(button)
-            
-            if self.canvas_initialized:
-                self._update_canvas()
-        
-        def _update_canvas(self):
-            self.canvas_initialized = True
-            for i, button in enumerate(self.container.children):
-                button: SortButton
-
-                # Child widgets are listed backwards relative to how they were added, so 
-                # i == 0 is the bottom widget and i == num_children is the top widget
-                if len(self.container.children) > 1: 
-                    if i == 0:
-                        with button.canvas.before:
-                            Color(*button.background_color)
-                            RoundedRectangle(size=button.size, pos=button.pos, radius=(0, 0, button.height/3, button.height/3))
-
-                    elif i < len(self.container.children) - 1:
-                        with button.canvas.before:
-                            Color(*button.background_color)
-                            Rectangle(size=button.size, pos=button.pos)
-                            Color(1, 1, 1, 1)
-                            Line(width=1, points=(button.x, button.y, button.x + button.width, button.y))
-                    else:
-                        with button.canvas.before:
-                            Color(*button.background_color)
-                            RoundedRectangle(size=button.size, pos=button.pos, radius=(button.height/3, button.height/3, 0, 0))
-                            Color(1, 1, 1, 1)
-                            Line(width=1, points=(button.x, button.y, button.x + button.width, button.y))
-                else:
-                    with button.canvas.before:
-                        Color(*button.background_color)
-                        RoundedRectangle(size=button.size, pos=button.pos, radius=(button.height/3, button.height/3, button.height/3, button.height/3))
 
     DndAudio().run()
         
