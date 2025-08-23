@@ -758,7 +758,7 @@ class AudioPlayer():
             song_file = None
         
         if self.next_track_id is not None:
-            next_song_file = os.path.split(self.track_data[self.next_track_id]["file"])[-1].split('.')[0]
+            next_song_file = os.path.split(self.track_data[self.next_track_id]["file"])[-1]
         else:
             next_song_file = None
 
