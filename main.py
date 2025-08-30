@@ -824,7 +824,7 @@ class SongsDisplay(SongsDisplayBase):
         if display:
             self.track_list.data.sort(
                 key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
-        if self.app.music_database.current_playlist_id == 0:
+        if self.app.music_database.playlist_id == 0:
             self.app.music_database.valid_pointers.sort(
                 key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
 
@@ -992,10 +992,10 @@ class SettingsDisplay(Widget):
     
     def get_debug_info(self, dt):
         try:
-            if self.app.music_database.current_playlist_id:
+            if self.app.music_database.playlist_id:
                 self.debug_info_label.text = (
                 "Debug Info:\n" +
-                f"Current Playlist: {self.app.music_database.data["playlists"][self.app.music_database.current_playlist_id]["name"]}" +
+                f"Current Playlist: {self.app.music_database.data["playlists"][self.app.music_database.playlist_id]["name"]}" +
                 self.app.get_audioplayer_attr("debug_string")
                 )
             else:
@@ -1178,14 +1178,14 @@ class PlaylistSongsDisplay(SongsDisplayBase):
             if display:
                 self.track_list.data.sort(
                     key=lambda x : self.app.music_database.data["playlists"][self.playlist_id]["track_list"].index(x["track_id"]), reverse=self.reverse_sort)
-            if self.app.music_database.current_playlist_id == self.playlist_id:
+            if self.app.music_database.playlist_id == self.playlist_id:
                 self.app.music_database.valid_pointers.sort(
                     key=lambda x : self.app.music_database.data["playlists"][self.playlist_id]["track_list"].index(x), reverse=self.reverse_sort)
         else:
             if display:
                 self.track_list.data.sort(
                     key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
-            if self.app.music_database.current_playlist_id == self.playlist_id:
+            if self.app.music_database.playlist_id == self.playlist_id:
                 self.app.music_database.valid_pointers.sort(
                     key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
     
@@ -1534,6 +1534,7 @@ class DndAudio(App):
                 for channel_val in main_display.c1 + main_display.c2: # c1 and c2 should be lists of floats
                     fp.write(round(channel_val * 255).to_bytes(1, "little"))
                 fp.write(int(fade_duration).to_bytes(2, "little"))
+                fp.write(int(self.music_database.playlist_id).to_bytes(4, "little"))
                 fp.write(struct.pack("3d", track_length, speed, volume))
         except Exception as err:
             if os.path.exists(f"{common_vars.app_folder}/config"):
@@ -1553,17 +1554,25 @@ class DndAudio(App):
                 c1 = np.ndarray(shape=(4,), dtype=np.uint8, buffer=fp.read(4)) / 255
                 c2 = np.ndarray(shape=(4,), dtype=np.uint8, buffer=fp.read(4)) / 255
                 fade_duration = int.from_bytes(fp.read(2), "little")
+                playlist_id = int.from_bytes(fp.read(4), "little")
                 track_length, speed, volume = struct.unpack("3d", fp.read(24))
                 
         except Exception as err:
             return
-        if track_id in self.music_database.valid_pointers and file_tag == bytes([0x6D, 0x72, 0x72, 0x70]): # make sure track id still exists
+        
+        valid_file_tag = (file_tag == bytes([0x6D, 0x72, 0x72, 0x70]))
+        
+        if playlist_id in self.music_database.playlist_pointer_dict.keys() and valid_file_tag:
+            self.music_database.set_playlist(playlist_id)
+
+        if track_id in self.music_database.valid_pointers and valid_file_tag: # make sure track id still exists
             #self.set_audioplayer_attr("pause_flag", True)
             self.music_database.set_track(track_id)
             found_track = True
         else:
             found_track = False
-        if file_tag == bytes([0x6D, 0x72, 0x72, 0x70]):
+
+        if valid_file_tag:
 
             main_display: MainDisplay = self.root.get_screen("main").main_display
 
@@ -1575,6 +1584,7 @@ class DndAudio(App):
                 self.set_audioplayer_attr("track_length", track_length)
                 main_display.c1 = list(c1) # main_display has it's own default values on init, but these will override that
                 main_display.c2 = list(c2)
+
             self.set_audioplayer_attr("speed", speed)
             self.set_audioplayer_attr("base_fade_duration", fade_duration)
             self.set_audioplayer_attr("fade_duration", int(fade_duration * speed))

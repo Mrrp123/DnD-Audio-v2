@@ -156,7 +156,7 @@ class MusicDatabase():
             self.playlist_pointer_dict.update({playlist_id : self.data["playlists"][playlist_id]["track_list"] for playlist_id in self.data["playlists"].keys()})
 
             self.valid_pointers = self.playlist_pointer_dict[0]
-            self.current_playlist_id = 0
+            self.playlist_id = 0
             
             # We don't want to modify pointer list directly when we shuffle, make an identical copy that we can use for later
             self.shuffled_valid_pointers = list(self.data["tracks"].keys())
@@ -164,7 +164,7 @@ class MusicDatabase():
         except OSError:
             self.data = {}
             self.track_pointer = None
-            self.current_playlist_id = None
+            self.playlist_id = None
             self.playlist_pointer_dict = {}
             self.valid_pointers = []
             self.shuffled_valid_pointers = []
@@ -319,7 +319,7 @@ class MusicDatabase():
         """
         Sets the playlist from which to play tracks from. Set playlist_id to zero to return to all tracks
         """
-        self.current_playlist_id = playlist_id
+        self.playlist_id = playlist_id
         self.valid_pointers = copy.deepcopy(self.playlist_pointer_dict[playlist_id])
         self.shuffled_valid_pointers = copy.deepcopy(self.playlist_pointer_dict[playlist_id])
 
