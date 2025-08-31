@@ -9,6 +9,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.screenmanager import ScreenManager, Screen, CardTransition, NoTransition, SlideTransition
 from kivy.uix.effectwidget import EffectWidget
 from kivy.uix.label import Label
+from kivy.uix.recycleview import RecycleView
 
 from kivy.graphics import Color, Rectangle, RoundedRectangle, Line
 
@@ -30,7 +31,6 @@ if TYPE_CHECKING:
     from kivy.uix.image import Image
     from kivy.uix.label import Label
     from kivy.uix.checkbox import CheckBox
-    from kivy.uix.recycleview import RecycleView
     from kivy.uix.textinput import TextInput
     from kivy.uix.scrollview import ScrollView
     from kivy.input.motionevent import MotionEvent
@@ -748,7 +748,7 @@ class SongsDisplayBase(Widget):
 
         self.app: DndAudio = App.get_running_app()
 
-        self.track_list: RecycleView = self.ids.track_list
+        self.track_list: SongRecycleView = self.ids.track_list
         self.track_search: TextInput = self.ids.track_search
         self.sort_buttons: dict[str, SortButton] = {
             button.sort_by : button for button in self.ids.dropdown.container.children
@@ -922,13 +922,15 @@ class SongButton(Widget):
     
     def on_touch_down(self, touch: MotionEvent):
         if self.y < touch.y < self.y + self.height:
-            self.touch_down_called = True
+            touch.grab(self)
             self.background_color = 0.52941176, 0.52941176, 0.52941176, 0.71372549 # hex 878787B6
             return True
 
     def on_touch_up(self, touch: MotionEvent):
-        self.background_color = 0, 0, 0, 1
-        if self.y < touch.y < self.y + self.height and self.touch_down_called:
+        
+        if self.y < touch.y < self.y + self.height and touch.grab_current is self:
+            self.background_color = 0, 0, 0, 1
+
             status, pause_flag = self.app.get_audioplayer_attr("status", "pause_flag")
 
             self.app.music_database.set_playlist(self.playlist_id)
@@ -957,8 +959,13 @@ class SongButton(Widget):
             if self.app.music_database._shuffle:
                 self.app.music_database.set_shuffle_state(self.app.music_database._shuffle)
             
+            touch.ungrab(self)
             return True
-        self.touch_down_called = False
+        
+        elif touch.grab_current is self:
+            self.background_color = 0, 0, 0, 1
+            touch.ungrab(self)
+            return True
 
 class SortButton(BoxLayout):
 
@@ -1097,7 +1104,7 @@ class PlaylistsDisplay(Widget):
         super().__init__(**kwargs)
 
         self.app: DndAudio = App.get_running_app()
-        self.playlists: RecycleView = self.ids.playlists
+        self.playlists: PlaylistRecycleView = self.ids.playlists
         self.playlist_search: TextInput = self.ids.playlist_search
         
         if len(self.app.music_database) != 0:
@@ -1177,7 +1184,7 @@ class PlaylistSongsDisplay(SongsDisplayBase):
 
         self.app: DndAudio = App.get_running_app()
 
-        self.track_list: RecycleView = self.ids.track_list
+        self.track_list: SongRecycleView = self.ids.track_list
         self.track_search: TextInput = self.ids.track_search
         self.sort_buttons: dict[str, SortButton] = {
             button.sort_by : button for button in self.ids.dropdown.container.children
@@ -1296,17 +1303,23 @@ class ScreenSelectionButton(Widget):
         
     def on_touch_down(self, touch: MotionEvent):
         if self.y < touch.y < self.y + self.height:
-            self.touch_down_called = True
+            touch.grab(self)
             self.background_color = 0.52941176, 0.52941176, 0.52941176, 0.71372549 # hex 878787B6
             return True
 
     def on_touch_up(self, touch: MotionEvent):
-        self.background_color = 0, 0, 0, 1
-        if self.y < touch.y < self.y + self.height and self.touch_down_called:
+        if self.y < touch.y < self.y + self.height and touch.grab_current is self:
+            self.background_color = 0, 0, 0, 1
+
             self.app.root.transition.direction = self.transition_direction
             self.app.root.current = self.screen_link_name
+            touch.ungrab(self)
             return True
-        self.touch_down_called = False
+        
+        elif touch.grab_current is self:
+            self.background_color = 0, 0, 0, 1
+            touch.ungrab(self)
+            return True
 
 class PlaylistButton(ScreenSelectionButton):
 
@@ -1330,14 +1343,67 @@ class PlaylistButton(ScreenSelectionButton):
             self.image = f"{common_vars.app_folder}/assets/covers/playlist_cover.png"
 
     def on_touch_up(self, touch: MotionEvent):
-        self.background_color = 0, 0, 0, 1
-        if self.y < touch.y < self.y + self.height and self.touch_down_called:
+        if self.y < touch.y < self.y + self.height and touch.grab_current is self:
+            self.background_color = 0, 0, 0, 1
             self.app.root.add_widget(PlaylistSongsScreen(self.playlist_id, sort_by=self.sort_by, 
                                                          reverse_sort=self.reverse_sort, name=self.screen_link_name))
             self.app.root.transition.direction = self.transition_direction
             self.app.root.current = self.screen_link_name
             return True
-        self.touch_down_called = False
+        
+        elif touch.grab_current is self:
+            self.background_color = 0, 0, 0, 1
+            touch.ungrab(self)
+            return True
+
+class SongRecycleView(RecycleView):
+
+    selected_child = None
+    color_clock = None
+
+    def on_scroll_start(self, touch: MotionEvent):
+
+        # Make sure we're in the RecycleView before trying to highlight anything
+        if touch.y <= self.height and not touch.is_mouse_scrolling:
+            index = self.layout_manager.get_view_index_at(self.to_local(*touch.pos))
+
+            self.selected_track_id = self.data[index]["track_id"]
+            for child in self.layout_manager.children:
+                if child.track_id == self.selected_track_id:
+                    self.selected_child = child
+                    self.color_clock = Clock.schedule_once(self.set_background_color, 0.05)
+                    break
+
+        return super().on_scroll_start(touch, check_children=False)
+    
+    def set_background_color(self, dt):
+        print("setting background color in set_background_color")
+        self.selected_child.background_color = 0.52941176, 0.52941176, 0.52941176, 0.71372549
+
+    def on_scroll_move(self, touch: MotionEvent):
+        if self.color_clock is not None and self.selected_child is not None:
+            self.color_clock.cancel()
+            self.selected_child.background_color = 0, 0, 0, 1
+            self.selected_child = None
+
+        return super().on_scroll_move(touch)
+
+class PlaylistRecycleView(SongRecycleView):
+
+    def on_scroll_start(self, touch: MotionEvent):
+
+        # Make sure we're in the RecycleView before trying to highlight anything
+        if touch.y <= self.height and not touch.is_mouse_scrolling:
+            index = self.layout_manager.get_view_index_at(self.to_local(*touch.pos))
+
+            self.selected_playlist_id = self.data[index]["playlist_id"]
+            for child in self.layout_manager.children:
+                if child.playlist_id == self.selected_playlist_id:
+                    self.selected_child = child
+                    self.color_clock = Clock.schedule_once(self.set_background_color, 0.05)
+                    break
+
+        return super(SongRecycleView, self).on_scroll_start(touch, check_children=False)
 
 class DndAudio(App):
 
