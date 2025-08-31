@@ -3,11 +3,12 @@
 #:import dp kivy.metrics.dp
 #:import shaders tools.shaders
 #:import app_folder tools.common_vars.app_folder
+#:import default_bold_font_name tools.common_vars.default_bold_font_name
 #:import default_font_name tools.common_vars.default_font_name
 #:import CoreLabel kivy.core.text.Label
 
 <Label>:
-    font_name: default_font_name
+    font_name: default_bold_font_name
 
 <TextInput>:
     font_name: default_font_name
@@ -490,7 +491,7 @@
         shorten: True
         shorten_from: "right"
         size_hint: 1, None
-        padding: root.height, root.height / 24, root.width / 12, 0
+        padding: root.height, 0, root.width / 12, 0
 
     Image:
         id: song_cover
@@ -621,7 +622,7 @@
         text_size: self.size
         # size: self.texture_size
         font_size: app.height/32
-        padding: ("12dp", "15dp", 0, 0)
+        padding: ("12dp", "11dp", 0, 0)
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
         on_release: root.back_button_on_release()
@@ -631,7 +632,7 @@
         bold: True
         color: 1,1,1,1
         width: app.width
-        height: app.height/20
+        height: app.height/15
         x: 0
         y: app.height - app.height / 6
         halign: "left"
@@ -676,6 +677,7 @@
         height: self.minimum_height
         text_size: self.size 
         font_size: app.height/40
+        font_name: "Roboto"
         padding: 6,6,6,6
 
     Widget:
@@ -710,7 +712,7 @@
         id: track_list
         viewclass: "SongButton"
         width: app.width
-        height: track_search.y - track_search.height
+        height: track_search.y - size_indicator.height
         bar_width: dp(10)
         scroll_type: ["bars", "content"]
         scroll_distance: 1
@@ -733,8 +735,8 @@
         disabled_color: 1,1,1,1
         background_color: 0.23137254901960785,1,0.333,1 #3bff55ff
         disabled_background_color:0.23137254901960785,1,0.333,1
-        x: dp(23) * 2 + CoreLabel(font_size=app.height/20, bold=True).get_extents("Songs")[0]
-        center_y: (app.height - app.height / 6) + app.height/40 #self.main_label.center_y
+        x: dp(23) * 2 + CoreLabel(font_size=app.height/20, font_name=default_font_name).get_extents("Songs")[0]
+        center_y: (app.height - app.height / 6) + app.height/30 #self.main_label.center_y
         text: "Add Song"
         on_release: app.filechooser.open_file(multiple=True, filters=["*.mp3;*.ogg;*.wav"], on_selection=app._add_file_handler)
         border: (0,0,0,0)

@@ -84,7 +84,7 @@ class TrackLabelShader(Label):
         self.is_animated = False
         self.animation_complete = False
 
-        self.ellipses_width = CoreLabel(font_size=self.font_size, font_name=common_vars.default_font_name).get_extents("...")[0]
+        self.ellipses_width = CoreLabel(font_size=self.font_size, font_name=common_vars.default_bold_font_name).get_extents("...")[0]
 
         self.app: DndAudio = App.get_running_app()
     
@@ -94,7 +94,7 @@ class TrackLabelShader(Label):
     
     def on_size(self, *args, **kwargs):
         self._update_alpha_fade_extents()
-        self.ellipses_width = CoreLabel(font_size=self.font_size, font_name=common_vars.default_font_name).get_extents("...")[0]
+        self.ellipses_width = CoreLabel(font_size=self.font_size, font_name=common_vars.default_bold_font_name).get_extents("...")[0]
     
     def _update_alpha_fade_extents(self):
         if self.width > 0:
@@ -535,7 +535,7 @@ class MainDisplay(EffectWidget):
             if self.track_artist_anim_clock is not None:
                 self.track_artist_anim_clock.cancel()
 
-            if CoreLabel(font_size=self.height/35, font_name=common_vars.default_font_name).get_extents(track["name"])[0] > max_width:
+            if CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents(track["name"])[0] > max_width:
                 self.track_name_label.is_animated = True
                 self.track_name_label.animation_complete = False
                 self.track_name_label.text = track["name"] + " "*8 + track["name"]
@@ -545,7 +545,7 @@ class MainDisplay(EffectWidget):
                 self.track_name_label.animation_complete = False
                 self.track_name_label.text = track["name"]
             
-            if CoreLabel(font_size=self.height/35, font_name=common_vars.default_font_name).get_extents(track["artist"])[0] > max_width:
+            if CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents(track["artist"])[0] > max_width:
                 self.track_artist_label.is_animated = True
                 self.track_artist_label.animation_complete = False
                 self.track_artist_label.text = track["artist"] + " "*8 + track["artist"]
@@ -586,10 +586,10 @@ class MainDisplay(EffectWidget):
 
     
     def trigger_track_name_anim(self, track_name, dt):
-        scroll_px_distance = CoreLabel(font_size=self.height/35, font_name=common_vars.default_font_name).get_extents(track_name + " "*8)[0]
+        scroll_px_distance = CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents(track_name + " "*8)[0]
 
         # Choose A for the letter because why not
-        approx_letter_size = CoreLabel(font_size=self.height/35, font_name=common_vars.default_font_name).get_extents("A")[0]
+        approx_letter_size = CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents("A")[0]
         new_scroll_x = self.track_name_scrollview.convert_distance_to_scroll(scroll_px_distance, 0)[0]
         self.track_name_anim._animated_properties = {"scroll_x" : new_scroll_x}
 
@@ -598,10 +598,10 @@ class MainDisplay(EffectWidget):
         self.track_name_anim.start(self.track_name_scrollview)
     
     def trigger_track_artist_anim(self, track_artist, dt):
-        scroll_px_distance = CoreLabel(font_size=self.height/35, font_name=common_vars.default_font_name).get_extents(track_artist + " "*8)[0]
+        scroll_px_distance = CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents(track_artist + " "*8)[0]
 
         # Choose A for the letter because why not
-        approx_letter_size = CoreLabel(font_size=self.height/35, font_name=common_vars.default_font_name).get_extents("A")[0]
+        approx_letter_size = CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents("A")[0]
         new_scroll_x = self.track_artist_scrollview.convert_distance_to_scroll(scroll_px_distance, 0)[0]
         self.track_artist_anim._animated_properties = {"scroll_x" : new_scroll_x}
 
