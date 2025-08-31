@@ -109,6 +109,7 @@ class TrackLabelShader(Label):
     
     def on_anim_start(self, *args):
         self.is_animated = True
+        self.animation_active = True
         self.animation_complete = False
             
     def on_anim_progress(self, *args):
@@ -117,6 +118,7 @@ class TrackLabelShader(Label):
     def on_anim_complete(self, *args):
         self.scroll_view.scroll_x = 0
         self._update_alpha_fade_extents()
+        self.animation_active = False
         self.animation_complete = True
 
         # Don't bother restarting the animation we're not on the main screen
@@ -125,22 +127,28 @@ class TrackLabelShader(Label):
                 # Check if the artist name is animating and if so, make sure it is complete before restarting animations so that
                 # both the name and artist animations are synced up
                 if self.main_display.track_artist_label.is_animated and self.main_display.track_artist_label.animation_complete:
-                    self.main_display.track_name_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_name_anim, self.norm_text), 5)
-                    self.main_display.track_artist_anim_clock = (
-                        Clock.schedule_once(partial(self.main_display.trigger_track_artist_anim, self.main_display.track_artist_label.norm_text), 5)
+                    self.main_display.track_name_anim_trigger = Clock.create_trigger(partial(self.main_display.trigger_track_name_anim, self.norm_text), 5)
+                    self.main_display.track_artist_anim_trigger = (
+                        Clock.create_trigger(partial(self.main_display.trigger_track_artist_anim, self.main_display.track_artist_label.norm_text), 5)
                         )
+                    self.main_display.track_name_anim_trigger()
+                    self.main_display.track_artist_anim_trigger()
                 elif not self.main_display.track_artist_label.is_animated:
-                    self.main_display.track_name_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_name_anim, self.norm_text), 5)
+                    self.main_display.track_name_anim_trigger = Clock.create_trigger(partial(self.main_display.trigger_track_name_anim, self.norm_text), 5)
+                    self.main_display.track_name_anim_trigger()
             elif self.label_type == "artist":
                 # Check if the track name is animating and if so, make sure it is complete before restarting animations so that
                 # both the name and artist animations are synced up
                 if self.main_display.track_name_label.is_animated and self.main_display.track_name_label.animation_complete:
-                    self.main_display.track_name_anim_clock = (
-                        Clock.schedule_once(partial(self.main_display.trigger_track_name_anim, self.main_display.track_name_label.norm_text), 5)
+                    self.main_display.track_name_anim_trigger = (
+                        Clock.create_trigger(partial(self.main_display.trigger_track_name_anim, self.main_display.track_name_label.norm_text), 5)
                         )
-                    self.main_display.track_artist_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_artist_anim, self.norm_text), 5)
+                    self.main_display.track_artist_anim_trigger = Clock.create_trigger(partial(self.main_display.trigger_track_artist_anim, self.norm_text), 5)
+                    self.main_display.track_name_anim_trigger()
+                    self.main_display.track_artist_anim_trigger()
                 elif not self.main_display.track_name_label.is_animated:
-                    self.main_display.track_artist_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_artist_anim, self.norm_text), 5)
+                    self.main_display.track_artist_anim_trigger = Clock.create_trigger(partial(self.main_display.trigger_track_artist_anim, self.norm_text), 5)
+                    self.main_display.track_artist_anim_trigger()
 
 class MainScreen(Screen):
     
@@ -157,10 +165,10 @@ class MainScreen(Screen):
             self.initialized = True
 
         # Turn our name/artist scrolling animations back on
-        if self.main_display.track_name_label.is_animated and self.main_display.track_name_label.animation_complete:
-            self.main_display.track_name_label.on_anim_complete()
-        if self.main_display.track_artist_label.is_animated and self.main_display.track_artist_label.animation_complete:
-            self.main_display.track_artist_label.on_anim_complete()
+        if self.main_display.track_name_label.is_animated:
+            self.main_display.track_name_anim_trigger()
+        if self.main_display.track_artist_label.is_animated:
+            self.main_display.track_artist_anim_trigger()
     
     def on_pre_enter(self):
         # Turn our audio info loop back on
@@ -175,11 +183,11 @@ class MainScreen(Screen):
             self.main_display.audio_clock.cancel()
 
         self.main_display.track_name_anim.stop(self.main_display.track_name_scrollview)
-        if self.main_display.track_name_anim_clock is not None:
-            self.main_display.track_name_anim_clock.cancel()
+        if self.main_display.track_name_anim_trigger is not None:
+            self.main_display.track_name_anim_trigger.cancel()
         self.main_display.track_artist_anim.stop(self.main_display.track_artist_scrollview)
-        if self.main_display.track_artist_anim_clock is not None:
-            self.main_display.track_artist_anim_clock.cancel()
+        if self.main_display.track_artist_anim_trigger is not None:
+            self.main_display.track_artist_anim_trigger.cancel()
 
 
 
@@ -188,8 +196,8 @@ class MainDisplay(EffectWidget):
     previous_track_event = None
     time_stop_event = False
     audio_clock = None
-    track_name_anim_clock = None
-    track_artist_anim_clock = None
+    track_name_anim_trigger = None
+    track_artist_anim_trigger = None
     time_stop_effect = TimeStop()
 
     def __init__(self, **kwargs):
@@ -530,28 +538,36 @@ class MainDisplay(EffectWidget):
             self.track_name_anim.stop(self.track_name_scrollview)
             self.track_artist_anim.stop(self.track_artist_scrollview)
 
-            if self.track_name_anim_clock is not None:
-                self.track_name_anim_clock.cancel()
-            if self.track_artist_anim_clock is not None:
-                self.track_artist_anim_clock.cancel()
+            if self.track_name_anim_trigger is not None:
+                self.track_name_anim_trigger.cancel()
+            if self.track_artist_anim_trigger is not None:
+                self.track_artist_anim_trigger.cancel()
 
+            # See if track name needs to be animated
             if CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents(track["name"])[0] > max_width:
                 self.track_name_label.is_animated = True
+                self.track_name_label.animation_active = False
                 self.track_name_label.animation_complete = False
                 self.track_name_label.text = track["name"] + " "*8 + track["name"]
-                self.track_name_anim_clock = Clock.schedule_once(partial(self.trigger_track_name_anim, track["name"]), 5)
+                self.track_name_anim_trigger = Clock.create_trigger(partial(self.trigger_track_name_anim, track["name"]), 5)
+                self.track_name_anim_trigger()
             else:
                 self.track_name_label.is_animated = False
+                self.track_artist_label.animation_active = False
                 self.track_name_label.animation_complete = False
                 self.track_name_label.text = track["name"]
             
+            # See if track artist needs to be animated
             if CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents(track["artist"])[0] > max_width:
                 self.track_artist_label.is_animated = True
+                self.track_artist_label.animation_active = False
                 self.track_artist_label.animation_complete = False
                 self.track_artist_label.text = track["artist"] + " "*8 + track["artist"]
-                self.track_artist_anim_clock = Clock.schedule_once(partial(self.trigger_track_artist_anim, track["artist"]), 5)
+                self.track_artist_anim_trigger = Clock.create_trigger(partial(self.trigger_track_artist_anim, track["artist"]), 5)
+                self.track_artist_anim_trigger()
             else:
                 self.track_artist_label.is_animated = False
+                self.track_artist_label.animation_active = False
                 self.track_artist_label.animation_complete = False
                 self.track_artist_label.text = track["artist"]
 
@@ -586,28 +602,30 @@ class MainDisplay(EffectWidget):
 
     
     def trigger_track_name_anim(self, track_name, dt):
-        scroll_px_distance = CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents(track_name + " "*8)[0]
+        if not self.track_name_label.animation_active:
+            scroll_px_distance = CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents(track_name + " "*8)[0]
 
-        # Choose A for the letter because why not
-        approx_letter_size = CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents("A")[0]
-        new_scroll_x = self.track_name_scrollview.convert_distance_to_scroll(scroll_px_distance, 0)[0]
-        self.track_name_anim._animated_properties = {"scroll_x" : new_scroll_x}
+            # Choose A for the letter because why not
+            approx_letter_size = CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents("A")[0]
+            new_scroll_x = self.track_name_scrollview.convert_distance_to_scroll(scroll_px_distance, 0)[0]
+            self.track_name_anim._animated_properties = {"scroll_x" : new_scroll_x}
 
-        # We want to scroll at about ~3 letters per second since that visually looks like a reasonable speed
-        self.track_name_anim._duration = scroll_px_distance / (3*approx_letter_size)
-        self.track_name_anim.start(self.track_name_scrollview)
+            # We want to scroll at about ~3 letters per second since that visually looks like a reasonable speed
+            self.track_name_anim._duration = scroll_px_distance / (3*approx_letter_size)
+            self.track_name_anim.start(self.track_name_scrollview)
     
     def trigger_track_artist_anim(self, track_artist, dt):
-        scroll_px_distance = CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents(track_artist + " "*8)[0]
+        if not self.track_artist_label.animation_active:
+            scroll_px_distance = CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents(track_artist + " "*8)[0]
 
-        # Choose A for the letter because why not
-        approx_letter_size = CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents("A")[0]
-        new_scroll_x = self.track_artist_scrollview.convert_distance_to_scroll(scroll_px_distance, 0)[0]
-        self.track_artist_anim._animated_properties = {"scroll_x" : new_scroll_x}
+            # Choose A for the letter because why not
+            approx_letter_size = CoreLabel(font_size=self.height/35, font_name=common_vars.default_bold_font_name).get_extents("A")[0]
+            new_scroll_x = self.track_artist_scrollview.convert_distance_to_scroll(scroll_px_distance, 0)[0]
+            self.track_artist_anim._animated_properties = {"scroll_x" : new_scroll_x}
 
-        # We want to scroll at about ~3 letters per second since that visually looks like a reasonable speed
-        self.track_artist_anim._duration = scroll_px_distance / (3*approx_letter_size)
-        self.track_artist_anim.start(self.track_artist_scrollview)
+            # We want to scroll at about ~3 letters per second since that visually looks like a reasonable speed
+            self.track_artist_anim._duration = scroll_px_distance / (3*approx_letter_size)
+            self.track_artist_anim.start(self.track_artist_scrollview)
 
     def get_average_color(self):
 
