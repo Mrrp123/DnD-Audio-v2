@@ -960,13 +960,19 @@ class SettingsScreen(Screen):
         self.settings_display = SettingsDisplay()
         self.add_widget(self.settings_display)
     
+    def on_pre_enter(self):
+        self.fps_clock = Clock.schedule_interval(self.settings_display.update_fps, 0.5)
+        self.debug_clock = Clock.schedule_interval(self.settings_display.get_debug_info, 0.05)
+    
+    def on_leave(self):
+        self.fps_clock.cancel()
+        self.debug_clock.cancel()
+    
 class SettingsDisplay(Widget):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.fps_clock = Clock.schedule_interval(self.update_fps, 0.5)
-        self.debug_clock = Clock.schedule_interval(self.get_debug_info, 0.05)
         self.speed_slider: Slider = self.ids.speed_slider
         self.fade_slider: Slider = self.ids.fade_slider
         self.fps_label: Label = self.ids.fps
