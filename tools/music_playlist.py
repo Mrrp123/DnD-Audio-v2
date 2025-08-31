@@ -557,16 +557,22 @@ class MusicDatabase():
             self.data = UpdatingDict(new_dict_entry)
             self.data.update_file()
 
-        # Reload list of pointers
-        self.valid_pointers = list(self.data["tracks"].keys())
-        self.shuffled_valid_pointers = list(self.data["tracks"].keys())
-
+        # Reload list of pointers only if we're playing from all songs (don't mess with current playlist settings)
+        if self.playlist_id == 0:
+            self.valid_pointers = list(self.data["tracks"].keys())
+            self.shuffled_valid_pointers = list(self.data["tracks"].keys())
+        
+        # Update playlist_pointer_dict 0 entry for all songs
+        self.playlist_pointer_dict[0] = list(self.data["tracks"].keys())
+        
         # Add any cover art to the cache
         self.cache_covers(track_ids=[new_id])
     
     def set_track(self, track_id):
         if track_id in self.valid_pointers:
             self.track_pointer = track_id
+        else:
+            print(f"Failed to set track_id {track_id}!")
     
     def get_track(self):
         return self.data["tracks"][self.track_pointer]
