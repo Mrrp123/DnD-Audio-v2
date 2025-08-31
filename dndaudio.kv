@@ -3,7 +3,14 @@
 #:import dp kivy.metrics.dp
 #:import shaders tools.shaders
 #:import app_folder tools.common_vars.app_folder
+#:import default_font_name tools.common_vars.default_font_name
 #:import CoreLabel kivy.core.text.Label
+
+<Label>:
+    font_name: default_font_name
+
+<TextInput>:
+    font_name: default_font_name
 
 <MainDisplay>:
 
