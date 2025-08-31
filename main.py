@@ -856,12 +856,20 @@ class SongsDisplay(SongsDisplayBase):
     
     def sort_tracks(self, display=True):
         
-        if display:
-            self.track_list.data.sort(
-                key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
-        if self.app.music_database.playlist_id == 0:
-            self.app.music_database.valid_pointers.sort(
-                key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
+        if self.sort_by in ("name", "artist"):
+            if display:
+                self.track_list.data.sort(
+                    key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by].lower(), reverse=self.reverse_sort)
+            if self.app.music_database.playlist_id == 0:
+                self.app.music_database.valid_pointers.sort(
+                    key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by].lower(), reverse=self.reverse_sort)
+        else:
+            if display:
+                self.track_list.data.sort(
+                    key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by], reverse=self.reverse_sort)
+            if self.app.music_database.playlist_id == 0:
+                self.app.music_database.valid_pointers.sort(
+                    key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by], reverse=self.reverse_sort)
 
 
 class SongButton(Widget):
@@ -1222,6 +1230,13 @@ class PlaylistSongsDisplay(SongsDisplayBase):
             if self.app.music_database.playlist_id == self.playlist_id:
                 self.app.music_database.valid_pointers.sort(
                     key=lambda x : self.app.music_database.data["playlists"][self.playlist_id]["track_list"].index(x), reverse=self.reverse_sort)
+        elif self.sort_by in ("name", "artist"):
+            if display:
+                self.track_list.data.sort(
+                    key=lambda x : self.app.music_database.data["tracks"][x["track_id"]][self.sort_by].lower(), reverse=self.reverse_sort)
+            if self.app.music_database.playlist_id == self.playlist_id:
+                self.app.music_database.valid_pointers.sort(
+                    key=lambda x : self.app.music_database.data["tracks"][x][self.sort_by].lower(), reverse=self.reverse_sort)
         else:
             if display:
                 self.track_list.data.sort(
