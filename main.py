@@ -83,6 +83,10 @@ class TrackLabelShader(Label):
         self.max_width = 1
         self.is_animated = False
         self.animation_complete = False
+
+        self.ellipses_width = CoreLabel(font_size=self.font_size, font_name=common_vars.default_font_name).get_extents("...")[0]
+
+        self.app: DndAudio = App.get_running_app()
     
     def on_parent(self, *args, **kwargs):
         self.main_display: MainDisplay = self.parent.parent
@@ -90,6 +94,7 @@ class TrackLabelShader(Label):
     
     def on_size(self, *args, **kwargs):
         self._update_alpha_fade_extents()
+        self.ellipses_width = CoreLabel(font_size=self.font_size, font_name=common_vars.default_font_name).get_extents("...")[0]
     
     def _update_alpha_fade_extents(self):
         if self.width > 0:
@@ -97,10 +102,7 @@ class TrackLabelShader(Label):
             if self.width > max_width:
                 offset = self.scroll_view.scroll_x * (self.width - max_width)
                 self.canvas["right_edge"] = (max_width + offset) / self.width
-                self.canvas["left_edge"] = (self.canvas["right_edge"] - 
-                                            (CoreLabel(font_size=self.main_display.height/35, 
-                                                       font_name=common_vars.default_font_name).get_extents("...")[0] / self.width)
-                )
+                self.canvas["left_edge"] = self.canvas["right_edge"] - (self.ellipses_width / self.width)
             else:
                 self.canvas["left_edge"] = 1.0
                 self.canvas["right_edge"] = 2.0
@@ -116,26 +118,29 @@ class TrackLabelShader(Label):
         self.scroll_view.scroll_x = 0
         self._update_alpha_fade_extents()
         self.animation_complete = True
-        if self.label_type == "name":
-            # Check if the artist name is animating and if so, make sure it is complete before restarting animations so that
-            # both the name and artist animations are synced up
-            if self.main_display.track_artist_label.is_animated and self.main_display.track_artist_label.animation_complete:
-                self.main_display.track_name_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_name_anim, self.norm_text), 5)
-                self.main_display.track_artist_anim_clock = (
-                    Clock.schedule_once(partial(self.main_display.trigger_track_artist_anim, self.main_display.track_artist_label.norm_text), 5)
-                    )
-            elif not self.main_display.track_artist_label.is_animated:
-                self.main_display.track_name_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_name_anim, self.norm_text), 5)
-        elif self.label_type == "artist":
-            # Check if the track name is animating and if so, make sure it is complete before restarting animations so that
-            # both the name and artist animations are synced up
-            if self.main_display.track_name_label.is_animated and self.main_display.track_name_label.animation_complete:
-                self.main_display.track_name_anim_clock = (
-                    Clock.schedule_once(partial(self.main_display.trigger_track_name_anim, self.main_display.track_name_label.norm_text), 5)
-                    )
-                self.main_display.track_artist_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_artist_anim, self.norm_text), 5)
-            elif not self.main_display.track_name_label.is_animated:
-                self.main_display.track_artist_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_artist_anim, self.norm_text), 5)
+
+        # Don't bother restarting the animation we're not on the main screen
+        if self.app.root.current == "main":
+            if self.label_type == "name":
+                # Check if the artist name is animating and if so, make sure it is complete before restarting animations so that
+                # both the name and artist animations are synced up
+                if self.main_display.track_artist_label.is_animated and self.main_display.track_artist_label.animation_complete:
+                    self.main_display.track_name_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_name_anim, self.norm_text), 5)
+                    self.main_display.track_artist_anim_clock = (
+                        Clock.schedule_once(partial(self.main_display.trigger_track_artist_anim, self.main_display.track_artist_label.norm_text), 5)
+                        )
+                elif not self.main_display.track_artist_label.is_animated:
+                    self.main_display.track_name_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_name_anim, self.norm_text), 5)
+            elif self.label_type == "artist":
+                # Check if the track name is animating and if so, make sure it is complete before restarting animations so that
+                # both the name and artist animations are synced up
+                if self.main_display.track_name_label.is_animated and self.main_display.track_name_label.animation_complete:
+                    self.main_display.track_name_anim_clock = (
+                        Clock.schedule_once(partial(self.main_display.trigger_track_name_anim, self.main_display.track_name_label.norm_text), 5)
+                        )
+                    self.main_display.track_artist_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_artist_anim, self.norm_text), 5)
+                elif not self.main_display.track_name_label.is_animated:
+                    self.main_display.track_artist_anim_clock = Clock.schedule_once(partial(self.main_display.trigger_track_artist_anim, self.norm_text), 5)
 
 class MainScreen(Screen):
     
@@ -150,6 +155,33 @@ class MainScreen(Screen):
         if not self.initialized:
             self.main_display._frame_one_init()
             self.initialized = True
+
+        # Turn our name/artist scrolling animations back on
+        if self.main_display.track_name_label.is_animated and self.main_display.track_name_label.animation_complete:
+            self.main_display.track_name_label.on_anim_complete()
+        if self.main_display.track_artist_label.is_animated and self.main_display.track_artist_label.animation_complete:
+            self.main_display.track_artist_label.on_anim_complete()
+    
+    def on_pre_enter(self):
+        # Turn our audio info loop back on
+        if self.main_display.audio_clock is not None:
+            self.audio_clock = Clock.schedule_interval(self.main_display.update_track_info, 0.05)
+    
+    def on_leave(self):
+        
+        # If we're not looking at the page, we have no reason to care about animations for song info
+        # turn these off
+        if self.main_display.audio_clock is not None:
+            self.main_display.audio_clock.cancel()
+
+        self.main_display.track_name_anim.stop(self.main_display.track_name_scrollview)
+        if self.main_display.track_name_anim_clock is not None:
+            self.main_display.track_name_anim_clock.cancel()
+        self.main_display.track_artist_anim.stop(self.main_display.track_artist_scrollview)
+        if self.main_display.track_artist_anim_clock is not None:
+            self.main_display.track_artist_anim_clock.cancel()
+
+
 
 class MainDisplay(EffectWidget):
     next_track_event = None
@@ -485,6 +517,9 @@ class MainDisplay(EffectWidget):
             if abs((new_value := (int(pos) / track_length * 1000)) - self.time_slider.value) >= (1000 / self.time_slider.width / 3) and status != "idle":
                 self.time_slider.value = new_value
             self.update_time_text(pos, speed, track_length)
+        else:
+            # This condition is met when we're grabbing the time slider
+            self.update_time_text(self.time_slider.value * track_length / 1000, speed, track_length)
 
         # Update track name / artist (and position if user is holding the time slider)
         if ((self.track_name_label.norm_text   != track["name"] 
@@ -522,9 +557,6 @@ class MainDisplay(EffectWidget):
 
             self.track_name_label.norm_text = track["name"]
             self.track_artist_label.norm_text = track["artist"]
-            
-            if not self.update_time_pos:
-                self.update_time_text(self.time_slider.value * track_length / 1000, speed, track_length)
         
 
         # Update song cover
