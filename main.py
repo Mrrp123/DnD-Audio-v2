@@ -685,8 +685,9 @@ class MainDisplay(EffectWidget):
     def stop_time(self):
         
         if not self.time_stop_event and len(self.app.music_database) != 0: # Prevent this effect from playing twice in a row
-            status, pos, track_length, speed, reverse_audio = self.app.get_audioplayer_attr("status", "pos", "track_length", "speed", "reverse_audio")
-            if (status == "playing" and # Prevent this from playing during transitions and within 7 sec from end of song
+            status, pause_flag, pos, track_length, speed, reverse_audio = self.app.get_audioplayer_attr("status", "pause_flag", "pos", 
+                                                                                                        "track_length", "speed", "reverse_audio")
+            if (status == "playing" and not pause_flag and # Prevent this from playing during transitions, pauses, and within 7 sec from end of song
             (not reverse_audio and (track_length - pos)/1000/speed > 7) or (reverse_audio and pos/1000/speed > 7)):
             
                 self.update_uniforms(t0=-1)
