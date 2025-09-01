@@ -1370,6 +1370,7 @@ class PlaylistButton(ScreenSelectionButton):
                                                          reverse_sort=self.reverse_sort, name=self.screen_link_name))
             self.app.root.transition.direction = self.transition_direction
             self.app.root.current = self.screen_link_name
+            touch.ungrab(self)
             return True
         
         elif touch.grab_current is self:
