@@ -1403,7 +1403,6 @@ class SongRecycleView(RecycleView):
         return super().on_scroll_start(touch, check_children=False)
     
     def set_background_color(self, dt):
-        print("setting background color in set_background_color")
         self.selected_child.background_color = 0.52941176, 0.52941176, 0.52941176, 0.71372549
 
     def on_scroll_move(self, touch: MotionEvent):
