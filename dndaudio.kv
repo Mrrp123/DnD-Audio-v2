@@ -848,11 +848,12 @@
         id: debug_info
         bold: True
         color: 0,0.7,1,1
-        center_x: app.width * (2/4)
-        center_y: app.height * (3/16)
+        x: app.width * (1/24)
+        y: app.width * (1/24)
         halign: "left"
         text: "Audio player currently not active"
         text_size: app.width * (11/12), None
+        size: self.texture_size
     
     Button:
         bold: True
@@ -867,7 +868,7 @@
         valign: "top"
         text_size: self.size
         font_size: app.height/32
-        padding: (0, "15dp", "12dp", 0)
+        padding: (0, "11dp", "12dp", 0)
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
         on_release:
