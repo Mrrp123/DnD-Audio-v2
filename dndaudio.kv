@@ -534,6 +534,7 @@
     text: ""
     checkbox_group: ""
     sort_by: "date_added"
+    reverse_sort: True
     CheckBox:
         id: sort_checkbox
         group: root.checkbox_group
@@ -552,7 +553,7 @@
         padding: 0, 0, 0, 0
     Image:
         id: sort_direction_button
-        source: f"{app_folder}/assets/buttons/chevron_down.png" if root.sort_by in ("date_added", "play_date", "play_count") else f"{app_folder}/assets/buttons/chevron_up.png"
+        source: f"{app_folder}/assets/buttons/chevron_down.png" if root.reverse_sort else f"{app_folder}/assets/buttons/chevron_up.png"
         size_hint_x: .2
         fit_mode: "scale-down"
         mipmap: True

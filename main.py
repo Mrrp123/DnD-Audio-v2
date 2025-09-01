@@ -1001,24 +1001,17 @@ class SortButton(BoxLayout):
             self.background_color = 0.2, 0.2, 0.2, 1
             
             if self.sort_checkbox.active:
-                pass
-
                 self.reverse_sort = not self.reverse_sort
-                if self.reverse_sort:
-                    self.sort_direction_button.source = f"{common_vars.app_folder}/assets/buttons/chevron_down.png"
-                else:
-                    self.sort_direction_button.source = f"{common_vars.app_folder}/assets/buttons/chevron_up.png"
-                
             else:
                 self.reverse_sort = self.sort_by in ("date_added", "play_date", "play_count")
                 self.sort_checkbox.active = True
-            
+
             self.songs_display.change_sort(self.sort_by, self.reverse_sort)
             self.songs_display_dropdown.dismiss()
 
             touch.ungrab(self)
-
             return True
+        
         elif touch.grab_current is self: 
             self.background_color = 0.2, 0.2, 0.2, 1
             touch.ungrab(self)
@@ -1867,6 +1860,7 @@ if __name__ == '__main__':
 
                 button.text = settings["text"]
                 button.sort_by = settings["sort_by"]
+                button.reverse_sort = settings["sort_by"] in ("date_added", "play_date", "play_count")
                 button.background_color = (0.2, 0.2, 0.2, 1)
                 button.checkbox_group = hex(id(widget))
 
