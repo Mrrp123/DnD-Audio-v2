@@ -990,7 +990,7 @@ class SortButton(BoxLayout):
         self.sort_direction_button: Image = self.ids.sort_direction_button
     
     def on_touch_down(self, touch: MotionEvent):
-        if self.collide_point(*touch.pos):
+        if self.collide_point(*touch.pos) and not touch.is_mouse_scrolling:
             touch.grab(self) # This helps us reset the color properly
             self.background_color = 0.52941176, 0.52941176, 0.52941176, 1 # hex 878787FF
             
