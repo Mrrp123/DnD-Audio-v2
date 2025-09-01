@@ -719,13 +719,12 @@
         size_hint: None, None
         width: app.height * (11/224)
         height: self.width
-        disabled_color: 1,1,1,1
-        background_color: 0.23137254901960785,1,0.333,1 #3bff55ff
-        disabled_background_color:0.23137254901960785,1,0.333,1
-        x: dp(23) * 2 + CoreLabel(font_size=app.height/20, font_name=default_font_name).get_extents("Songs")[0]
-        center_y: (app.height - app.height / 6) + app.height/30 #self.main_label.center_y
-        text: "Add Song"
+        x: dp(23) * 1.5 + CoreLabel(font_size=app.height/20, font_name=default_font_name).get_extents("Songs")[0]
+        center_y: (app.height - app.height / 6) + app.height/35 #self.main_label.center_y
         on_release: app.filechooser.open_file(multiple=True, filters=["*.mp3;*.ogg;*.wav"], on_selection=app._add_file_handler)
+
+        background_normal: f"{app_folder}/assets/buttons/add_song_normal.png"
+        background_down: f"{app_folder}/assets/buttons/add_song_pressed.png"
         border: (0,0,0,0)
 
 <SettingsDisplay>:
