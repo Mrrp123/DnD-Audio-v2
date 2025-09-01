@@ -1033,7 +1033,7 @@
         text_size: self.size
         # size: self.texture_size
         font_size: app.height/32
-        padding: ("12dp", "15dp", 0, 0)
+        padding: ("12dp", "11dp", 0, 0)
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
         on_release:
@@ -1045,7 +1045,7 @@
         bold: True
         color: 1,1,1,1
         width: app.width/2
-        height: app.height/20
+        height: app.height/15
         x: 0
         y: app.height - app.height / 6
         halign: "left"
@@ -1064,6 +1064,7 @@
         height: self.minimum_height
         text_size: self.size 
         font_size: app.height/40
+        font_name: "Roboto"
         padding: 6,6,6,6
 
     Widget:
@@ -1098,7 +1099,7 @@
         id: playlists
         viewclass: "PlaylistButton"
         width: app.width
-        height: playlist_search.y - playlist_search.height
+        height: playlist_search.y - size_indicator.height
         bar_width: dp(10)
         scroll_type: ["bars", "content"]
         scroll_distance: 1
