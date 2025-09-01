@@ -6,12 +6,10 @@ from kivy.app import App
 
 from kivy.uix.widget import Widget
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.screenmanager import ScreenManager, Screen, CardTransition, NoTransition, SlideTransition
+from kivy.uix.screenmanager import ScreenManager, Screen, NoTransition, SlideTransition
 from kivy.uix.effectwidget import EffectWidget
 from kivy.uix.label import Label
 from kivy.uix.recycleview import RecycleView
-
-from kivy.graphics import Color, Rectangle, RoundedRectangle, Line
 
 from kivy.clock import Clock
 from kivy.animation import Animation
@@ -38,24 +36,21 @@ if TYPE_CHECKING:
 
 import tools.common_vars as common_vars
 from tools.music_playlist import MusicDatabase
-import sys
 import os
 import numpy as np
 import time
 import struct
 from glob import glob
-from threading import Thread
 from functools import partial
 
 
 
 from pythonosc.dispatcher import Dispatcher
-from pythonosc.osc_server import BlockingOSCUDPServer, ThreadingOSCUDPServer
+from pythonosc.osc_server import BlockingOSCUDPServer
 from pythonosc.udp_client import SimpleUDPClient
 
 from kivy.graphics import (RenderContext, Fbo, Color, Rectangle,
-                           Translate, PushMatrix, PopMatrix, ClearColor,
-                           ClearBuffers)
+                           PushMatrix, PopMatrix, ClearColor, ClearBuffers)
 
 class TrackLabelShader(Label):
     fs = StringProperty(None)
