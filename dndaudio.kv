@@ -544,13 +544,19 @@
         halign: "left"
         valign: "center"
         bold: True
-        size_hint_x: .8
+        size_hint_x: .65 # Somehow this works
         text_size: self.size
         font_size: root.height * (35/64)
         color: 1, 1, 1, 1
         height: root.height
         padding: 0, 0, 0, 0
-
+    Image:
+        id: sort_direction_button
+        source: f"{app_folder}/assets/buttons/chevron_down.png" if root.sort_by in ("date_added", "play_date", "play_count") else f"{app_folder}/assets/buttons/chevron_up.png"
+        size_hint_x: .2
+        fit_mode: "scale-down"
+        mipmap: True
+        color: 1, 1, 1, int(sort_checkbox.active)
 
 <TopSortButton>:
     canvas.before:

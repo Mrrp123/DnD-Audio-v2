@@ -18,7 +18,7 @@ from kivy.animation import Animation
 from kivy.utils import get_color_from_hex, platform
 from tools.kivy_gradient import Gradient
 from tools.shaders import TimeStop
-from kivy.properties import StringProperty, NumericProperty, ListProperty, ColorProperty
+from kivy.properties import StringProperty, NumericProperty, ListProperty, ColorProperty, BooleanProperty
 from kivy.core.text import Label as CoreLabel
 from kivy.metrics import dp
 
@@ -973,6 +973,7 @@ class SortButton(BoxLayout):
     sort_by = StringProperty("date_added")
     background_color = ColorProperty()
     checkbox_group = StringProperty()
+    reverse_sort = BooleanProperty()
 
     def on_parent(self, widget, parent):
         # This function gets called (for some reason???) when removing widgets as well I guess
@@ -990,19 +991,44 @@ class SortButton(BoxLayout):
 
         # This is handled in the dndaudio.kv file
         self.sort_checkbox: CheckBox
+        self.sort_direction_button: Image = self.ids.sort_direction_button
     
     def on_touch_down(self, touch: MotionEvent):
         if self.collide_point(*touch.pos):
+            touch.grab(self) # This helps us reset the color properly
             self.background_color = 0.52941176, 0.52941176, 0.52941176, 1 # hex 878787FF
-            reverse_sort = self.sort_by in ("date_added", "play_date", "play_count")
-            self.songs_display.change_sort(self.sort_by, reverse_sort)
-            self.songs_display_dropdown.dismiss()
-            self.sort_checkbox.active = True
+            
             return True
     
     def on_touch_up(self, touch: MotionEvent):
-        self.background_color = 0.2, 0.2, 0.2, 1
+        
+        if self.collide_point(*touch.pos) and touch.grab_current is self:
+            self.background_color = 0.2, 0.2, 0.2, 1
+            
+            if self.sort_checkbox.active:
+                pass
 
+                self.reverse_sort = not self.reverse_sort
+                if self.reverse_sort:
+                    self.sort_direction_button.source = f"{common_vars.app_folder}/assets/buttons/chevron_down.png"
+                else:
+                    self.sort_direction_button.source = f"{common_vars.app_folder}/assets/buttons/chevron_up.png"
+                
+            else:
+                self.reverse_sort = self.sort_by in ("date_added", "play_date", "play_count")
+                self.sort_checkbox.active = True
+            
+            self.songs_display.change_sort(self.sort_by, self.reverse_sort)
+            self.songs_display_dropdown.dismiss()
+
+            touch.ungrab(self)
+
+            return True
+        elif touch.grab_current is self: 
+            self.background_color = 0.2, 0.2, 0.2, 1
+            touch.ungrab(self)
+            return True
+        
 
 # The sole purpose for these classes is so that I can do
 # canvas stuff in the kv file
@@ -1671,6 +1697,7 @@ class DndAudio(App):
                 fp.write(int(self.music_database._shuffle).to_bytes(1, "little"))
                 fp.write(int(self.music_database.repeat).to_bytes(1, "little"))
                 fp.write(self.sort_by_bytemap[self.root.get_screen("songs").songs_display.sort_by])
+                fp.write(int(self.root.get_screen("songs").songs_display.reverse_sort).to_bytes(1, "little"))
                 for channel_val in main_display.c1 + main_display.c2: # c1 and c2 should be lists of floats
                     fp.write(round(channel_val * 255).to_bytes(1, "little"))
                 fp.write(int(fade_duration).to_bytes(2, "little"))
@@ -1691,6 +1718,7 @@ class DndAudio(App):
                 shuffle = int.from_bytes(fp.read(1), "little")
                 repeat = int.from_bytes(fp.read(1), "little")
                 sort_by = self.reverse_sort_by_bytemap[fp.read(1)]
+                reverse_sort = int.from_bytes(fp.read(1), "little")
                 c1 = np.ndarray(shape=(4,), dtype=np.uint8, buffer=fp.read(4)) / 255
                 c2 = np.ndarray(shape=(4,), dtype=np.uint8, buffer=fp.read(4)) / 255
                 fade_duration = int.from_bytes(fp.read(2), "little")
@@ -1738,7 +1766,7 @@ class DndAudio(App):
 
             songs_display: SongsDisplay = self.root.get_screen("songs").songs_display
             songs_display.sort_by = sort_by
-            songs_display.reverse_sort = sort_by in ("date_added", "play_date", "play_count")
+            songs_display.reverse_sort = reverse_sort
             songs_display.sort_buttons[sort_by].sort_checkbox.active = True
             songs_display.refresh_tracks()
 
@@ -1817,6 +1845,8 @@ if __name__ == '__main__':
 
         def __init__(self, **kwargs):
             super().__init__(**kwargs)
+            self.do_scroll_x = False
+            self.do_scroll_y = False
             self.app: DndAudio = App.get_running_app()
         
         def on_sort_settings(self, widget, new_sort_settings):
