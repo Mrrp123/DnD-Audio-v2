@@ -1444,7 +1444,7 @@ class DndAudio(App):
         # We haven't been using reload_songs for quite some time, leave it for later reworks
         self.music_database = MusicDatabase(common_vars.music_database_path)
         # This won't work on android
-        if platform in ('linux', 'linux2', 'macos', 'win') and len(self.music_database) != 0:
+        if platform in ('linux', 'linux2', 'macosx', 'win') and len(self.music_database) != 0:
             self.music_database.cache_covers()
         elif platform == "android":
             from android.permissions import request_permissions, Permission
@@ -1515,7 +1515,7 @@ class DndAudio(App):
         
         loaded_songs = []
 
-        if platform in ('linux', 'linux2', 'macos', 'win'):
+        if platform in ('linux', 'linux2', 'macosx', 'win'):
             loaded_songs = glob(f"{common_vars.app_folder}/audio/*.wav") + glob(f"{common_vars.app_folder}/audio/*.ogg") + glob(f"{common_vars.app_folder}/audio/*.mp3")
 
         elif platform == "android":
@@ -1592,7 +1592,7 @@ class DndAudio(App):
         #     if not any([os.path.samefile(file, database_file) for database_file in database_files]):
         #         self.music_database.add_track(file)
         # This won't work on android
-        if platform in ('linux', 'linux2', 'macos', 'win'):
+        if platform in ('linux', 'linux2', 'macosx', 'win'):
             self.music_database.cache_covers()
 
 
@@ -1604,7 +1604,7 @@ class DndAudio(App):
             argument = ''
             self.audio_service.start(mActivity, argument)
 
-        elif platform in ('linux', 'linux2', 'macos', 'win'):
+        elif platform in ('linux', 'linux2', 'macosx', 'win'):
             from runpy import run_path
             from multiprocessing import Process, set_start_method
             set_start_method("spawn")

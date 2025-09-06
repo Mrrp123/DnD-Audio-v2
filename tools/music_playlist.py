@@ -27,7 +27,7 @@ if platform == "android":
     AUDIO_API = "audiotrack"
 
 
-if platform in ('win', 'linux', 'linux2', 'macos'):
+if platform in ('win', 'linux', 'linux2', 'macosx'):
     import miniaudio
     AUDIO_API = "miniaudio"
 
