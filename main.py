@@ -1866,6 +1866,12 @@ if __name__ == '__main__':
                 button.checkbox_group = hex(id(widget))
 
                 self.add_widget(button)
+        
+        def open(self, *args):
+            new_font_size = CoreLabel(font_size=self.app.height/40).get_extents("_")[1]+12
+            for child in self.container.children:
+                child.height = new_font_size
+            super().open(*args)
 
     DndAudio().run()
         
