@@ -1,5 +1,6 @@
 from tools.audiosegment import AudioSegment
 from tools.audioprocessing import *
+from tools.database import load_db
 import tools.common_vars as common_vars
 
 import numpy as np
@@ -10,7 +11,6 @@ from glob import glob
 from threading import Thread, Lock
 import time
 from functools import reduce
-import yaml
 
 from pythonosc.dispatcher import Dispatcher
 from pythonosc.osc_server import ThreadingOSCUDPServer
@@ -618,8 +618,7 @@ class AudioPlayer():
         """
         Reloads track information
         """
-        with open(common_vars.music_database_path) as fp:
-            self.track_data: dict = yaml.safe_load(fp)["tracks"]
+        self.track_data: dict = load_db(common_vars.music_database_path)["tracks"]
 
 
     

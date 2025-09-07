@@ -1,6 +1,5 @@
 import os
 from threading import Thread
-import yaml
 from datetime import datetime
 from mutagen.mp3 import MP3
 from mutagen.oggvorbis import OggVorbis
@@ -10,10 +9,12 @@ from mutagen.id3._util import ID3NoHeaderError
 from PIL import Image, ImageOps, ImageChops, UnidentifiedImageError
 import numpy as np
 from io import BytesIO
-from ast import literal_eval
 import random
 import hashlib
 import copy
+
+from tools.database import save_db, load_db, DatabaseFormatError
+
 from typing import TypeVar, Generic, TypedDict
 K = TypeVar("K")
 V = TypeVar("V")
@@ -33,8 +34,6 @@ if platform in ('win', 'linux', 'linux2', 'macosx'):
 
 import tools.common_vars as common_vars
 
-class DatabaseFormatError(Exception):
-    pass
 
 class UpdatingDict(dict[K, V], Generic[K, V]):
     """
@@ -67,15 +66,11 @@ class UpdatingDict(dict[K, V], Generic[K, V]):
             if isinstance(self.parent, UpdatingDict):
                 self.parent.__setitem__(self.parent_key, self)
             elif not self.locked:
-                Thread(target=self.update_file(), daemon=False).start()
+                Thread(target=save_db, args=(common_vars.music_database_path, self), daemon=False).start()
     
     def update(self, *args, **kwargs):
         for key, value in dict(*args, **kwargs).items():
             self[key] = value
-            
-    def update_file(self):
-        with open(common_vars.music_database_path, "w") as fp:
-            yaml.safe_dump(literal_eval(str(self)), stream=fp, sort_keys=False)
 
 class TrackInfo(TypedDict):
     id: int
@@ -92,8 +87,8 @@ class TrackInfo(TypedDict):
     cover: str
     album: str
     genre: str
-    year: int | None
-    bpm: int | None
+    year: int
+    bpm: int
     play_count: int
     play_date: float
 
@@ -145,12 +140,9 @@ class MusicDatabase():
     """
 
     def __init__(self, database_file) -> None:
-        
-        # I don't like how lists look in yaml :( so I make them inline
-        yaml.SafeDumper.add_representer(list, lambda dumper, data : dumper.represent_sequence('tag:yaml.org,2002:seq', data, flow_style=True))
 
         try:
-            self.data: UpdatingDict[str, UpdatingDict[int, TrackInfo|PlaylistInfo]] = UpdatingDict(self.load_yaml(database_file))
+            self.data: UpdatingDict[str, UpdatingDict[int, TrackInfo|PlaylistInfo]] = UpdatingDict(load_db(database_file))
             self.track_pointer = list(self.data["tracks"].keys())[0] # id pointer to a song in self.database["tracks"]
             self.playlist_pointer_dict = {0 : list(self.data["tracks"].keys())} # 0 is a special playlist id for all songs
             self.playlist_pointer_dict.update({playlist_id : self.data["playlists"][playlist_id]["track_list"] for playlist_id in self.data["playlists"].keys()})
@@ -205,21 +197,8 @@ class MusicDatabase():
         self.data["tracks"][track_id]["play_date"] = datetime.now().timestamp()
         self.data.locked = True
     
-    def load_yaml(self, database_file):
-        try:
-            with open(database_file, "r") as fp:
-                yaml_object = yaml.safe_load(fp)
-        except FileNotFoundError:
-            yaml_object = None
-
-        if yaml_object is None:
-            raise OSError(f"No yaml data in {database_file}")
-        self._verify_format(yaml_object)
-
-        return yaml_object
-    
     @staticmethod
-    def _verify_format(yaml_object: dict[str, dict[int, dict[str, int|float|str|None]]]):
+    def _verify_format(yaml_object: dict[str, dict[int, dict[str, int|float|str]]]):
 
         required_base_keys = ("tracks", "playlists") # playlists keys can be empty, but it still needs to be there
 
@@ -245,8 +224,8 @@ class MusicDatabase():
             "cover": str,
             "album": str,
             "genre": str,
-            "year": int | None,
-            "bpm": int | None,
+            "year": int,
+            "bpm": int,
             "play_count": int,
             "play_date": float,
         }
@@ -493,8 +472,8 @@ class MusicDatabase():
             cover="",
             album="",
             genre="",
-            year=None,
-            bpm=None,
+            year=0,
+            bpm=0,
             ):
         
         persistent_id = self._get_hash_from_file(file)
@@ -519,9 +498,9 @@ class MusicDatabase():
             track_info["album"] = album
         if genre != "":
             track_info["genre"] = genre
-        if year is not None:
+        if year:
             track_info["year"] = year
-        if bpm is not None:
+        if bpm:
             track_info["bpm"] = bpm
 
         new_dict_entry = {
@@ -635,16 +614,16 @@ class MusicDatabase():
         
         # Base dict to fill known info into
         track_info = {
-            "length" : None,
-            "rate" : None,
-            "bit_rate" : None,
+            "length" : 0,
+            "rate" : 0,
+            "bit_rate" : 0,
             "name" : os.path.split(file)[-1],
             "artist" : "",
             "cover" : "",
             "album" : "",
             "genre" : "",
-            "year" : None,
-            "bpm" : None,
+            "year" : 0,
+            "bpm" : 0,
         }
 
         try:
@@ -689,16 +668,16 @@ class MusicDatabase():
 
         # Base dict to fill known info into
         track_info = {
-            "length" : None,
-            "rate" : None,
-            "bit_rate" : None,
+            "length" : 0,
+            "rate" : 0,
+            "bit_rate" : 0,
             "name" : os.path.split(file)[-1],
             "artist" : "",
             "cover" : "",
             "album" : "",
             "genre" : "",
-            "year" : None,
-            "bpm" : None,
+            "year" : 0,
+            "bpm" : 0,
         }
 
         # rate and length absolutely must exist, if they don't these will throw errors

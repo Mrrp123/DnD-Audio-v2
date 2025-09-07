@@ -13,5 +13,6 @@ cache/*
 .vscode
 *.md
 conv.py
-*xml_to_yaml.py
+*.db
 *.xml
+conversion_tools/

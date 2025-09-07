@@ -5,6 +5,6 @@ audioplayer_thread = None
 audioplayer = None
 
 app_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-music_database_path = f"{app_folder}/music_data.yaml"
+music_database_path = f"{app_folder}/music_data.db"
 default_bold_font_name = f"{app_folder}/assets/fonts/noto-sans-jp-japanese-700-normal.ttf"
 default_font_name = f"{app_folder}/assets/fonts/noto-sans-jp-japanese-400-normal.ttf"
