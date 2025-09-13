@@ -1380,15 +1380,19 @@ class SongRecycleView(RecycleView):
     def on_scroll_start(self, touch: MotionEvent):
 
         # Make sure we're in the RecycleView before trying to highlight anything
-        if touch.y <= self.height and not touch.is_mouse_scrolling:
-            index = self.layout_manager.get_view_index_at(self.to_local(*touch.pos))
+        if (touch.y <= self.height and not touch.is_mouse_scrolling
+            and (local_touch_pos := self.to_local(*touch.pos))[1] > 0 # Make sure we're selecting only in the region of our RV objects
+            and local_touch_pos[1] < self.layout_manager._rv_positions[-1]+self.layout_manager._rv_positions[1]):
 
-            self.selected_track_id = self.data[index]["track_id"]
-            for child in self.layout_manager.children:
-                if child.track_id == self.selected_track_id:
-                    self.selected_child = child
-                    self.color_clock = Clock.schedule_once(self.set_background_color, 0.05)
-                    break
+            index = self.layout_manager.get_view_index_at(local_touch_pos)
+
+            if self.data:
+                self.selected_track_id = self.data[index]["track_id"]
+                for child in self.layout_manager.children:
+                    if child.track_id == self.selected_track_id:
+                        self.selected_child = child
+                        self.color_clock = Clock.schedule_once(self.set_background_color, 0.05)
+                        break
 
         return super().on_scroll_start(touch, check_children=False)
     
@@ -1408,15 +1412,19 @@ class PlaylistRecycleView(SongRecycleView):
     def on_scroll_start(self, touch: MotionEvent):
 
         # Make sure we're in the RecycleView before trying to highlight anything
-        if touch.y <= self.height and not touch.is_mouse_scrolling:
-            index = self.layout_manager.get_view_index_at(self.to_local(*touch.pos))
+        if (touch.y <= self.height and not touch.is_mouse_scrolling
+            and (local_touch_pos := self.to_local(*touch.pos))[1] > 0 # Make sure we're selecting only in the region of our RV objects
+            and local_touch_pos[1] < self.layout_manager._rv_positions[-1]+self.layout_manager._rv_positions[1]):
 
-            self.selected_playlist_id = self.data[index]["playlist_id"]
-            for child in self.layout_manager.children:
-                if child.playlist_id == self.selected_playlist_id:
-                    self.selected_child = child
-                    self.color_clock = Clock.schedule_once(self.set_background_color, 0.05)
-                    break
+            index = self.layout_manager.get_view_index_at(local_touch_pos)
+
+            if self.data:
+                self.selected_playlist_id = self.data[index]["playlist_id"]
+                for child in self.layout_manager.children:
+                    if child.playlist_id == self.selected_playlist_id:
+                        self.selected_child = child
+                        self.color_clock = Clock.schedule_once(self.set_background_color, 0.05)
+                        break
 
         return super(SongRecycleView, self).on_scroll_start(touch, check_children=False)
 
