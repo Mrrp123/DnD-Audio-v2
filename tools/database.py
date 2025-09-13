@@ -46,7 +46,7 @@ def bytes_to_string(fp: BufferedReader):
     elif byte == bytes([0x00]):
         return ""
     else:
-        raise ValueError(f"Unknown byte encountered while parsing string: 0x{int.from_bytes(byte, "little"):02X}")
+        raise ValueError(f"Unknown byte encountered while parsing string: 0x{int.from_bytes(byte, 'little'):02X}")
 
 def load_db(database_file):
     """

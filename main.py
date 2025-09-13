@@ -1084,7 +1084,7 @@ class SettingsDisplay(Widget):
             if self.app.music_database.playlist_id:
                 self.debug_info_label.text = (
                 "Debug Info:\n" +
-                f"Current Playlist: {self.app.music_database.data["playlists"][self.app.music_database.playlist_id]["name"]}" +
+                f"Current Playlist: {self.app.music_database.data['playlists'][self.app.music_database.playlist_id]['name']}" +
                 self.app.get_audioplayer_attr("debug_string")
                 )
             else:
