@@ -3,12 +3,11 @@
 #:import dp kivy.metrics.dp
 #:import shaders tools.shaders
 #:import app_folder tools.common_vars.app_folder
-#:import default_bold_font_name tools.common_vars.default_bold_font_name
 #:import default_font_name tools.common_vars.default_font_name
 #:import CoreLabel kivy.core.text.Label
 
 <Label>:
-    font_name: default_bold_font_name
+    font_name: default_font_name
 
 <TextInput>:
     font_name: default_font_name
@@ -446,10 +445,12 @@
             size: self.size
     canvas.after:
         Color:
-            rgba: 1,1,1,0.5
+            rgba: 1,1,1,0.15
         Line:
             width: 1
-            points: (root.height, self.y, root.width, self.y)
+            # For some goofy, fuck ass reason, opengl lines are defined on half pixel boundaries
+            # offset line by 0.5 to get true 1 px lines
+            points: (root.height * (6/5), round(self.y) + 0.5, root.width, round(self.y) + 0.5)
 
     Label:
         id: name_label
@@ -458,11 +459,11 @@
         halign: "left"
         valign: "bottom"
         text_size: self.size
-        font_size: app.height / 40
+        font_size: app.height / 50
         shorten: True
         shorten_from: "right"
         size_hint: 1, None
-        padding: root.height, 0, root.width / 12, 0
+        padding: root.height * (6/5), 0, root.width / 12, 0
 
     Label:
         id: artist_label
@@ -471,48 +472,27 @@
         halign: "left"
         valign: "top"
         text_size: self.size
-        font_size: app.height / 50
+        font_size: app.height / 55
         color: 2/3, 2/3, 2/3, 1
         shorten: True
         shorten_from: "right"
         size_hint: 1, None
-        padding: root.height, 0, root.width / 12, 0
+        padding: root.height * (6/5), 0, root.width / 12, 0
 
     Image:
         id: song_cover
-        source: root.image#"./assets/covers/default_cover.png"
-        size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
+        source: root.image
         x: -root.width
-        fit_mode: "scale-down"
-        mipmap: True
+        size: root.height * (6/7), min(1/self.image_ratio * root.height * (6/7), root.height * (6/7))
+        fit_mode: "contain"
+        mipmap: False
         canvas:
-            # Create mask for rounded rectangle for song cover
-            StencilPush 
-            Color:
-                rgba: 1,1,1,1
             RoundedRectangle:
-                size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
-                pos: self.parent.x + root.height * (1/6), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))) / 2
-                radius: self.size[1] / 12,
-            
-            # Draw song cover
-            StencilUse
-            Rectangle:
                 texture: self.texture
-                size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
-                pos: self.parent.x + root.height * (1/6), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))) / 2
-
-            # Remove mask (so that we can draw the rest of the frame)
-            StencilUnUse
-            Color:
-                rgba: 1,1,1,1
-            RoundedRectangle:
-                size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
-                pos: self.parent.x + root.height * (1/6), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))) / 2
+                size: root.height * (6/7), min(1/self.image_ratio * root.height * (6/7), root.height * (6/7))
+                pos: self.parent.x + root.height * (1/5), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (6/7), root.height * (6/7))) / 2
                 radius: self.size[1] / 12,
 
-            # Clear the stencil object
-            StencilPop
 
 <SortButton>:
     orientation: "horizontal"
@@ -531,7 +511,7 @@
         valign: "center"
         size_hint_x: .65 # Somehow this works
         text_size: self.size
-        font_size: root.height * (35/64)
+        font_size: app.height / 50
         color: 1, 1, 1, 1
         height: root.height
         padding: 0, 0, 0, 0
@@ -597,11 +577,12 @@
         {"text" : "Date Added", "sort_by" : "date_added"},\
         {"text" : "Last Played", "sort_by" : "play_date"},\
         {"text" : "Plays", "sort_by" : "play_count"}
+    main_label_font_size: app.height/22
 
     Button:
         id: back_button
         width: min(app.height / 4, app.width / 3)
-        height: app.height / 10
+        height: app.height / 12
         background_color: 1,1,1,0
         color: 0, 1, 1, 1
         x: 0
@@ -611,7 +592,7 @@
         valign: "top"
         text_size: self.size
         # size: self.texture_size
-        font_size: app.height/32
+        font_size: app.height/40
         padding: ("12dp", "11dp", 0, 0)
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
@@ -621,14 +602,14 @@
         id: main_label
         color: 1,1,1,1
         width: app.width
-        height: app.height/15
+        height: root.main_label_font_size * 1.25
         x: 0
-        y: app.height - app.height / 6
+        y: back_button.y - self.height
         halign: "left"
         # text: "Songs"
         text_size: self.size
         #size: self.texture_size
-        font_size: app.height/20
+        font_size: root.main_label_font_size
         padding: ("23dp", "15dp", 0, 0)
 
 
@@ -665,7 +646,7 @@
         width: app.width - main_label.padding[0]*2
         height: self.minimum_height
         text_size: self.size 
-        font_size: app.height/40
+        font_size: app.height/45
         font_name: "Roboto"
         padding: 6,6,6,6
 
@@ -673,11 +654,11 @@
         id: text_box_background
         canvas:
             Color:
-                rgba: .2,.2,.2,.3
+                rgba: .1,.1,.1, 1
             RoundedRectangle:
                 size: size_indicator.width + size_indicator.height / 2, size_indicator.size[1]
-                pos: main_label.x + main_label.padding[0] - size_indicator.height / 4, app.height * (3/4)
-                radius: size_indicator.height / 2,
+                pos: main_label.x + main_label.padding[0] - size_indicator.height / 4, main_label.y - (size_indicator.height * 1.25)
+                radius: size_indicator.height / 3,
 
     TextInput:
         id: track_search
@@ -688,11 +669,12 @@
         cursor_color: 1,1,1,1
         multiline: False
         x: main_label.x + main_label.padding[0]
-        y: app.height * (3/4)
+        y: main_label.y - (size_indicator.height * 1.25)
         halign: "left"
         # hint_text: "Search in Songs"
+        hint_text_color: .5, .5, .5, 1
         text_size: self.size 
-        font_size: app.height/40
+        font_size: app.height/45
         padding: size_indicator.padding
         on_text: root.on_text()
     
@@ -700,12 +682,12 @@
         id: track_list
         viewclass: "SongButton"
         width: app.width
-        height: track_search.y - size_indicator.height
+        height: int(track_search.y - size_indicator.height)
         bar_width: dp(10)
         scroll_type: ["bars", "content"]
-        scroll_distance: 1
+        scroll_distance: 5
         RecycleBoxLayout:
-            default_size: None, size_indicator.size[1]*2
+            default_size: None, int(size_indicator.size[1]*1.666)
             default_size_hint: 1, None
             size_hint: None, None
             height: self.minimum_height
@@ -714,13 +696,16 @@
             background_color: 1,1,1,0.3
 
 <SongsDisplay>:
+
+    main_label_font_size: app.height/22
+
     Button:
         id: add_song
         size_hint: None, None
         width: app.height * (11/224)
         height: self.width
-        x: dp(23) * 1.5 + CoreLabel(font_size=app.height/20, font_name=default_font_name).get_extents("Songs")[0]
-        center_y: (app.height - app.height / 6) + app.height/35 #self.main_label.center_y
+        x: dp(23) * 1.5 + CoreLabel(font_size=app.height/22, font_name=default_font_name).get_extents("Songs")[0]
+        center_y: (app.height - app.height / 12 - root.main_label_font_size * 1.25) + app.height/37 #self.main_label.center_y
         on_release: app.filechooser.open_file(multiple=True, filters=["*.mp3;*.ogg;*.wav"], on_selection=app._add_file_handler)
 
         background_normal: f"{app_folder}/assets/buttons/add_song_normal.png"
