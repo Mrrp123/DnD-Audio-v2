@@ -850,7 +850,7 @@
             width: 1
             # For some goofy, fuck ass reason, opengl lines are defined on half pixel boundaries
             # offset line by 0.5 to get true 1 px lines
-            points: (self.height, round(self.y) + 0.5, self.width, round(self.y) + 0.5)
+            points: (self.height * (6/5), round(self.y) + 0.5, self.width, round(self.y) + 0.5)
 
     Label:
         id: screen_label
@@ -859,16 +859,14 @@
         halign: "left"
         valign: "middle"
         text_size: self.size
-        font_size: app.height / 35
+        font_size: app.height / 37
         color: 1, 1, 1, 1
-        shorten: True
-        shorten_from: "right"
         size_hint: 1, None
-        padding: root.height, 0, root.width / 12, 0
+        padding: root.height * (6/5), 0, root.width / 12, 0
     
     Label:
         id: arrow_indicator
-        pos: root.width - self.width, root.y
+        pos: root.width - self.width, root.y + CoreLabel(font_size=app.height/30).get_extents("\u203A")[0]/2
         size: root.size[1]/2, root.size[1]
         halign: "right"
         valign: "middle"
@@ -882,43 +880,25 @@
     Image:
         id: screen_icon
         source: root.image#"./assets/covers/default_cover.png"
-        size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
+        size: root.height * (6/7), min(1/self.image_ratio * root.height * (6/7), root.height * (6/7))
         x: -root.width
-        fit_mode: "scale-down"
+        fit_mode: "contain"
         mipmap: True
         canvas:
-            # Create mask for rounded rectangle for song cover
-            StencilPush 
-            RoundedRectangle:
-                size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
-                pos: self.parent.x + root.height * (1/6), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))) / 2
-                radius: self.size[1] / 12,
-            
-            # Draw song cover
-            StencilUse
             Color:
                 rgba: root.image_color
-            Rectangle:
-                texture: self.texture
-                size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
-                pos: self.parent.x + root.height * (1/6), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))) / 2
-
-            # Remove mask (so that we can draw the rest of the frame)
-            StencilUnUse
             RoundedRectangle:
-                size: root.height * (2/3), min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))
-                pos: self.parent.x + root.height * (1/6), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (2/3), root.height * (2/3))) / 2
+                texture: self.texture
+                size: root.height * (6/7), min(1/self.image_ratio * root.height * (6/7), root.height * (6/7))
+                pos: self.parent.x + root.height * (1/5), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (6/7), root.height * (6/7))) / 2
                 radius: self.size[1] / 12,
-
-            # Clear the stencil object
-            StencilPop
 
 <LibraryDisplay>:
 
     Button:
         id: library_back
         width: min(app.height / 4, app.width / 3)
-        height: app.height / 10
+        height: app.height / 12
         background_color: 1,1,1,0
         color: 0, 1, 1, 1
         x: 0
@@ -928,7 +908,7 @@
         valign: "top"
         text_size: self.size
         # size: self.texture_size
-        font_size: app.height/32
+        font_size: app.height/40
         padding: ("12dp", "11dp", 0, 0)
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
@@ -940,19 +920,19 @@
         id: library_label
         color: 1,1,1,1
         width: app.width
-        height: app.height/15
+        height: app.height/22 * 1.25
         x: 0
-        y: app.height - app.height / 6
+        y: library_back.y - self.height
         halign: "left"
         text: "Library"
         text_size: self.size
-        font_size: app.height/20
+        font_size: app.height/22
         padding: ("23dp", "15dp", 0, 0)
 
     BoxLayout:
         orientation: "vertical"
         width: app.width
-        height: (CoreLabel(font_size=app.height/40).get_extents("_")[1]+12)*4 # Same size as size_indicator.height * 4 (what we use for songs page)
+        height: (CoreLabel(font_size=app.height/40).get_extents("_")[1]+12)*3 # Same size as size_indicator.height * 3 (what we use for songs page)
         x: 0
         y: round(library_label.y - self.height - library_label.height / 4) # round position else seperator lines look funny
 
