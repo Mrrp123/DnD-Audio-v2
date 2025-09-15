@@ -534,7 +534,7 @@ class MusicDatabase():
         else:
             new_dict_entry = {"tracks" : {new_id : new_dict_entry}, "playlists" : {}}
             self.data = UpdatingDict(new_dict_entry)
-            self.data.update_file()
+            Thread(target=save_db, args=(common_vars.music_database_path, self.data), daemon=False).start()
 
         # Reload list of pointers only if we're playing from all songs (don't mess with current playlist settings)
         if self.playlist_id == 0:
