@@ -18,12 +18,8 @@ from pythonosc.udp_client import SimpleUDPClient
 
 from kivy.utils import platform
 
-if platform == "android":
-    from jnius import autoclass
-    AUDIO_API = "audiotrack"
 
-
-if platform in ('win', 'linux', 'linux2', 'macosx'):
+if platform in ('win', 'linux', 'linux2', 'macosx', 'android'):
     import miniaudio
     from miniaudio import lib, ffi, _get_filename_bytes
     AUDIO_API = "miniaudio"
@@ -41,54 +37,11 @@ class AudioStreamer():
         self.rate = rate
         self.buffersize_ms = buffersize_ms
         self.encoding = encoding
-
-        if AUDIO_API == "audiotrack":
-            self._android_init()
         
 
-        elif AUDIO_API == "miniaudio":
+        if AUDIO_API == "miniaudio":
             self._miniaudio_init()
-    
 
-    def _android_init(self):
-        AudioTrack = autoclass("android.media.AudioTrack")
-        self.write_blocking = AudioTrack.WRITE_BLOCKING
-        AudioManager = autoclass("android.media.AudioManager")
-        AudioFormat = autoclass("android.media.AudioFormat")
-        AudioFormatBuilder = autoclass("android.media.AudioFormat$Builder")
-        AudioAttributes = autoclass("android.media.AudioAttributes")
-        AudioAttributesBuilder = autoclass("android.media.AudioAttributes$Builder")
-
-        if self.channels == 2:
-            channel_mask = AudioFormat.CHANNEL_OUT_STEREO
-        elif self.channels == 1:
-            channel_mask = AudioFormat.CHANNEL_OUT_MONO
-        
-        if self.encoding == 16:
-            encoding = AudioFormat.ENCODING_PCM_16BIT
-        elif self.encoding == 8:
-            encoding = AudioFormat.ENCODING_PCM_8BIT
-
-        self.buffer_size = AudioTrack.getMinBufferSize(
-            self.rate,
-            channel_mask,
-            encoding
-        )
-        
-        self.audio_stream = AudioTrack(
-            AudioAttributesBuilder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build(),
-            AudioFormatBuilder().setChannelMask(channel_mask).setEncoding(encoding).setSampleRate(self.rate).build(),
-            self.buffer_size,
-            AudioTrack.MODE_STREAM,
-            AudioManager.AUDIO_SESSION_ID_GENERATE
-            )
-
-        # Fill buffer with empty bytes before calling play
-        self.audio_stream.write(bytes(self.buffer_size), 0, self.buffer_size)
-        self.audio_stream.play()
-
-        self.write = self._android_write
-    
 
     def _miniaudio_init(self):
         if self.encoding == 16:
@@ -120,9 +73,6 @@ class AudioStreamer():
     def write(self, data: bytes):
         pass
     
-    def _android_write(self, data: bytes):
-        bytes_written = self.audio_stream.write(data, 0, len(data))
-    
     def _miniaudio_write(self, data: bytes):
         if not self.miniaudio_running:
             self.miniaudio_running = True
@@ -142,22 +92,16 @@ class AudioDecoder():
 
         self.app_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
-        if AUDIO_API == "audiotrack":
-            self._android_init()
+        # if AUDIO_API == "audiotrack":
+        #     self._android_init()
         
-        elif AUDIO_API == "miniaudio":
+        if AUDIO_API == "miniaudio":
             self._miniaudio_init()
     
     def _miniaudio_init(self):
         self.load_ogg = self._miniaudio_load_ogg
         self.load_mp3 = self._miniaudio_load_mp3
         self.mp3_to_wav = self._miniaudio_mp3_to_wav
-
-
-    def _android_init(self):
-        self.load_ogg = self._android_load_ogg
-        self.load_mp3 = self._android_load_mp3
-        self.mp3_to_wav = self._android_mp3_to_wav
     
     def load_ogg(self, file, start_frame, num_chunks, chunk_frame_len, reverse_audio=False, frame_rate=44_100):
         pass
@@ -214,122 +158,6 @@ class AudioDecoder():
         def __exit__(self, *args):
             ffi.release(self.decode_buffer)
             lib.stb_vorbis_close(self.vorbis)
-    
-    class AndroidFileStream():
-
-        def __init__(self, file, start_frame=0, frames_to_read=1024):
-            MediaExtractor = autoclass("android.media.MediaExtractor")
-            FileInputStream = autoclass("java.io.FileInputStream")
-            File = autoclass("java.io.File")
-            MediaCodec = autoclass("android.media.MediaCodec")
-            MediaFormat = autoclass("android.media.MediaFormat")
-            BufferInfo = autoclass("android.media.MediaCodec$BufferInfo")
-
-            self.BUFFER_FLAG_END_OF_STREAM = MediaCodec.BUFFER_FLAG_END_OF_STREAM
-
-            self.media_extractor = MediaExtractor()
-            file_input_stream = FileInputStream(File(file))
-            fd = file_input_stream.getFD()
-            self.media_extractor.setDataSource(fd)
-            file_input_stream.close()
-
-            self.media_extractor.selectTrack(0)
-            self.track_format = self.media_extractor.getTrackFormat(0)
-
-            mime = self.track_format.getString("mime")
-            self.sample_rate = self.track_format.getInteger("sample-rate")
-            self.channel_count = self.track_format.getInteger("channel-count")
-
-            self.decoder = MediaCodec.createDecoderByType(mime)
-            self.decoder.configure(self.track_format, None, None, 0)
-            self.decoder.start()
-
-            self.buffer_info = BufferInfo()
-            self.extra_pcm_buffer = bytearray(0)
-            self.eof = False
-            
-            if start_frame > 0:
-                self.seek(start_frame)
-            self.frames_to_read = frames_to_read
-            self.bytes_per_sample = 2 * self.channel_count
-        
-        def __enter__(self):
-            return self
-        
-        def get_buffer(self):
-            pcm_output_buffer = self.extra_pcm_buffer
-
-            if len(pcm_output_buffer) >= self.frames_to_read * self.bytes_per_sample:
-                self.extra_pcm_buffer = pcm_output_buffer[self.frames_to_read * self.bytes_per_sample:]
-                return bytes(pcm_output_buffer[:self.frames_to_read * self.bytes_per_sample])
-            elif self.eof:
-                pcm_output_buffer = bytes(pcm_output_buffer)
-                del self.extra_pcm_buffer[:]
-                return pcm_output_buffer
-
-
-            while (len(pcm_output_buffer) < self.frames_to_read * self.bytes_per_sample) and not self.eof:
-
-                input_buffer_id = self.decoder.dequeueInputBuffer(100_000)
-
-                if input_buffer_id >= 0:
-                    input_buffer = self.decoder.getInputBuffer(input_buffer_id)
-                    total_sample_bytes = 0
-                    presentation_time_us = 0
-
-                    while total_sample_bytes < 1024:
-                        num_encoded_bytes = self.media_extractor.readSampleData(input_buffer, total_sample_bytes)
-
-                        if num_encoded_bytes < 0:
-                            self.eof = True
-                            self.decoder.queueInputBuffer(input_buffer_id, 0, 0, 0, self.BUFFER_FLAG_END_OF_STREAM)
-                            break
-                    
-                        else:
-                            total_sample_bytes += num_encoded_bytes
-                            presentation_time_us = self.media_extractor.getSampleTime()
-                            self.media_extractor.advance()
-                        
-                        if total_sample_bytes >= 1024:
-                            self.decoder.queueInputBuffer(input_buffer_id, 0, total_sample_bytes, presentation_time_us, 0)
-                            break
-                                    
-                output_buffer_id = self.decoder.dequeueOutputBuffer(self.buffer_info, 100_000)
-
-                if output_buffer_id >= 0:
-                    output_buffer = self.decoder.getOutputBuffer(output_buffer_id)
-
-                    pcm_chunk = bytearray(self.buffer_info.size)
-                    output_buffer.get(pcm_chunk)
-                    pcm_output_buffer.extend(pcm_chunk)
-
-                    self.decoder.releaseOutputBuffer(output_buffer_id, False)
-
-                if eof:
-                    break
-                
-            
-            if len(pcm_output_buffer) > self.frames_to_read * self.bytes_per_sample:
-                self.extra_pcm_buffer = pcm_output_buffer[self.frames_to_read * self.bytes_per_sample:]
-
-            return bytes(pcm_output_buffer[:self.frames_to_read * self.bytes_per_sample])
-
-        
-        def seek(self, seek_frame):
-            """
-            Note, while android seekTo takes in a value in microseconds, this function
-            takes in a specific frame, not time.
-            """
-            seek_time_us = (seek_frame / self.sample_rate) * 1_000_000
-            self.media_extractor.seekTo(seek_time_us, self.media_extractor.SEEK_TO_CLOSEST_SYNC)
-            
-        def close(self):
-            self.__exit__()
-
-        def __exit__(self, *args):
-            self.media_extractor.release()
-            self.decoder.stop()
-            self.decoder.release()
 
 
     def load_wav(self, file, start_frame, num_chunks, chunk_frame_len, reverse_audio=False, frame_rate=44_100):
@@ -435,69 +263,6 @@ class AudioDecoder():
             fp.setparams((2, 2, frame_rate, 0, "NONE", "NONE"))
             for samples in file_stream:
                 fp.writeframes(samples)
-
-    def _android_load_ogg(self, file, start_frame, num_chunks, chunk_frame_len, reverse_audio=False, frame_rate=44_100):
-
-        with self.MiniaudioVorbisFileStream(file, start_frame, frames_to_read=chunk_frame_len) as stream:
-            cut = False
-
-            for chunk_index in range(num_chunks):
-                if reverse_audio:
-                    frame_pos = -chunk_frame_len*(chunk_index+1) + start_frame
-                    if frame_pos < 0:
-                        chunk_frame_len += frame_pos # frame pos is negative here, so we're subtracting from chunk_frame_len
-                        cut = True # Set flag indicating that we have to cut out a part of the AudioSegment
-                        frame_pos = 0
-                    stream.seek(frame_pos)
-
-                byte_data = stream.get_buffer()
-
-                if not byte_data:
-                    break
-
-                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2)
-                if reverse_audio:
-                    if cut:
-                        audio._data = audio._data[:chunk_frame_len]
-                    yield audio.reverse()
-                else:
-                    yield audio
-
-    def _android_load_mp3(self, file, persistent_track_id, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
-
-        with self.AndroidFileStream(file, start_frame, frames_to_read=chunk_frame_len) as stream:
-            for chunk_index in range(num_chunks):
-
-                byte_data = stream.get_buffer()
-
-                if not byte_data:
-                    break
-
-                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2)
-                yield audio
-    
-    def _android_mp3_to_wav(self, file, persistent_track_id, frame_rate=44_100):
-
-        # Try to delete files if there are too many (>3) in the cache
-        current_cached_files = glob(f"{self.app_folder}/cache/audio/*_reversed.wav")
-        if len(current_cached_files) > 3:
-            num_to_delete = len(current_cached_files) - 3
-            # Sort everything by when they were last modfied to choose deletion order
-            current_cached_files.sort(key=lambda path: os.path.getmtime(path))
-            for wav_file in current_cached_files[0:num_to_delete]:
-                try:
-                    os.remove(wav_file)
-                except OSError:
-                    # If we encounter an OSError, then it's likely the file is still open
-                    # Just leave it alone in this case
-                    pass
-                
-        with self.AndroidFileStream(file) as stream:
-
-            with wave.open(f"{self.app_folder}/cache/audio/{persistent_track_id}_reversed.wav", "wb") as fp:
-                fp.setparams((2, 2, frame_rate, 0, "NONE", "NONE"))
-                while (samples := stream.get_buffer()):
-                    fp.writeframes(samples)
 
 # class FFMPEGProcessHandler():
 #     """

@@ -1,0 +1,11 @@
+--- miniaudio/build_ffi_module.py	2025-09-21 13:58:00.532978078 -0700
++++ miniaudio.mod/build_ffi_module.py	2025-09-21 17:58:05.774155357 -0700
+@@ -862,7 +862,7 @@
+ 
+ if os.name == "posix":
+     compiler_args = ["-g1", "-O3", "-ffast-math"]
+-    libraries = ["m", "pthread", "dl"]
++    libraries = ["m", "dl"]
+     if check_linker_need_libatomic():
+         libraries.append("atomic")
+     if "PYMINIAUDIO_EXTRA_CFLAGS" in os.environ:
