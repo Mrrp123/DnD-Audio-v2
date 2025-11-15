@@ -24,6 +24,10 @@ if platform in ('win', 'linux', 'linux2', 'macosx', 'android'):
     from miniaudio import lib, ffi, _get_filename_bytes
     AUDIO_API = "miniaudio"
 
+    AUDIO_MODE = "signed16"
+    SAMPLE_MODE = miniaudio.SampleFormat.FLOAT32 if AUDIO_MODE == "float32" else miniaudio.SampleFormat.SIGNED16
+    SAMPLE_WIDTH = 4 if AUDIO_MODE == "float32" else 2
+
 
 
 class AudioStreamer():
@@ -47,6 +51,14 @@ class AudioStreamer():
         if self.encoding == 16:
             self.playback_device = miniaudio.PlaybackDevice(
                 miniaudio.SampleFormat.SIGNED16,
+                self.channels,
+                self.rate,
+                self.buffersize_ms,
+                callback_periods=2
+                )
+        elif self.encoding == 32:
+            self.playback_device = miniaudio.PlaybackDevice(
+                miniaudio.SampleFormat.FLOAT32,
                 self.channels,
                 self.rate,
                 self.buffersize_ms,
@@ -211,11 +223,12 @@ class AudioDecoder():
     def _miniaudio_load_mp3(self, file, persistent_track_id, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
 
         try:
-            miniaudio_stream = miniaudio.mp3_stream_file(file, frames_to_read=chunk_frame_len, seek_frame=start_frame)
+            # miniaudio_stream = miniaudio.mp3_stream_file(file, frames_to_read=chunk_frame_len, seek_frame=start_frame)
+            miniaudio_stream = miniaudio.stream_file(file, frames_to_read=chunk_frame_len, output_format=SAMPLE_MODE, seek_frame=start_frame)
             for samples in miniaudio_stream:
 
                 byte_data = samples.tobytes()
-                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2)
+                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=SAMPLE_WIDTH)
 
                 yield audio
 
@@ -226,11 +239,12 @@ class AudioDecoder():
             if not os.path.exists(hard_link_path):
                 os.link(file, hard_link_path)
 
-            miniaudio_stream = miniaudio.mp3_stream_file(hard_link_path, frames_to_read=chunk_frame_len, seek_frame=start_frame)
+            # miniaudio_stream = miniaudio.mp3_stream_file(hard_link_path, frames_to_read=chunk_frame_len, seek_frame=start_frame)
+            miniaudio_stream = miniaudio.stream_file(hard_link_path, frames_to_read=chunk_frame_len, output_format=SAMPLE_MODE, seek_frame=start_frame)
             for samples in miniaudio_stream:
 
                 byte_data = samples.tobytes()
-                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=2)
+                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=SAMPLE_WIDTH)
 
                 yield audio
     
@@ -327,6 +341,8 @@ class AudioPlayer():
 
         self.stream = AudioStreamer(channels, rate, buffersize_ms, encoding)
         self.decoder = AudioDecoder()
+
+        self.time_avg = []
 
         if os.path.exists(common_vars.music_database_path):
             self.reload_track_data()
@@ -531,6 +547,17 @@ class AudioPlayer():
         else:
             chunk_gen_time = f"{(self.end-self.start)//1_000_000:.0f}ms"
         
+        if len(self.time_avg) >= 100:
+            self.time_avg.pop(0)
+        
+        # time in us
+        self.time_avg.append((self.end-self.start)/1_000)
+
+        with open(f"./testing/{AUDIO_MODE}_processing_time_{str(self.speed)[0:3].replace(".", "p")}.csv", "a") as fp:
+            if fp.tell() == 0:
+                fp.write("song_pos,chunk_gen_time,speed\n")
+            fp.write(f"{self.pos/1000/self.speed},{self.end-self.start},{self.speed:.1f}\n")
+        
         if not hasattr(self, "chunk_index"):
             chunk_index = 0
             num_chunks = 0
@@ -549,7 +576,8 @@ class AudioPlayer():
                         f"Audio Player Status: {self.status}\n" +\
                         f"Chunk Index: {chunk_index}/{num_chunks-1}, Chunk Length: {len(chunk)/self.speed:.3f}ms, " +\
                         f"Chunk Frame Length: {round(len(chunk._data)/self.speed)} frames\n" +\
-                        f"Audio chunk generation time: {chunk_gen_time}"
+                        f"Audio chunk generation time: {chunk_gen_time}\n" +\
+                        f"Rolling 5 sec avg: {np.mean(self.time_avg):.1f}us"
             #print(self.debug_string)
 
 
@@ -1071,7 +1099,10 @@ class AudioPlayer():
 
 if __name__ == "__main__" or __name__ == "<run_path>":
     try:
-        audioplayer = AudioPlayer(lock=Lock(), rate=44_100)
+        if AUDIO_MODE == "float32":
+            audioplayer = AudioPlayer(lock=Lock(), rate=44_100, encoding=32)
+        else:
+            audioplayer = AudioPlayer(lock=Lock(), rate=44_100)
         audioplayer.run()
     # No matter what happens, try to make sure that if the audioplayer dies, so too does the UI
     except Exception as err:

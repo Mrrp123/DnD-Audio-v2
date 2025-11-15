@@ -1,5 +1,6 @@
 import numpy as np
 from tools.audioprocessing import db_to_amp, resample
+# from audioprocessing import db_to_amp, resample
 
 class AudioSegment():
 
@@ -11,12 +12,16 @@ class AudioSegment():
             case 2:
                 self.dt = np.int16
             case 4:
-                self.dt = np.int32
+                self.dt = np.float32
             case _:
                 raise ValueError(f"sample width of {sample_width} not supported!")
         
-        self.min_val = np.iinfo(self.dt).min
-        self.max_val = np.iinfo(self.dt).max
+        if sample_width != 4:
+            self.min_val = np.iinfo(self.dt).min
+            self.max_val = np.iinfo(self.dt).max
+        else:
+            self.min_val = -1
+            self.max_val = 1
             
         # make sure buffer is a bytearray, else we won't be able to write to the array
         self._data = np.ndarray(shape=(len(data)//channels//sample_width, channels), dtype=self.dt, buffer=bytearray(data), order="C")

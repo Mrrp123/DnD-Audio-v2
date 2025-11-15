@@ -176,8 +176,12 @@ class FIRLowpassFilter():
         """
         Expects data in the shape of [num_samples, num_channels]
         """
-        min_val = np.iinfo(dt).min
-        max_val = np.iinfo(dt).max
+        if dt == np.int16:
+            min_val = np.iinfo(dt).min
+            max_val = np.iinfo(dt).max
+        else:
+            min_val = -1
+            max_val = 1
         num_samples = data.shape[0]
         padded_data = np.concatenate([self.padding, data])
         self.padding = padded_data[-(self.filter_len - 1):]
@@ -188,14 +192,17 @@ class FIRLowpassFilter():
         else:
             return np.clip(np.convolve(padded_data, self.fir_filter, mode="full")[start:end], min_val, max_val)
 
-def change_speed(song_data: bytes, speed: float, filter: FIRLowpassFilter | None = None, dt=np.int16):
+def change_speed(song_data: bytes, speed: float, filter: FIRLowpassFilter | None = None, dt=np.float32):
     """
     This function manipulates the raw audio data to speed up or slow down a song by averaging audio samples
     or by cutting out audio samples. This process is slow when upsampling
     """
 
     # Convert bytes to numpy array (faster to deal with)
-    channels = np.ndarray(shape=(len(song_data)//2//2, 2), dtype=dt, buffer=song_data, order="C")
+    if dt == np.int16:
+        channels = np.ndarray(shape=(len(song_data)//2//2, 2), dtype=dt, buffer=song_data, order="C")
+    else:
+        channels = np.ndarray(shape=(len(song_data)//2//4, 2), dtype=dt, buffer=song_data, order="C")
 
     channels = np.apply_along_axis(resample, axis=0, arr=channels, scale=1/speed)
 
