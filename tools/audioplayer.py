@@ -24,10 +24,6 @@ if platform in ('win', 'linux', 'linux2', 'macosx', 'android'):
     from miniaudio import lib, ffi, _get_filename_bytes
     AUDIO_API = "miniaudio"
 
-    AUDIO_MODE = "signed16"
-    SAMPLE_MODE = miniaudio.SampleFormat.FLOAT32 if AUDIO_MODE == "float32" else miniaudio.SampleFormat.SIGNED16
-    SAMPLE_WIDTH = 4 if AUDIO_MODE == "float32" else 2
-
 
 
 class AudioStreamer():
@@ -35,12 +31,11 @@ class AudioStreamer():
     Handles pushing bytes to the speaker depending on which audio api / OS we are using.
     """
 
-    def __init__(self, channels=2, rate=44_100, buffersize_ms=50, encoding=16):
+    def __init__(self, channels=2, rate=44_100, buffersize_ms=50):
 
         self.channels = channels
         self.rate = rate
         self.buffersize_ms = buffersize_ms
-        self.encoding = encoding
         
 
         if AUDIO_API == "miniaudio":
@@ -48,24 +43,13 @@ class AudioStreamer():
 
 
     def _miniaudio_init(self):
-        if self.encoding == 16:
-            self.playback_device = miniaudio.PlaybackDevice(
-                miniaudio.SampleFormat.SIGNED16,
-                self.channels,
-                self.rate,
-                self.buffersize_ms,
-                callback_periods=2
-                )
-        elif self.encoding == 32:
-            self.playback_device = miniaudio.PlaybackDevice(
-                miniaudio.SampleFormat.FLOAT32,
-                self.channels,
-                self.rate,
-                self.buffersize_ms,
-                callback_periods=2
-                )
-        else:
-            raise ValueError("8 bit encoding not supported for miniaudio!")
+        self.playback_device = miniaudio.PlaybackDevice(
+            miniaudio.SampleFormat.FLOAT32,
+            self.channels,
+            self.rate,
+            self.buffersize_ms,
+            callback_periods=2
+            )
         
         def miniaudio_generator():
             yield b""
@@ -74,7 +58,7 @@ class AudioStreamer():
                 del self.audio_buffer[0:self.req_audio_buffer_size]
                 yield data
         
-        self.req_audio_buffer_size = (self.channels * self.rate * self.encoding//8) // round(1000/self.buffersize_ms)
+        self.req_audio_buffer_size = (self.channels * self.rate * 4) // round(1000/self.buffersize_ms)
         self.audio_buffer = bytearray(self.req_audio_buffer_size)
         self.miniaudio_running = False
         self.data_generator = miniaudio_generator()
@@ -100,9 +84,12 @@ class AudioStreamer():
 
 class AudioDecoder():
 
-    def __init__(self):
+    def __init__(self, rate):
 
         self.app_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+        # Decoder will always output PCM samples at this frame rate (handles resampling automatically)
+        self.rate = rate
 
         # if AUDIO_API == "audiotrack":
         #     self._android_init()
@@ -114,11 +101,44 @@ class AudioDecoder():
         self.load_ogg = self._miniaudio_load_ogg
         self.load_mp3 = self._miniaudio_load_mp3
         self.mp3_to_wav = self._miniaudio_mp3_to_wav
-    
+
+    def _stream_file(self, file: str, output_format=miniaudio.SampleFormat.FLOAT32,
+                     nchannels=2, frames_to_read=2205, seek_frame=0):
+        """
+        Basically identical to miniaudio.stream_file, but also returns the decoder (and fixes some windows shenanigans)
+        Note: when seeking to some seek_frame, this is the frame at the requested sample rate,
+        not a frame at the actual sample rate of the song (so you have to take this into account
+        if you're streaming a 48 kHz file for example)
+        """
+        decoder = ffi.new("ma_decoder *")
+        decoder_config = lib.ma_decoder_config_init(output_format.value, nchannels, self.rate)
+        decoder_config.ditherMode = miniaudio.DitherMode.NONE.value
+        
+        filenamebytes = _get_filename_bytes(file)
+
+        result = lib.ma_decoder_init_file(filenamebytes, ffi.addressof(decoder_config), decoder)
+
+        # Miniaudio has issues parsing windows file paths if they contain non-ascii characters,
+        # Casting them to wchar_t* and makes the file load properly
+        if result == lib.MA_DOES_NOT_EXIST:
+            filenamebytes = ffi.new("wchar_t[]", file)
+            result = lib.ma_decoder_init_file_w(filenamebytes, ffi.addressof(decoder_config), decoder)
+        if result != lib.MA_SUCCESS:
+            raise miniaudio.DecodeError("failed to initialize decoder", result)
+        if seek_frame > 0:
+            result = lib.ma_decoder_seek_to_pcm_frame(decoder, seek_frame)
+            if result != lib.MA_SUCCESS:
+                raise miniaudio.DecodeError("failed to seek to frame", result)
+            
+        g = miniaudio._samples_stream_generator(frames_to_read, nchannels, output_format, decoder, None)
+        dummy = next(g)
+        assert len(dummy) == 0
+        return decoder, g
+        
     def load_ogg(self, file, start_frame, num_chunks, chunk_frame_len, reverse_audio=False, frame_rate=44_100):
         pass
 
-    def load_mp3(self, file, persistent_track_id, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
+    def load_mp3(self, file, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
         pass
 
     def mp3_to_wav(self, file, persistent_track_id, frame_rate=44_100):
@@ -220,33 +240,16 @@ class AudioDecoder():
             else:
                 yield audio
     
-    def _miniaudio_load_mp3(self, file, persistent_track_id, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
+    def _miniaudio_load_mp3(self, file, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
 
-        try:
-            # miniaudio_stream = miniaudio.mp3_stream_file(file, frames_to_read=chunk_frame_len, seek_frame=start_frame)
-            miniaudio_stream = miniaudio.stream_file(file, frames_to_read=chunk_frame_len, output_format=SAMPLE_MODE, seek_frame=start_frame)
-            for samples in miniaudio_stream:
+        decoder, file_stream = self._stream_file(file, frames_to_read=chunk_frame_len, seek_frame=round(start_frame/frame_rate*self.rate))
+        
+        for samples in file_stream:
 
-                byte_data = samples.tobytes()
-                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=SAMPLE_WIDTH)
+            byte_data = samples.tobytes()
+            audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=4)
 
-                yield audio
-
-        except miniaudio.DecodeError:
-            # Miniaudio on windows is fucking stupid and can't resolve file names with non-ascii characters
-            # Create a hard link here with a set (ASCII) name that we can read from instead
-            hard_link_path = f"{self.app_folder}/cache/audio/{persistent_track_id}.mp3"
-            if not os.path.exists(hard_link_path):
-                os.link(file, hard_link_path)
-
-            # miniaudio_stream = miniaudio.mp3_stream_file(hard_link_path, frames_to_read=chunk_frame_len, seek_frame=start_frame)
-            miniaudio_stream = miniaudio.stream_file(hard_link_path, frames_to_read=chunk_frame_len, output_format=SAMPLE_MODE, seek_frame=start_frame)
-            for samples in miniaudio_stream:
-
-                byte_data = samples.tobytes()
-                audio = AudioSegment(data=byte_data, frame_rate=frame_rate, channels=2, sample_width=SAMPLE_WIDTH)
-
-                yield audio
+            yield audio
     
     def _miniaudio_mp3_to_wav(self, file: str, persistent_track_id: int, frame_rate=44_100):
                 
@@ -264,14 +267,7 @@ class AudioDecoder():
                     # Just leave it alone in this case
                     pass
                 
-        # Windows path reading shenanigans
-        if not file.isascii():
-            hard_link_path = f"{self.app_folder}/cache/audio/{persistent_track_id}.mp3"
-            if not os.path.exists(hard_link_path):
-                os.link(file, hard_link_path)
-            file_stream = miniaudio.mp3_stream_file(hard_link_path)
-        else:
-            file_stream = miniaudio.mp3_stream_file(file)
+        decoder, file_stream = self._stream_file(file, output_format=miniaudio.SampleFormat.SIGNED16)
 
         with wave.open(f"{self.app_folder}/cache/audio/{persistent_track_id}_reversed.wav", "wb") as fp:
             fp.setparams((2, 2, frame_rate, 0, "NONE", "NONE"))
@@ -313,7 +309,7 @@ class AudioPlayer():
         None
     """
 
-    def __init__(self, lock, channels=2, rate=44_100, buffersize_ms=50, encoding=16) -> None:
+    def __init__(self, lock, channels=2, rate=44_100, buffersize_ms=50) -> None:
         self.rate = rate
         self.pos = self.init_pos = 0
         self.frame_pos = 0
@@ -339,8 +335,8 @@ class AudioPlayer():
 
         self.app_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
-        self.stream = AudioStreamer(channels, rate, buffersize_ms, encoding)
-        self.decoder = AudioDecoder()
+        self.stream = AudioStreamer(channels, rate, buffersize_ms)
+        self.decoder = AudioDecoder(rate)
 
         self.time_avg = []
 
@@ -463,9 +459,8 @@ class AudioPlayer():
         file = self.track_data[track_id]["file"]
         _, file_type = os.path.splitext(file)
 
-        num_frames = total_frames = self.get_track_length(track_id)[1]
-        self.next_track_length = (total_frames / self.track_data[track_id]["rate"])*1000
-        self.next_total_frames = total_frames
+        self.next_track_length, self.next_total_frames = self.get_track_length(track_id)
+        num_frames = total_frames = self.next_total_frames
         if self.bootup:
             self.track_length = self.next_track_length
             self.total_frames = self.next_total_frames
@@ -498,9 +493,9 @@ class AudioPlayer():
         #     num_frames -= start_frame
             
             
-        num_chunks = ceil(num_frames / (self.track_data[track_id]["rate"]/1000*self.chunk_len))
+        num_chunks = ceil(num_frames / (self.rate/1000*self.chunk_len))
         self.num_chunks = num_chunks
-        chunk_frame_len = round(self.track_data[track_id]["rate"] * (self.chunk_len / 1000))
+        chunk_frame_len = round(self.rate * (self.chunk_len / 1000))
 
         if file_type == ".wav":
             audio_generator = self.decoder.load_wav(file, start_frame, num_chunks, chunk_frame_len, self.reverse_audio, self.track_data[track_id]["rate"])
@@ -517,7 +512,7 @@ class AudioPlayer():
                 reversed_file = f"{self.app_folder}/cache/audio/{persistent_track_id}_reversed.wav"
                 audio_generator = self.decoder.load_wav(reversed_file, start_frame, num_chunks, chunk_frame_len, True, self.track_data[track_id]["rate"])
             else:
-                audio_generator = self.decoder.load_mp3(file, persistent_track_id, start_frame, num_chunks, chunk_frame_len, self.track_data[track_id]["rate"])
+                audio_generator = self.decoder.load_mp3(file, start_frame, num_chunks, chunk_frame_len, self.track_data[track_id]["rate"])
         print(f"Using chunk_frame_len of {chunk_frame_len} for file {file}")
         for audio in audio_generator:
             yield audio
@@ -553,10 +548,7 @@ class AudioPlayer():
         # time in us
         self.time_avg.append((self.end-self.start)/1_000)
 
-        with open(f"./testing/{AUDIO_MODE}_processing_time_{str(self.speed)[0:3].replace(".", "p")}.csv", "a") as fp:
-            if fp.tell() == 0:
-                fp.write("song_pos,chunk_gen_time,speed\n")
-            fp.write(f"{self.pos/1000/self.speed},{self.end-self.start},{self.speed:.1f}\n")
+        # self.osc_client.send_message("/debug", [self.pos, self.speed, self.end-self.start])
         
         if not hasattr(self, "chunk_index"):
             chunk_index = 0
@@ -587,7 +579,7 @@ class AudioPlayer():
         Pauses the audio player. Note: this will block the player from doing anything
         """
         self.stream.write( # This helps clear out any remaining data in the audio buffer (prevents popping sounds)
-            bytes(round(self.rate * self.stream.channels * self.stream.encoding // 8 * self.chunk_len / 1000))) 
+            bytes(round(self.rate * self.stream.channels * 4 * self.chunk_len / 1000))) 
         while self.pause_flag == True:
             time.sleep(0.05)
         return
@@ -708,10 +700,10 @@ class AudioPlayer():
                 self.write_to_buffer(chunk)
                 if self.reverse_audio:
                     self.pos -= len(chunk)
-                    self.frame_pos -= chunk.get_num_frames()
+                    self.frame_pos -= round(chunk.get_num_frames() * self.track_data[self.track_id]["rate"]/self.rate)
                 else:
                     self.pos += len(chunk)
-                    self.frame_pos += chunk.get_num_frames()
+                    self.frame_pos += round(chunk.get_num_frames() * self.track_data[self.track_id]["rate"]/self.rate)
                 if len(extra_chunk) != 0: # Sometimes lengths match up perfectly and extra chunk ends up being a zero len chunk
                     self.chunk_generator = prepend_chunk_generator(self.chunk_generator, extra_chunk)
             
@@ -804,14 +796,14 @@ class AudioPlayer():
                 self.write_to_buffer(chunk)
                 if self.reverse_audio:
                     self.pos -= len(chunk)
-                    self.frame_pos -= chunk.get_num_frames()
+                    self.frame_pos -= round(chunk.get_num_frames() * self.track_data[self.track_id]["rate"]/self.rate)
                     new_pos -= len(chunk)
-                    new_frame_pos -= chunk.get_num_frames()
+                    new_frame_pos -= round(chunk.get_num_frames() * self.track_data[self.track_id]["rate"]/self.rate)
                 else:
                     self.pos += len(chunk)
-                    self.frame_pos += chunk.get_num_frames()
+                    self.frame_pos += round(chunk.get_num_frames() * self.track_data[self.track_id]["rate"]/self.rate)
                     new_pos += len(chunk)
-                    new_frame_pos += chunk.get_num_frames()
+                    new_frame_pos += round(chunk.get_num_frames() * self.track_data[self.track_id]["rate"]/self.rate)
 
         # Once we are done with crossfades, update various variables
         self.pos = new_pos
@@ -844,8 +836,8 @@ class AudioPlayer():
         if self.volume < 1:
             audio = audio + amp_to_db(self.volume)
         data = audio.data
-        if self.speed != 1 or audio.frame_rate != self.rate:
-            data = change_speed(data, self.speed * audio.frame_rate/self.rate, filter=self.filter, dt=audio.dt)
+        if self.speed != 1:
+            data = change_speed(data, self.speed, filter=self.filter)
         self.get_debug_info()
         self.stream.write(data)
         if self.pause_flag == True:
@@ -880,19 +872,17 @@ class AudioPlayer():
 
                 data = next(self.chunk_generator).data # Get track data bytes
 
-                # Change the speed of the audio to whatever the user has set, taking into account the sampling rate of the output data
-                data = change_speed(data, self.speed * self.track_data[self.track_id]["rate"]/self.rate)
+                # Change the speed of the audio to whatever the user has set
+                data = change_speed(data, self.speed)
 
-                # Frame rate is 44.1 kHz because the audio we use in the assets is 44.1 kHz, not necessaryily self.rate
-                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume)
-
-                # Even though track_audio could be any sampling rate, the above change_speed function will have resampled it to self.rate (44.1 kHz)
-                track_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2)
+                # Frame rate is 44.1 kHz because the audio we use in the assets is 44.1 kHz, not necessarily self.rate
+                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume) - 120
+                track_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=4)
 
                 # For the first few chunks, we want to fade down to the desired ducking volume (5 dB)
                 if i < len(db_list):
                     track_audio = track_audio.fade(from_gain=db_list[i][0], to_gain=db_list[i][1], 
-                                                 start=0, duration=len(data)//4) + amp_to_db(self.volume)
+                                                 start=0, duration=len(data)//8) + amp_to_db(self.volume)
                 else:
                     track_audio = track_audio + min_db + amp_to_db(self.volume)
 
@@ -924,7 +914,7 @@ class AudioPlayer():
             zwfp.setpos(21_563) # Set position to a specific point in the file
 
             if extra_track_audio is None:
-                extra_track_audio = AudioSegment(data=bytes(0), frame_rate=self.rate, channels=2, sample_width=2)
+                extra_track_audio = AudioSegment(data=bytes(0), frame_rate=self.rate, channels=2, sample_width=4)
 
             for i, speed in enumerate(speed_list):
                 chunk_len = speed * self.chunk_len
@@ -942,8 +932,8 @@ class AudioPlayer():
                 zw = zwfp.readframes(round(self.chunk_len*44_100/1000))
                 
                 # Again, resampling for track_audio should already be handled by the above code; set it to self.rate
-                track_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2) + (min_db + amp_to_db(self.volume))
-                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume)
+                track_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=4) + (min_db + amp_to_db(self.volume))
+                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume) - 120
 
                 # This should always be the same length
                 self.stream.write((track_audio * zw_audio).data)
@@ -964,7 +954,7 @@ class AudioPlayer():
 
             # After the slow down effect has been done, read the rest of the time_stop.wav
             while len(zw) != 0:
-                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume)
+                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume) - 120
                 self.stream.write(zw_audio.data)
                 zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
 
@@ -993,15 +983,15 @@ class AudioPlayer():
 
                 zw = zwfp.readframes(round(self.chunk_len*44_100/1000))
 
-                # Frame rate is 44.1 kHz because the audio we use in the assets is 44.1 kHz, not necessaryily self.rate
-                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume)
+                # Frame rate is 44.1 kHz because the audio we use in the assets is 44.1 kHz, not necessarily self.rate
+                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume) - 120
 
                 # Again, even though track_audio could be any sampling rate, the above change_speed function will have resampled it to self.rate
-                track_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=2)
+                track_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=4)
 
                 if i >= end_offset:
                     track_audio = track_audio.fade(from_gain=db_list[i - end_offset][1], to_gain=db_list[i - end_offset][0], 
-                                                 start=0, duration=len(data)//4) + amp_to_db(self.volume)
+                                                 start=0, duration=len(data)//8) + amp_to_db(self.volume)
                 else:
                     track_audio = track_audio + (min_db + amp_to_db(self.volume))
 
@@ -1059,10 +1049,10 @@ class AudioPlayer():
                 self.write_to_buffer(self.chunk)
                 if self.reverse_audio:
                     self.pos -= len(self.chunk)
-                    self.frame_pos -= chunk.get_num_frames()
+                    self.frame_pos -= round(chunk.get_num_frames() * self.track_data[self.track_id]["rate"]/self.rate)
                 else:
                     self.pos += len(self.chunk)
-                    self.frame_pos += chunk.get_num_frames()
+                    self.frame_pos += round(chunk.get_num_frames() * self.track_data[self.track_id]["rate"]/self.rate)
                 # Check current status
                 if self.status == "stopped":
                     break
@@ -1099,10 +1089,7 @@ class AudioPlayer():
 
 if __name__ == "__main__" or __name__ == "<run_path>":
     try:
-        if AUDIO_MODE == "float32":
-            audioplayer = AudioPlayer(lock=Lock(), rate=44_100, encoding=32)
-        else:
-            audioplayer = AudioPlayer(lock=Lock(), rate=44_100)
+        audioplayer = AudioPlayer(lock=Lock(), rate=44_100)
         audioplayer.run()
     # No matter what happens, try to make sure that if the audioplayer dies, so too does the UI
     except Exception as err:

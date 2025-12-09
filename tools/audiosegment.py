@@ -1,44 +1,40 @@
 import numpy as np
 from tools.audioprocessing import db_to_amp, resample
-# from audioprocessing import db_to_amp, resample
 
 class AudioSegment():
 
-    def __init__(self, data: bytes, frame_rate: int = 44_100, channels: int = 2, sample_width: int = 2):
+    def __init__(self, data: bytes, frame_rate: int = 44_100, channels: int = 2, sample_width: int = 4):
 
         match sample_width:
             case 1:
-                self.dt = np.int8
+                dt = np.int8
             case 2:
-                self.dt = np.int16
+                dt = np.int16
             case 4:
-                self.dt = np.float32
+                dt = np.float32
             case _:
                 raise ValueError(f"sample width of {sample_width} not supported!")
         
         if sample_width != 4:
-            self.min_val = np.iinfo(self.dt).min
-            self.max_val = np.iinfo(self.dt).max
+            # make sure buffer is a bytearray, else we won't be able to write to the array
+            # Also, make sure we normalize our array after casting to float32, else things will not sound correct
+            self._data = np.ndarray(shape=(len(data)//channels//sample_width, channels), dtype=dt, buffer=bytearray(data), order="C").astype(np.float32) / np.iinfo(dt).max
         else:
-            self.min_val = -1
-            self.max_val = 1
+            # make sure buffer is a bytearray, else we won't be able to write to the array
+            self._data = np.ndarray(shape=(len(data)//channels//sample_width, channels), dtype=dt, buffer=bytearray(data), order="C")
             
-        # make sure buffer is a bytearray, else we won't be able to write to the array
-        self._data = np.ndarray(shape=(len(data)//channels//sample_width, channels), dtype=self.dt, buffer=bytearray(data), order="C")
-
         self.frame_rate = frame_rate
         self.channels = channels
-        self.sample_width = sample_width
     
     def __add__(self, arg):
         if isinstance(arg, AudioSegment):
             if self.frame_rate != arg.frame_rate:
-                arg._data = np.apply_along_axis(resample, axis=0, arr=arg._data, scale=self.frame_rate/arg.frame_rate).astype(self.dt)
+                arg._data = np.apply_along_axis(resample, axis=0, arr=arg._data, scale=self.frame_rate/arg.frame_rate)
 
             self._data = np.concatenate((self._data, arg._data))
             return self
         elif isinstance(arg, float | int | np.integer):
-            self._data = np.clip(self._data * db_to_amp(arg), a_min=self.min_val, a_max=self.max_val).astype(self.dt)
+            self._data = np.clip(self._data * db_to_amp(arg), a_min=-1, a_max=1)
             return self
         else:
             raise TypeError(f"unsupported operand type(s) for +: 'AudioSegment' and {type(arg)}")
@@ -54,12 +50,7 @@ class AudioSegment():
 
             # If mixing between two different rates, resample the second argument to the first's rate, then mix
             if self.frame_rate != arg.frame_rate:
-                arg._data = np.apply_along_axis(resample, axis=0, arr=arg._data, scale=self.frame_rate/arg.frame_rate).astype(self.dt)
-
-            self._data = self._data.astype(np.float32) # Cast to float32 incase we overflow from the sum of the signals
-
-            # data_max = np.max(self._data)
-            # arg_max = np.max(self._data)
+                arg._data = np.apply_along_axis(resample, axis=0, arr=arg._data, scale=self.frame_rate/arg.frame_rate)
 
             try:
                 self._data = self._data + arg._data
@@ -69,18 +60,18 @@ class AudioSegment():
                     and frame_diff > -np.ceil(self.frame_rate / 1000):
                     
                     if frame_diff > 0:
-                        self._data = self._data + np.concatenate((arg._data, np.zeros(shape=(frame_diff, arg.channels))))
+                        self._data = self._data + np.concatenate((arg._data, np.zeros(shape=(frame_diff, arg.channels), dtype=np.float32)))
                     else:
-                        self._data = np.concatenate((self._data, np.zeros(shape=(-frame_diff, self.channels)))) + arg._data
+                        self._data = np.concatenate((self._data, np.zeros(shape=(-frame_diff, self.channels), dtype=np.float32))) + arg._data
                 else:
                     raise
 
             max_val = np.max(np.abs(self._data))
-            if max_val > self.max_val: # If the sum of our signals would clip, normalize the signal to our dtype range
+            if max_val > 1: # If the sum of our signals would clip, normalize the signal to our dtype range
                 # norm_factor = ((data_max + arg_max)/2) / max_val
-                self._data = self._data * (self.max_val / max_val)
+                self._data = self._data * (1 / max_val)
             
-            self._data = self._data.astype(self.dt)
+            self._data = self._data
 
             return self
 
@@ -115,7 +106,7 @@ class AudioSegment():
 
             data = self._data[start_frame:end_frame]
 
-            return AudioSegment(data.tobytes(), self.frame_rate, self.channels, self.sample_width)
+            return AudioSegment(data.tobytes(), self.frame_rate, self.channels, 4)
         else:
             raise ValueError("indexing is not supported!")
 
@@ -149,7 +140,7 @@ class AudioSegment():
         
         amp_array = np.linspace(from_amp, to_amp, num=frame_duration, endpoint=True)
 
-        self._data[start_frame:end_frame] = np.clip(self._data[start_frame:end_frame].T * amp_array, a_min=self.min_val, a_max=self.max_val).T.astype(self.dt)
+        self._data[start_frame:end_frame] = np.clip(self._data[start_frame:end_frame].T * amp_array, a_min=-1, a_max=1, dtype=np.float32).T
 
         return self
     

@@ -145,7 +145,7 @@ def resample(channel_samples, scale=1.0):
             np.linspace(0.0, 1.0, n, endpoint=False), # where to interpret
             np.linspace(0.0, 1.0, len(channel_samples), endpoint=False), # known positions
             channel_samples, # known data points
-            )
+            ).astype(np.float32)
 
 class FIRLowpassFilter():
 
@@ -172,41 +172,33 @@ class FIRLowpassFilter():
         self.fir_filter = _fir_filter / np.sum(_fir_filter)
         self.filter_len = len(self.fir_filter)
     
-    def filter_signal(self, data: np.ndarray, dt):
+    def filter_signal(self, data: np.ndarray):
         """
         Expects data in the shape of [num_samples, num_channels]
         """
-        if dt == np.int16:
-            min_val = np.iinfo(dt).min
-            max_val = np.iinfo(dt).max
-        else:
-            min_val = -1
-            max_val = 1
         num_samples = data.shape[0]
         padded_data = np.concatenate([self.padding, data])
         self.padding = padded_data[-(self.filter_len - 1):]
         start = self.filter_len + 1
         end = start + num_samples
         if data.ndim > 1:
-            return np.clip(np.apply_along_axis(np.convolve, 0, padded_data, self.fir_filter, mode="full")[start:end], min_val, max_val)
+            return np.clip(np.apply_along_axis(np.convolve, 0, padded_data, self.fir_filter, mode="full")[start:end], -1, 1, dtype=np.float32)
         else:
-            return np.clip(np.convolve(padded_data, self.fir_filter, mode="full")[start:end], min_val, max_val)
+            return np.clip(np.convolve(padded_data, self.fir_filter, mode="full")[start:end], -1, 1, dtype=np.float32)
 
-def change_speed(song_data: bytes, speed: float, filter: FIRLowpassFilter | None = None, dt=np.float32):
+def change_speed(song_data: bytes, speed: float, filter: FIRLowpassFilter | None = None):
     """
     This function manipulates the raw audio data to speed up or slow down a song by averaging audio samples
     or by cutting out audio samples. This process is slow when upsampling
     """
 
     # Convert bytes to numpy array (faster to deal with)
-    if dt == np.int16:
-        channels = np.ndarray(shape=(len(song_data)//2//2, 2), dtype=dt, buffer=song_data, order="C")
-    else:
-        channels = np.ndarray(shape=(len(song_data)//2//4, 2), dtype=dt, buffer=song_data, order="C")
+    # This assumes we have 2 channel 32bit float audio bytes
+    channels = np.ndarray(shape=(len(song_data)//2//4, 2), dtype=np.float32, buffer=song_data, order="C")
 
     channels = np.apply_along_axis(resample, axis=0, arr=channels, scale=1/speed)
 
     if filter is not None and speed < 1: # If we're slowing down, we need to apply a low pass filter to the outgoing audio
-        channels = filter.filter_signal(channels, dt)
+        channels = filter.filter_signal(channels)
 
-    return channels.astype(dt).tobytes() # return as bytes
+    return channels.tobytes() # return as bytes
