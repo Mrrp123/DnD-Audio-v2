@@ -478,7 +478,7 @@ class MusicDatabase():
         
         persistent_id = self._get_hash_from_file(file)
         
-        if len(self) != 0:
+        if len(self.valid_pointers) != 0:
             for pointer in self.valid_pointers:
                 # If the exact file already exists in the database, don't add it
                 if self.data["tracks"][pointer]["persistent_id"] == persistent_id:
