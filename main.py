@@ -1470,6 +1470,7 @@ class DndAudio(App):
         Window.on_dropfile = nothing
         Window.bind(on_drop_file=self._file_drop_handler)
         Window.bind(on_resize=self.on_resize)
+        self.width, self.height = Window.size
         if platform != "android":
             Window.size = (375, 700)
         
