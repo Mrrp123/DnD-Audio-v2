@@ -23,12 +23,8 @@ V = TypeVar("V")
 
 from kivy.utils import platform
 
-if platform == "android":
-    from jnius import autoclass
-    AUDIO_API = "audiotrack"
 
-
-if platform in ('win', 'linux', 'linux2', 'macosx'):
+if platform in ("win", "linux", "linux2", "macosx", "android"):
     import miniaudio
     AUDIO_API = "miniaudio"
 
@@ -557,9 +553,7 @@ class MusicDatabase():
         return self.data["tracks"][self.track_pointer]
     
     def get_track_info(self, file: str):
-        if AUDIO_API == "audiotrack":
-            track_info, metadata = self._android_get_track_info(file)
-        elif AUDIO_API == "miniaudio":
+        if AUDIO_API == "miniaudio":
             track_info, metadata = self._miniaudio_get_track_info(file)
         
         if isinstance(metadata, (MP3, WAVE)):
@@ -655,54 +649,6 @@ class MusicDatabase():
         
         return track_info, metadata
     
-    def _android_get_track_info(self, file: str):
-        # For some *obscene* reason, Android's MediaMetadataRetriever class 
-        # didn't support something as fucking simple as SAMPLE RATE until 
-        # api 31, so we use mutagen for metadata, and MediaExtractor 
-        # for sample rate, length and bitrate
-        MediaExtractor = autoclass("android.media.MediaExtractor")
-
-        self.media_extractor = MediaExtractor()
-        self.media_extractor.setDataSource(file)
-        self.track_format = self.media_extractor.getTrackFormat(0)
-
-        # Base dict to fill known info into
-        track_info = {
-            "length" : 0,
-            "rate" : 0,
-            "bit_rate" : 0,
-            "name" : os.path.split(file)[-1],
-            "artist" : "",
-            "cover" : "",
-            "album" : "",
-            "genre" : "",
-            "year" : 0,
-            "bpm" : 0,
-        }
-
-        # rate and length absolutely must exist, if they don't these will throw errors
-        track_info["rate"] = self.track_format.getInteger("sample-rate")
-        # This will be off by at most 0.5 us (2 or 3 frames @ 48kHz), which should be good enough, but if it causes problems then this will need to change.
-        track_info["length"] = round(self.track_format.getLong("durationUs") * track_info["rate"] / 1_000_000)
-        track_info["bit_rate"] = self.track_format.getInteger("bitrate") // 1000
-        self.media_extractor.release()
-
-        file_ext = os.path.splitext(file)[1].lower()
-
-        if file_ext == ".wav":
-            metadata = WAVE(file)
-
-        elif file_ext == ".ogg":
-            metadata = OggVorbis(file)
-        
-        elif file_ext == ".mp3":
-            metadata = MP3(file)
-        
-        else:
-            raise ValueError("Unsupported file type!")
-        
-        
-        return track_info, metadata
     
     def add_playlist(self, playlist_name: str, track_list: list[int] | None = None):
 
