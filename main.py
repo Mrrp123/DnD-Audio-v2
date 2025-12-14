@@ -52,6 +52,9 @@ from pythonosc.udp_client import SimpleUDPClient
 from kivy.graphics import (RenderContext, Fbo, Color, Rectangle,
                            PushMatrix, PopMatrix, ClearColor, ClearBuffers)
 
+# Allows us to click a button even if we're not focused on the window
+os.environ["SDL_MOUSE_FOCUS_CLICKTHROUGH"] = "1"
+
 class TrackLabelShader(Label):
     fs = StringProperty(None)
     vs = StringProperty(None)
