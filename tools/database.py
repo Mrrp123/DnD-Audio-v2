@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from tools.music_playlist import UpdatingDict, TrackInfo, PlaylistInfo
 
-DB_VERSION = 20250902
+DB_VERSION = 20251215
 
 class DatabaseFormatError(Exception):
     pass
@@ -73,7 +73,7 @@ def load_db(database_file):
            length | long   | Length of audio file [frames]
              size | long   | File size of audio file [bytes]
              rate | int    | Sample rate of file [Hz]
-         bit_rate | short  | Sampling rate of file [Hz]
+         bit_rate | short  | Encoded bitrate of file [kbps]
              year | short  | Release year
               bpm | short  | Beats per minute [minute^-1]
        play_count | int    | Count of the number of times this track has been played
@@ -101,6 +101,17 @@ def load_db(database_file):
        track_list | int[]   | An array of all the track ids contained in the playlist
     --------------------------------------------------------------------------------------
     
+    DBTrackHistory:
+    A historical record of when songs were played. Each track history object has a set of values associated 
+    with them, encoded in the following order:
+
+             Name | Type     | Description [units]
+    ---------------------------------------------------------------------------------------
+               id | int      | Numerical id (Same as track's id)
+    persistent_id | string   | Unique id (Same as track's persistent id)
+            count | ULEB128  | Count of the number of historical records
+       play_dates | double[] | An array of UTC timestamps of when the song was played [sec]
+    ---------------------------------------------------------------------------------------
 
     DB Format:
     
@@ -108,16 +119,18 @@ def load_db(database_file):
     database file. Encoded in the following order:
 
              Name | Type             | Description [units]
-    -------------------------------------------------------------------------------
+    ------------------------------------------------------------------------------------
        DB_VERSION | int              | Version number of the database format
        num_tracks | int              | Number of tracks present in the database
     num_playlists | int              | Number of playlists present in the database
+    num_histories | int              | Number of history objects present in the database
            tracks | DBTrackInfo[]    | Aforementioned DBTrackInfo objects
         playlists | DBPlaylistInfo[] | Aforementioned DBPlaylistInfo objects
-    -------------------------------------------------------------------------------
+        histories | DBTrackHistory[] | Aforementioned DBTrackHistory objects
+    ------------------------------------------------------------------------------------
 
     Output Format:
-    Type definitions for the output format are default python types
+    Type definitions for the output format are default python types. 
 
     db_data (dict) = {
         "tracks" : {
@@ -141,7 +154,7 @@ def load_db(database_file):
                 "play_count" : Number of time the song has been listened to (int),
                 "play_date" : UTC timestamp of when the song was last played (float) [sec]
                 }
-            }
+            },
         "playlists" : {
             id (int) : {
                 "id" : numerical id (int),
@@ -149,16 +162,24 @@ def load_db(database_file):
                 "name" : Playlist title (str),
                 "track_list" : A list of all the track ids contained in the playlist (list[int])
                 }
+            },
+        "histories" : {
+            id (int) : {
+                "id" : numerical id (Same as track's id) (int),
+                "persistent_id" : unique id (Same as track's persistent id) (str),
+                "play_dates" : A list of UTC timestamps of when the song was played (list[float]) [sec],
+                }
             }
     }
     """
+    
+    def load_v20251215(fp: BufferedReader):
 
-    def load_v20250902(fp: BufferedReader):
-
-        db_data = {"tracks" : {}, "playlists" : {}}
+        db_data = {"tracks" : {}, "playlists" : {}, "histories" : {}}
 
         num_tracks = int.from_bytes(fp.read(4), "little")
         num_playlists = int.from_bytes(fp.read(4), "little")
+        num_histories = int.from_bytes(fp.read(4), "little")
 
         for i in range(num_tracks):
             track_id = int.from_bytes(fp.read(4), "little")
@@ -205,13 +226,25 @@ def load_db(database_file):
             playlist_id = int.from_bytes(fp.read(4), "little")
             persistent_id = bytes_to_string(fp)
             name = bytes_to_string(fp)
-            track_list = [int.from_bytes(fp.read(4), "little") for k in range(decode_ULEB128_int(fp))]
+            track_list = [int.from_bytes(fp.read(4), "little") for _ in range(decode_ULEB128_int(fp))]
             
             db_data["playlists"][playlist_id] = {
                 "id" : playlist_id,
                 "persistent_id" : persistent_id,
                 "name" : name,
                 "track_list" : track_list
+            }
+        
+        for k in range(num_histories):
+            track_id = int.from_bytes(fp.read(4), "little")
+            persistent_id = bytes_to_string(fp)
+            num_entries = decode_ULEB128_int(fp)
+            play_dates = list(struct.unpack(f"{num_entries}d", fp.read(num_entries*8)))
+
+            db_data["histories"][track_id] = {
+                "id" : track_id,
+                "persistent_id" : persistent_id,
+                "play_dates" : play_dates
             }
         
         if (byte := fp.read(1)):
@@ -222,8 +255,8 @@ def load_db(database_file):
     with open(database_file, "rb") as fp:
         version = int.from_bytes(fp.read(4), "little")
 
-        if version == 20250902:
-            return load_v20250902(fp)
+        if version == 20251215:
+            return load_v20251215(fp)
         else:
             raise DatabaseFormatError(f"Unknown database version: {version}")
     
@@ -237,6 +270,7 @@ def save_db(database_file, data: UpdatingDict[str, UpdatingDict[int, TrackInfo|P
         fp.write(DB_VERSION.to_bytes(4, "little"))
         fp.write(len(data["tracks"].keys()).to_bytes(4, "little"))
         fp.write(len(data["playlists"].keys()).to_bytes(4, "little"))
+        fp.write(len(data["histories"].keys()).to_bytes(4, "little"))
 
         for track_id in data["tracks"].keys():
             fp.write(data["tracks"][track_id]["id"].to_bytes(4, "little"))
@@ -273,3 +307,11 @@ def save_db(database_file, data: UpdatingDict[str, UpdatingDict[int, TrackInfo|P
             for track_id in data["playlists"][playlist_id]["track_list"]:
                 track_list_bytearray.extend(track_id.to_bytes(4, "little"))
             fp.write(track_list_bytearray)
+        
+        for track_id in data["histories"].keys():
+            fp.write(data["histories"][track_id]["id"].to_bytes(4, "little"))
+            fp.write(string_to_bytes(data["histories"][track_id]["persistent_id"]))
+            fp.write(
+                struct.pack(f"{len(data["histories"][track_id]["play_dates"])}d", 
+                *data["histories"][track_id]["play_dates"])
+                )

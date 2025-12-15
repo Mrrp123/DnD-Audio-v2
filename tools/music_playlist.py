@@ -94,6 +94,10 @@ class PlaylistInfo(TypedDict):
     name: str
     track_list: list[int]
 
+class TrackHistory(TypedDict):
+    id: int
+    persistent_id: str
+    play_dates: list[float]
 
 class MusicDatabase():
     """
@@ -123,13 +127,20 @@ class MusicDatabase():
                 "play_count" : Number of time the song has been listened to (int),
                 "play_date" : UTC timestamp of when the song was last played (float) [sec]
                 }
-            }
+            },
         "playlists" : {
             id (int) : {
                 "id" : numerical id (int),
                 "persistent_id" : unique id based on the sha256 hash of name and creation date (str),
                 "name" : Playlist title (str),
                 "track_list" : A list of all the track ids contained in the playlist (list[int])
+                }
+            },
+        "histories" : {
+            id (int) : {
+                "id" : numerical id (Same as track's id) (int),
+                "persistent_id" : unique id (Same as track's persistent id) (str),
+                "play_dates" : A list of UTC timestamps of when the song was played (list[float]) [sec],
                 }
             }
     }
@@ -138,7 +149,7 @@ class MusicDatabase():
     def __init__(self, database_file) -> None:
 
         try:
-            self.data: UpdatingDict[str, UpdatingDict[int, TrackInfo|PlaylistInfo]] = UpdatingDict(load_db(database_file))
+            self.data: UpdatingDict[str, UpdatingDict[int, TrackInfo|PlaylistInfo|TrackHistory]] = UpdatingDict(load_db(database_file))
             self.track_pointer = list(self.data["tracks"].keys())[0] # id pointer to a song in self.database["tracks"]
             self.playlist_pointer_dict = {0 : list(self.data["tracks"].keys())} # 0 is a special playlist id for all songs
             self.playlist_pointer_dict.update({playlist_id : self.data["playlists"][playlist_id]["track_list"] for playlist_id in self.data["playlists"].keys()})
@@ -188,9 +199,22 @@ class MusicDatabase():
     
     def update_play_info(self, track_id):
         self.data.locked = True
+
+        now = datetime.now().timestamp()
+
         self.data["tracks"][track_id]["play_count"] += 1
+
+        if track_id in self.data["histories"].keys():
+            self.data["histories"][track_id]["play_dates"].append(now)
+        else:
+            self.data["histories"][track_id] = {
+                "id" : track_id, 
+                "persistent_id" : self.data["tracks"][track_id]["persistent_id"], 
+                "play_dates" : [now]
+                }
+            
         self.data.locked = False
-        self.data["tracks"][track_id]["play_date"] = datetime.now().timestamp()
+        self.data["tracks"][track_id]["play_date"] = now
         self.data.locked = True
     
     @staticmethod
