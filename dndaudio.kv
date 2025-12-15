@@ -837,6 +837,9 @@
     image: ""
     image_color: 1, 1, 1, 1
     background_color: 0, 0, 0, 1
+    image_scale: (6/7)
+    label_font_size: app.height / 37
+    arrow_font_size: app.height / 30
     canvas.before:
         Color:
             rgba: self.background_color
@@ -859,7 +862,7 @@
         halign: "left"
         valign: "middle"
         text_size: self.size
-        font_size: app.height / 37
+        font_size: root.label_font_size
         color: 1, 1, 1, 1
         size_hint: 1, None
         padding: root.height * (6/5), 0, root.width / 12, 0
@@ -880,7 +883,7 @@
     Image:
         id: screen_icon
         source: root.image#"./assets/covers/default_cover.png"
-        size: root.height * (6/7), min(1/self.image_ratio * root.height * (6/7), root.height * (6/7))
+        size: root.height * root.image_scale, min(1/self.image_ratio * root.height * root.image_scale, root.height * root.image_scale)
         x: -root.width
         fit_mode: "contain"
         mipmap: True
@@ -889,8 +892,8 @@
                 rgba: root.image_color
             RoundedRectangle:
                 texture: self.texture
-                size: root.height * (6/7), min(1/self.image_ratio * root.height * (6/7), root.height * (6/7))
-                pos: self.parent.x + root.height * (1/5), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (6/7), root.height * (6/7))) / 2
+                size: root.height * root.image_scale, min(1/self.image_ratio * root.height * root.image_scale, root.height * root.image_scale)
+                pos: self.parent.x + root.height * (1/5), self.parent.y + (root.height - min(1/self.image_ratio * root.height * root.image_scale, root.height * root.image_scale)) / 2
                 radius: self.size[1] / 12,
 
 <LibraryDisplay>:
@@ -951,11 +954,18 @@
             screen_link_name: "songs"
             display_name: "Songs"
 
+
+<PlaylistButton>:
+    image_scale: 4/5
+    label_font_size: app.height/50
+    arrow_font_size: app.height/30
+
 <PlaylistsDisplay>:
+    main_label_font_size: app.height/22
     Button:
         id: playlists_back
         width: min(app.height / 4, app.width / 3)
-        height: app.height / 10
+        height: app.height / 12
         background_color: 1,1,1,0
         color: 0, 1, 1, 1
         x: 0
@@ -965,7 +975,7 @@
         valign: "top"
         text_size: self.size
         # size: self.texture_size
-        font_size: app.height/32
+        font_size: app.height/40
         padding: ("12dp", "11dp", 0, 0)
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
@@ -977,13 +987,13 @@
         id: playlists_label
         color: 1,1,1,1
         width: app.width/2
-        height: app.height/15
+        height: root.main_label_font_size * 1.25
         x: 0
-        y: app.height - app.height / 6
+        y: playlists_back.y - self.height
         halign: "left"
         text: "Playlists"
         text_size: self.size
-        font_size: app.height/20
+        font_size: root.main_label_font_size
         padding: ("23dp", "15dp", 0, 0)
     
     TextInput: # This exists only to help the rounded rectangle figure out its height, it mimics the settings of playlist_search
@@ -995,7 +1005,7 @@
         width: app.width - playlists_label.padding[0]*2
         height: self.minimum_height
         text_size: self.size 
-        font_size: app.height/40
+        font_size: app.height/45
         font_name: "Roboto"
         padding: 6,6,6,6
 
@@ -1003,11 +1013,11 @@
         id: text_box_background
         canvas:
             Color:
-                rgba: .2,.2,.2,.3
+                rgba: .1,.1,.1, 1
             RoundedRectangle:
                 size: size_indicator.width + size_indicator.height / 2, size_indicator.size[1]
-                pos: playlists_label.x + playlists_label.padding[0] - size_indicator.height / 4, app.height * (3/4)
-                radius: size_indicator.height / 2,
+                pos: playlists_label.x + playlists_label.padding[0] - size_indicator.height / 4, playlists_label.y - (size_indicator.height * 1.25)
+                radius: size_indicator.height / 3,
 
     TextInput:
         id: playlist_search
@@ -1018,11 +1028,12 @@
         cursor_color: 1,1,1,1
         multiline: False
         x: playlists_label.x + playlists_label.padding[0]
-        y: app.height * (3/4)
+        y: playlists_label.y - (size_indicator.height * 1.25)
         halign: "left"
         hint_text: "Search in Playlists"
+        hint_text_color: .5, .5, .5, 1
         text_size: self.size 
-        font_size: app.height/40
+        font_size: app.height/45
         padding: size_indicator.padding
         on_text: root.on_text()
     
@@ -1030,12 +1041,12 @@
         id: playlists
         viewclass: "PlaylistButton"
         width: app.width
-        height: playlist_search.y - size_indicator.height
+        height: int(playlist_search.y - size_indicator.height)
         bar_width: dp(10)
         scroll_type: ["bars", "content"]
-        scroll_distance: 1
+        scroll_distance: 5
         RecycleBoxLayout:
-            default_size: None, int(size_indicator.size[1]*2.666)
+            default_size: None, int(size_indicator.size[1]*2.38)
             default_size_hint: 1, None
             size_hint: None, None
             height: self.minimum_height
