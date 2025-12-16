@@ -918,6 +918,7 @@ class SongButton(Widget):
                 self.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover_small.png"
 
             self.songs_display: SongsDisplay | PlaylistSongsDisplay = self.parent.parent.parent
+            self.recycleview: SongRecycleView = self.parent.parent
     
     def on_touch_down(self, touch: MotionEvent):
         if self.y < touch.y < self.y + self.height:
@@ -928,8 +929,12 @@ class SongButton(Widget):
     def on_touch_up(self, touch: MotionEvent):
         
         if self.y < touch.y < self.y + self.height and touch.grab_current is self:
-            self.background_color = 0, 0, 0, 1
 
+            # Make sure the button lights up white for at least one frame when we select it
+            if (time_diff := (Clock.get_boottime() - self.recycleview.color_time)) > 0.05:
+                self.background_color = 0, 0, 0, 1
+            else:
+                Clock.schedule_once(self.set_background_color, time_diff)
             status, pause_flag = self.app.get_audioplayer_attr("status", "pause_flag")
 
             self.app.music_database.set_playlist(self.playlist_id)
@@ -965,6 +970,10 @@ class SongButton(Widget):
             self.background_color = 0, 0, 0, 1
             touch.ungrab(self)
             return True
+    
+    def set_background_color(self, dt, color=(0, 0, 0, 1)):
+        # Simple helper for setting color based on clock
+        self.background_color = color
 
 class SortButton(BoxLayout):
 
@@ -1348,21 +1357,30 @@ class PlaylistButton(ScreenSelectionButton):
         self.sort_by: str
         self.reverse_sort: bool
 
-    def on_parent(self, *args):
-        self.app: DndAudio = App.get_running_app()
+    def on_parent(self, widget, parent):
+        if parent is not None:
+            self.app: DndAudio = App.get_running_app()
 
-        self.display_label: Label = self.ids.screen_label
-        self.display_label.text = self.app.music_database.data["playlists"][self.playlist_id]["name"]
-        self.screen_link_name = self.app.music_database.data["playlists"][self.playlist_id]["persistent_id"]
+            self.display_label: Label = self.ids.screen_label
+            self.display_label.text = self.app.music_database.data["playlists"][self.playlist_id]["name"]
+            self.screen_link_name = self.app.music_database.data["playlists"][self.playlist_id]["persistent_id"]
 
-        if os.path.exists((img_path := f"{common_vars.app_folder}/cache/playlist_covers/{self.screen_link_name}.jpg")):
-            self.image = img_path
-        else:
-            self.image = f"{common_vars.app_folder}/assets/covers/playlist_cover.png"
+            if os.path.exists((img_path := f"{common_vars.app_folder}/cache/playlist_covers/{self.screen_link_name}.jpg")):
+                self.image = img_path
+            else:
+                self.image = f"{common_vars.app_folder}/assets/covers/playlist_cover.png"
+
+            self.recycleview: PlaylistRecycleView = self.parent.parent
 
     def on_touch_up(self, touch: MotionEvent):
         if self.y < touch.y < self.y + self.height and touch.grab_current is self:
-            self.background_color = 0, 0, 0, 1
+
+            # Make sure the button lights up white for at least one frame when we select it
+            if (time_diff := (Clock.get_boottime() - self.recycleview.color_time)) > 0.05:
+                self.background_color = 0, 0, 0, 1
+            else:
+                Clock.schedule_once(self.set_background_color, time_diff)
+
             self.app.root.add_widget(PlaylistSongsScreen(self.playlist_id, sort_by=self.sort_by, 
                                                          reverse_sort=self.reverse_sort, name=self.screen_link_name))
             self.app.root.transition.direction = self.transition_direction
@@ -1374,11 +1392,16 @@ class PlaylistButton(ScreenSelectionButton):
             self.background_color = 0, 0, 0, 1
             touch.ungrab(self)
             return True
+    
+    def set_background_color(self, dt, color=(0,0,0,1)):
+        # Helper to set background color using clock
+        self.background_color = color
 
 class SongRecycleView(RecycleView):
 
     selected_child = None
     color_clock = None
+    color_time = 0
 
     def on_scroll_start(self, touch: MotionEvent):
 
@@ -1395,6 +1418,7 @@ class SongRecycleView(RecycleView):
                     if child.track_id == self.selected_track_id:
                         self.selected_child = child
                         self.color_clock = Clock.schedule_once(self.set_background_color, 0.05)
+                        self.color_time = Clock.get_boottime()
                         break
 
         return super().on_scroll_start(touch, check_children=False)
@@ -1427,6 +1451,7 @@ class PlaylistRecycleView(SongRecycleView):
                     if child.playlist_id == self.selected_playlist_id:
                         self.selected_child = child
                         self.color_clock = Clock.schedule_once(self.set_background_color, 0.05)
+                        self.color_time = Clock.get_boottime()
                         break
 
         return super(SongRecycleView, self).on_scroll_start(touch, check_children=False)
