@@ -311,6 +311,7 @@ def save_db(database_file, data: UpdatingDict[str, UpdatingDict[int, TrackInfo|P
         for track_id in data["histories"].keys():
             fp.write(data["histories"][track_id]["id"].to_bytes(4, "little"))
             fp.write(string_to_bytes(data["histories"][track_id]["persistent_id"]))
+            fp.write(encode_ULEB128_int(len(data["histories"][track_id]["play_dates"])))
             fp.write(
                 struct.pack(f"{len(data["histories"][track_id]["play_dates"])}d", 
                 *data["histories"][track_id]["play_dates"])
