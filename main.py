@@ -10,13 +10,14 @@ from kivy.uix.screenmanager import ScreenManager, Screen, NoTransition, SlideTra
 from kivy.uix.effectwidget import EffectWidget
 from kivy.uix.label import Label
 from kivy.uix.recycleview import RecycleView
+from kivy.uix.slider import Slider
 
 from kivy.clock import Clock
 from kivy.animation import Animation
 from kivy.utils import get_color_from_hex, platform
 from tools.kivy_gradient import Gradient
 from tools.shaders import TimeStop
-from kivy.properties import StringProperty, NumericProperty, ListProperty, ColorProperty, BooleanProperty
+from kivy.properties import StringProperty, NumericProperty, ListProperty, ColorProperty, BooleanProperty, ObjectProperty
 from kivy.core.text import Label as CoreLabel
 from kivy.metrics import dp
 
@@ -25,7 +26,6 @@ import plyer
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from kivy.uix.button import Button
-    from kivy.uix.slider import Slider
     from kivy.uix.image import Image
     from kivy.uix.label import Label
     from kivy.uix.checkbox import CheckBox
@@ -148,6 +148,138 @@ class TrackLabelShader(Label):
                     self.main_display.track_artist_anim_trigger = Clock.create_trigger(partial(self.main_display.trigger_track_artist_anim, self.norm_text), 5)
                     self.main_display.track_artist_anim_trigger()
 
+class AnimSlider(Slider):
+    """
+    Slider that can animate between states activated by clicking on the slider
+    """
+
+    anim_size_active = ObjectProperty((1, 1))
+    anim_pos_active = ObjectProperty((1, 1))
+    anim_duration_active = NumericProperty(1)
+    anim_duration_inactive = NumericProperty(1)
+
+    # Nominally, these are strings, but could theoretically be functions
+    anim_transition_active = ObjectProperty("linear")
+    anim_transition_inactive = ObjectProperty("linear")
+
+    def __init__(self, **kwargs):
+        self.is_grabbed = False
+        super().__init__(**kwargs)
+    
+    def _init_anim_params(self):
+        """
+        Can't really initialize parameters until we hit the on_enter in the MainScreen.
+        Make sure to call this before doing anything with the AnimSlider
+        """
+        self.app: DndAudio = App.get_running_app()
+        self.main_display: MainDisplay = self.app.root.get_screen("main").main_display
+
+        self.orig_size = tuple(self.size)
+        self.orig_pos = tuple(self.pos)
+
+        # Animation to return to original shape when deselected
+        self.orig_anim = Animation(size=self.orig_size, pos=self.orig_pos, 
+                                   duration=self.anim_duration_inactive, transition=self.anim_transition_inactive)
+
+        # Animation to expand to larger shape when selected
+        self.new_anim = Animation(size=self.anim_size_active, pos=self.anim_pos_active, 
+                                  duration=self.anim_duration_active, transition=self.anim_transition_active)
+    
+    def on_touch_down(self, touch: MotionEvent):
+        if self.collide_point(*touch.pos) and not self.disabled:
+            self.is_grabbed = True
+            # We stop the old anim and start the new one since they may have different
+            # durations, which can interfere if one completes after the other
+            self.orig_anim.stop()
+            self.new_anim.start()
+            return super().on_touch_down(touch)
+    
+    def on_touch_up(self, touch: MotionEvent):
+        if touch.grab_current == self:
+            self.new_anim.stop()
+            self.orig_anim.start()
+            self.is_grabbed = False
+            return super().on_touch_up(touch)
+
+class AudioSlider(AnimSlider):
+
+    def on_touch_down(self, touch: MotionEvent):
+        if self.collide_point(*touch.pos) and not self.disabled and not touch.is_mouse_scrolling:
+            touch.grab(self)
+            self.is_grabbed = True
+            track_length, speed = self.app.get_audioplayer_attr("track_length", "speed")
+            # We overrode on_touch_down, so we need to make sure to update slider pos ourselves
+            self.set_value_pos(touch.pos)
+            self.main_display.update_time_text(self.value * track_length / 1000, speed, track_length)
+
+            # We apply
+            self.orig_anim.stop(self)
+            self.new_anim.start(self)
+            return True
+
+    
+    def on_touch_move(self, touch: MotionEvent):
+        if touch.grab_current == self:
+            track_length, speed = self.app.get_audioplayer_attr("track_length", "speed")
+            # We overrode on_touch_move, so we need to make sure to update slider pos ourselves
+            self.set_value_pos(touch.pos)
+            self.main_display.update_time_text(self.value * track_length / 1000, speed, track_length)
+            return True
+
+    def on_touch_up(self, touch: MotionEvent):
+        if touch.grab_current == self:
+            # We overrode on_touch_up, so we need to make sure to update slider pos ourselves
+            self.set_value_pos(touch.pos)
+            # Revert track pos/size to original pos/size
+            self.new_anim.stop(self)
+            self.orig_anim.start(self)
+            
+            track_length, speed, reverse_audio = self.app.get_audioplayer_attr("track_length", "speed", "reverse_audio")
+
+            if self.value == 1000 and not reverse_audio:
+                pos = 0
+            elif self.value == 0 and reverse_audio:
+                pos = track_length
+            else:
+                pos = self.value * track_length / 1000
+            
+            self.app.set_audioplayer_attr("seek_pos", pos)
+            self.app.set_audioplayer_attr("pos", pos)
+            self.main_display.update_time_text(pos, speed, track_length)
+
+            self.app.set_audioplayer_attr("status", "seek")
+            self.is_grabbed = False
+            return True
+
+class VolumeSlider(AnimSlider):
+
+    def on_touch_down(self, touch: MotionEvent):
+        if self.collide_point(*touch.pos) and not self.disabled and not touch.is_mouse_scrolling:
+            touch.grab(self)
+            self.is_grabbed = True
+            self.set_value_pos(touch.pos)
+            self.app.set_audioplayer_attr("volume", (self.value / 100))
+            # Make volume slider expand
+            self.orig_anim.stop(self)
+            self.new_anim.start(self)
+            return True
+    
+    def on_touch_move(self, touch: MotionEvent):
+        if touch.grab_current == self:
+            self.set_value_pos(touch.pos)
+            self.app.set_audioplayer_attr("volume", (self.value / 100))
+            return True
+    
+    def on_touch_up(self, touch: MotionEvent):
+        if touch.grab_current == self:
+            self.set_value_pos(touch.pos)
+            # Revert track pos to original position
+            self.new_anim.stop(self)
+            self.orig_anim.start(self)
+            self.app.set_audioplayer_attr("volume", (self.value / 100))
+            self.is_grabbed = False
+            return True
+
 class MainScreen(Screen):
     
     def __init__(self, **kw):
@@ -234,8 +366,8 @@ class MainDisplay(EffectWidget):
         self.app: DndAudio = App.get_running_app()        
 
         # Setting up various widgets names
-        self.time_slider: Slider = self.ids.audio_position_slider
-        self.volume_slider: Slider = self.ids.volume_slider
+        self.audio_slider: AudioSlider = self.ids.audio_position_slider
+        self.volume_slider: VolumeSlider = self.ids.volume_slider
         self.song_cover: Image = self.ids.song_cover
         self.background_img: Image = self.ids.background
         self.next_track_button: Button = self.ids.next_track
@@ -250,16 +382,12 @@ class MainDisplay(EffectWidget):
         self.track_name_scrollview: ScrollView = self.ids.track_name_scrollview
         self.track_artist_scrollview: ScrollView = self.ids.track_artist_scrollview
 
-        self.stop_move = False # Stops gestures from working when grabbing the time slider
-        self.update_time_pos = True # Stops time values from updating when grabbing the time slider
         self.song_cover_path = None
 
         self.c1 = get_color_from_hex("060606")
         self.c2 = get_color_from_hex("111111")
 
         self.background_img.texture = Gradient.vertical(self.c1, self.c2)
-        self.time_slider_anim = Animation(pos=(0, 0), size=(0, 0))
-        self.volume_slider_anim = Animation(pos=(0, 0), size=(0, 0))
         
         # only animate at 40fps since these animations are *expensive* operations on the poor cpu :(
         self.track_name_anim = Animation(scroll_x=0, duration=20, transition="linear", step=1/40)
@@ -281,16 +409,15 @@ class MainDisplay(EffectWidget):
 
     
     def _frame_one_init(self):
-        self.orig_time_slider_pos = tuple(self.time_slider.pos) # These variables cannot be initialized before the first frame, init them here
-        self.orig_time_slider_size = tuple(self.time_slider.size)
 
-        self.orig_volume_slider_pos = tuple(self.volume_slider.pos)
-        self.orig_volume_slider_size = tuple(self.volume_slider.size)
+        # Size and position variables need to be initialized after the first frame, init them here
+        self.audio_slider._init_anim_params()
+        self.volume_slider._init_anim_params()
 
         try:
             pos, track_length, volume, speed = self.app.get_audioplayer_attr("init_pos", "track_length", "volume", "speed")
             
-            self.time_slider.value = int(pos) / track_length * 1000
+            self.audio_slider.value = int(pos) / track_length * 1000
             self.volume_slider.value = round(volume * 100)
 
             self.update_track_info(0)
@@ -300,7 +427,7 @@ class MainDisplay(EffectWidget):
             self.update_time_text(pos, speed, track_length)
 
         except ValueError: # No config file case
-            self.time_slider.value = 0
+            self.audio_slider.value = 0
             self.volume_slider.value = 100
         
 
@@ -309,7 +436,7 @@ class MainDisplay(EffectWidget):
         if self.audio_clock is None:
             self.app.start_audio_player()
             self.audio_clock = Clock.schedule_interval(self.update_track_info, 0.05)
-            self.time_slider.disabled = False
+            self.audio_slider.disabled = False
             self.next_track_button.disabled = False
             self.previous_track_button.disabled = False
     
@@ -367,96 +494,12 @@ class MainDisplay(EffectWidget):
                 new_size = (self.height * (5/12), min(1/self.song_cover.image_ratio * self.height * (5/12), self.height * (5/12)))
                 anim = Animation(size=new_size, duration=0.25, transition="out_back")
                 anim.start(self.song_cover)
-
-    
-    def begin_change_volume(self, touch: MotionEvent):
-
-        if self.volume_slider.collide_point(*touch.pos) and not self.volume_slider.disabled:
-            self.app.set_audioplayer_attr("volume", (self.volume_slider.value / 100))
-
-            new_size = (self.orig_volume_slider_size[0] * 1.05, self.orig_volume_slider_size[1] * 2)
-            new_pos = (self.orig_volume_slider_pos[0] - self.orig_volume_slider_size[0] * .025, self.orig_volume_slider_pos[1] - self.orig_volume_slider_size[1]/2)
-            
-            # Make the track pos bar expand when held
-            self.volume_slider_anim.stop(self.volume_slider)
-            self.volume_slider_anim = Animation(size=new_size, pos=new_pos, duration=0.3, transition="out_expo")
-            self.volume_slider_anim.start(self.volume_slider)
-    
-    def update_volume(self, touch: MotionEvent):
-        if touch.grab_current == self.volume_slider:
-            self.app.set_audioplayer_attr("volume", (self.volume_slider.value / 100))
-    
-    def end_change_volume(self, touch: MotionEvent):
-        if touch.grab_current == self.volume_slider:
-
-            # Revert track pos to original position
-            self.volume_slider_anim.stop(self.volume_slider)
-            self.volume_slider_anim = Animation(size=self.orig_volume_slider_size, pos=self.orig_volume_slider_pos, duration=0.1, transition="linear")
-            self.volume_slider_anim.start(self.volume_slider)
-            
-            self.app.set_audioplayer_attr("volume", (self.volume_slider.value / 100))
-
-
-    def begin_seek(self, touch: MotionEvent):
-
-        if self.time_slider.collide_point(*touch.pos) and not self.time_slider.disabled:
-            self.stop_move = True
-            self.update_time_pos = False
-            new_size = (self.orig_time_slider_size[0] * 1.05, self.orig_time_slider_size[1] * 2)
-            new_pos = (self.orig_time_slider_pos[0] - self.orig_time_slider_size[0] * .025, self.orig_time_slider_pos[1] - self.orig_time_slider_size[1]/2)
-
-            track_length, speed = self.app.get_audioplayer_attr("track_length", "speed")
-            # Force call set_value_pos since otherwise it's a frame behind and doesn't update when the slider is first grabbed
-            self.time_slider.set_value_pos(touch.pos)
-            self.update_time_text(self.time_slider.value * track_length / 1000, speed, track_length)
-
-            # Make the track pos bar expand when held
-            self.time_slider_anim.stop(self.time_slider)
-            self.time_slider_anim = Animation(size=new_size, pos=new_pos, duration=0.3, transition="out_expo")
-            self.time_slider_anim.start(self.time_slider)
-    
-    def update_seek(self, touch: MotionEvent):
-        if touch.grab_current == self.time_slider:
-            if self.time_slider.value == 1000:
-                self.app.set_audioplayer_attr("seek_pos", 0)
-            track_length, speed = self.app.get_audioplayer_attr("track_length", "speed")
-
-            # Force call set_value_pos since otherwise it's a frame behind and results in unexpected
-            # behavior when the slider is released
-            self.time_slider.set_value_pos(touch.pos)
-            self.update_time_text(self.time_slider.value * track_length / 1000, speed, track_length)
-
-    def end_seek(self, touch: MotionEvent):
-        if touch.grab_current == self.time_slider:
-            self.stop_move = False
-
-            # Revert track pos to original position
-            self.time_slider_anim.stop(self.time_slider)
-            self.time_slider_anim = Animation(size=self.orig_time_slider_size, pos=self.orig_time_slider_pos, duration=0.1, transition="linear")
-            self.time_slider_anim.start(self.time_slider)
-            
-            track_length, speed, reverse_audio = self.app.get_audioplayer_attr("track_length", "speed", "reverse_audio")
-
-            
-            if self.time_slider.value == 1000 and not reverse_audio:
-                pos = 0
-            elif self.time_slider.value == 0 and reverse_audio:
-                pos = track_length
-            else:
-                pos = self.time_slider.value * track_length / 1000
-            
-            self.app.set_audioplayer_attr("seek_pos", pos)
-            self.app.set_audioplayer_attr("pos", pos)
-            self.update_time_text(pos, speed, track_length)
-
-            self.app.set_audioplayer_attr("status", "seek")
-            self.update_time_pos = True
     
     def reverse(self):
         if len(self.app.music_database) != 0:
             reverse_audio, track_length = self.app.get_audioplayer_attr("reverse_audio", "track_length")
             self.app.set_audioplayer_attr("reverse_audio", not reverse_audio)
-            seek_pos = int(self.time_slider.value * track_length / 1000)
+            seek_pos = int(self.audio_slider.value * track_length / 1000)
             self.app.set_audioplayer_attr("seek_pos", seek_pos)
             self.app.set_audioplayer_attr("pos", seek_pos)
             self.app.set_audioplayer_attr("status", "seek")
@@ -506,7 +549,7 @@ class MainDisplay(EffectWidget):
 
         if len(self.app.music_database) == 0:
             self.track_name_label.text = "No songs found!"
-            self.time_slider.disabled = True
+            self.audio_slider.disabled = True
             return
 
         # If we get a value error, these values don't exist in the audioplayer, thus skip this update
@@ -518,16 +561,13 @@ class MainDisplay(EffectWidget):
         track = self.app.music_database.get_track() # Currently playing track
 
         # Update track position
-        if self.update_time_pos:
+        if not self.audio_slider.is_grabbed:
             # If we aren't changing the size of our rectangle by more than ~1/3 a pixel, don't call an update (this is a surprisingly heavy graphics call)
-            if abs((new_value := (int(pos) / track_length * 1000)) - self.time_slider.value) >= (1000 / self.time_slider.width / 3) and status != "idle":
-                self.time_slider.value = new_value
+            if abs((new_value := (int(pos) / track_length * 1000)) - self.audio_slider.value) >= (1000 / self.audio_slider.width / 3) and status != "idle":
+                self.audio_slider.value = new_value
             self.update_time_text(pos, speed, track_length)
-        else:
-            # This condition is met when we're grabbing the time slider
-            self.update_time_text(self.time_slider.value * track_length / 1000, speed, track_length)
 
-        # Update track name / artist (and position if user is holding the time slider)
+        # Update track name / artist (and position if user is holding the audio slider)
         if ((self.track_name_label.norm_text   != track["name"] 
         or   self.track_artist_label.norm_text != track["artist"]) 
         and  status in ("playing", "idle", "fade_in")):
@@ -571,7 +611,9 @@ class MainDisplay(EffectWidget):
 
             self.track_name_label.norm_text = track["name"]
             self.track_artist_label.norm_text = track["artist"]
-        
+
+            if self.audio_slider.is_grabbed:
+                self.update_time_text(self.audio_slider.value * track_length / 1000, speed, track_length)
 
         # Update song cover
         if self.song_cover_path != track["cover"] and status in ("playing", "idle", "fade_in"):

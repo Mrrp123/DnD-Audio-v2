@@ -105,13 +105,18 @@
             StencilPop
     
 
-    Slider:
+    AudioSlider:
         id: audio_position_slider
+        anim_size_active: (self.width*1.05, self.height*2)
+        anim_pos_active: (self.x - self.width * 0.025, self.y - self.height/2)
+        anim_duration_active: 0.3
+        anim_duration_inactive: 0.1
+        anim_transition_active: "out_expo"
         min: 0
         max: 1000
         size_hint: None, None
         width: app.width * (11/12) - dp(32)
-        height: "48dp"
+        height: dp(48)
         disabled: True
         background_horizontal: f"{app_folder}/assets/buttons/empty.png"
         cursor_image: f"{app_folder}/assets/buttons/empty.png"
@@ -120,9 +125,6 @@
         center_x: app.width * (1/2)
         center_y: app.height * (1/3)
         padding: 0
-        on_touch_down: root.begin_seek(args[1])
-        on_touch_move: root.update_seek(args[1])
-        on_touch_up: root.end_seek(args[1])
         canvas:
             # Draw background rail for track position
             Color:
@@ -157,13 +159,18 @@
             # Clear the stencil object
             StencilPop
     
-    Slider:
+    VolumeSlider:
         id: volume_slider
+        anim_size_active: (self.width*1.05, self.height*2)
+        anim_pos_active: (self.x - self.width * 0.025, self.y - self.height/2)
+        anim_duration_active: 0.3
+        anim_duration_inactive: 0.1
+        anim_transition_active: "out_expo"
         min: 0
         max: 100
         size_hint: None, None
         width: app.width * (3/4) - dp(32)
-        height: "48dp"
+        height: dp(48)
         # disabled: False
         background_horizontal: f"{app_folder}/assets/buttons/empty.png"
         cursor_image: f"{app_folder}/assets/buttons/empty.png"
@@ -172,9 +179,6 @@
         center_x: app.width * (1/2)
         center_y: app.height * (1/7)
         padding: 0
-        on_touch_down: root.begin_change_volume(args[1])
-        on_touch_move: root.update_volume(args[1])
-        on_touch_up: root.end_change_volume(args[1])
         canvas:
             # Draw background rail
             Color:
