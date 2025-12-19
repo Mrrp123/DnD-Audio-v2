@@ -96,7 +96,7 @@ class TrackLabelShader(Label):
     
     def _update_alpha_fade_extents(self):
         if self.width > 0:
-            max_width = self.main_display.width - 2 * (self.main_display.width * (1/2) - (self.main_display.width * (11/12) - dp(32)) / 2 + dp(2))
+            max_width = self.app.width - 2 * (self.app.width * (1/2) - (self.app.width * (11/12) - dp(32)) / 2 + dp(2))
             if self.width > max_width:
                 offset = self.scroll_view.scroll_x * (self.width - max_width)
                 self.canvas["right_edge"] = (max_width + offset) / self.width
@@ -572,7 +572,7 @@ class MainDisplay(EffectWidget):
         or   self.track_artist_label.norm_text != track["artist"]) 
         and  status in ("playing", "idle", "fade_in")):
             
-            max_width = (self.width - 2 * (self.width * (1/2) - (self.width * (11/12) - dp(32)) / 2 + dp(2)))
+            max_width = (self.app.width - 2 * (self.app.width * (1/2) - (self.app.width * (11/12) - dp(32)) / 2 + dp(2)))
             self.track_name_anim.stop(self.track_name_scrollview)
             self.track_artist_anim.stop(self.track_artist_scrollview)
 
@@ -582,7 +582,7 @@ class MainDisplay(EffectWidget):
                 self.track_artist_anim_trigger.cancel()
 
             # See if track name needs to be animated
-            if CoreLabel(font_size=self.height/35, font_name=common_vars.default_font_name).get_extents(track["name"])[0] > max_width:
+            if CoreLabel(font_size=self.app.height/35, font_name=common_vars.default_font_name).get_extents(track["name"])[0] > max_width:
                 self.track_name_label.is_animated = True
                 self.track_name_label.animation_active = False
                 self.track_name_label.animation_complete = False
