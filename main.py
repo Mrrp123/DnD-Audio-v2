@@ -382,6 +382,9 @@ class MainDisplay(EffectWidget):
         self.track_name_scrollview: ScrollView = self.ids.track_name_scrollview
         self.track_artist_scrollview: ScrollView = self.ids.track_artist_scrollview
 
+        fbind("size", self.track_name_label.on_size)
+        fbind("size", self.track_artist_label.on_size)
+
         self.song_cover_path = None
 
         self.c1 = get_color_from_hex("060606")
