@@ -88,7 +88,7 @@
         shorten: True
         shorten_from: "right"
         size_hint: 1, None
-        text: "Ego (feat. Will Stetson)"
+        text: "Not Playing"
         padding: root.height * (6/5), 0, root.x + root.width - control_panel.x, 0
 
     Label:
@@ -103,12 +103,12 @@
         shorten: True
         shorten_from: "right"
         size_hint: 1, None
-        text: "Andora"
+        text: ""
         padding: root.height * (6/5), 0, root.x + root.width - control_panel.x, 0
     
     Image:
         id: song_cover
-        source: "/home/zeberle/projects/DnD-Audio-v2/cache/small_covers/9cb877b7d0ed3c46700011b3be090fb5.jpg"
+        source: f"{app_folder}/assets/covers/default_cover_small.png"
         y: -app.height
         size: root.height * (4/5), min(1/self.image_ratio * root.height * (4/5), root.height * (4/5))
         fit_mode: "contain"
