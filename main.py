@@ -303,7 +303,7 @@ class MainScreen(Screen):
     def on_pre_enter(self):
         # Turn our audio info loop back on
         if self.main_display.audio_clock is not None:
-            self.audio_clock = Clock.schedule_interval(self.main_display.update_track_info, 0.05)
+            self.main_display.audio_clock = Clock.schedule_interval(self.main_display.update_track_info, 0.05)
     
     def on_leave(self):
         
