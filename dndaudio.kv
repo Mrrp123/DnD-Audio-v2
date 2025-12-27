@@ -12,6 +12,114 @@
 <TextInput>:
     font_name: default_font_name
 
+<AudioPanel>:
+    # Width is the app minus left spacing (same as SongButton Image spacing) minus twice the scroll bar width (20dp)
+    # This will end up being slightly asymmetric
+    width: app.width - dp(20) - (CoreLabel(font_size=app.height/45).get_extents("_")[1]+12)*1.666 / 5
+    height: (CoreLabel(font_size=app.height/45).get_extents("_")[1]+12)*1.666
+    size_hint: None, None
+    # Set position to be off screen initially, so we don't see it on bootup.
+    x: (CoreLabel(font_size=app.height/45).get_extents("_")[1]+12)*1.666 / 5 + app.width
+    y: dp(10)
+    canvas:
+        Color:
+            rgba: 0.1, 0.1, 0.1, 0.95
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: self.height/3,
+    
+    BoxLayout:
+        id: control_panel
+        x: root.x + root.width - root.height * (9/4) - root.height / 5
+        y: root.y + root.height / 8
+        height: root.height * (3/4)
+        width: root.height * (9/4)
+
+        Button:
+            id: previous_track
+            size_hint: None, None
+            width: root.height * (3/4)
+            height: self.width
+            disabled: False
+            on_touch_up: root.main_display.get_tap_type(args[1])
+
+            background_normal: f"{app_folder}/assets/buttons/backward_skip_normal.png"
+            background_disabled_normal: f"{app_folder}/assets/buttons/backward_skip_normal.png"
+            background_down: f"{app_folder}/assets/buttons/backward_skip_pressed.png"
+            background_disabled_down: f"{app_folder}/assets/buttons/backward_skip_pressed.png"
+            border: (0,0,0,0)
+        
+        Button:
+            id: pause
+            size_hint: None, None
+            width: root.height * (3/4)
+            height: self.width
+            on_release: root.main_display.pause_music()
+
+            background_normal: f"{app_folder}/assets/buttons/play_normal.png"
+            background_disabled_normal: f"{app_folder}/assets/buttons/pause_normal.png"
+            background_down: f"{app_folder}/assets/buttons/play_pressed.png"
+            background_disabled_down: f"{app_folder}/assets/buttons/pause_pressed.png"
+            border: (0,0,0,0)
+
+        Button:
+            id: next_track
+            size_hint: None, None
+            width: root.height * (3/4)
+            height: self.width
+            disabled: False
+            on_touch_up: root.main_display.get_tap_type(args[1])
+            
+            background_normal: f"{app_folder}/assets/buttons/forward_skip_normal.png"
+            background_disabled_normal: f"{app_folder}/assets/buttons/forward_skip_normal.png"
+            background_down: f"{app_folder}/assets/buttons/forward_skip_pressed.png"
+            background_disabled_down: f"{app_folder}/assets/buttons/forward_skip_pressed.png"
+            border: (0,0,0,0)
+
+    Label:
+        id: name_label
+        pos: root.x, root.y + root.height/2
+        size: root.size[0], root.size[1]/2
+        halign: "left"
+        valign: "bottom"
+        text_size: self.size
+        font_size: app.height / 50
+        shorten: True
+        shorten_from: "right"
+        size_hint: 1, None
+        text: "Ego (feat. Will Stetson)"
+        padding: root.height * (6/5), 0, root.x + root.width - control_panel.x, 0
+
+    Label:
+        id: artist_label
+        pos: root.x, root.y
+        size: root.size[0], root.size[1]/2
+        halign: "left"
+        valign: "top"
+        text_size: self.size
+        font_size: app.height / 55
+        color: 2/3, 2/3, 2/3, 1
+        shorten: True
+        shorten_from: "right"
+        size_hint: 1, None
+        text: "Andora"
+        padding: root.height * (6/5), 0, root.x + root.width - control_panel.x, 0
+    
+    Image:
+        id: song_cover
+        source: "/home/zeberle/projects/DnD-Audio-v2/cache/small_covers/9cb877b7d0ed3c46700011b3be090fb5.jpg"
+        y: -app.height
+        size: root.height * (4/5), min(1/self.image_ratio * root.height * (4/5), root.height * (4/5))
+        fit_mode: "contain"
+        mipmap: True
+        canvas:
+            RoundedRectangle:
+                texture: self.texture
+                size: root.height * (4/5), min(1/self.image_ratio * root.height * (4/5), root.height * (4/5))
+                pos: self.parent.x + root.height * (1/5), self.parent.y + (root.height - min(1/self.image_ratio * root.height * (4/5), root.height * (4/5))) / 2
+                radius: self.size[1] / 12,
+
 <MainDisplay>:
 
     Image:
@@ -698,6 +806,8 @@
             width: app.width
             orientation:  "vertical"
             background_color: 1,1,1,0.3
+            # Height of AudioPanel + 20dp of spacing
+            padding: (0, 0, 0, (CoreLabel(font_size=app.height/40).get_extents("_")[1]+12)*1.666 + dp(20))
 
 <SongsDisplay>:
 
@@ -1057,6 +1167,8 @@
             width: app.width
             orientation:  "vertical"
             background_color: 1,1,1,0.3
+            # Height of AudioPanel + 20dp of spacing
+            padding: (0, 0, 0, (CoreLabel(font_size=app.height/40).get_extents("_")[1]+12)*1.666 + dp(20))
 
 <PlaylistSongsDisplay>:
     dropdown_sort_settings:

@@ -6,6 +6,7 @@ from kivy.app import App
 
 from kivy.uix.widget import Widget
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.screenmanager import ScreenManager, Screen, NoTransition, SlideTransition
 from kivy.uix.effectwidget import EffectWidget
 from kivy.uix.label import Label
@@ -120,7 +121,7 @@ class TrackLabelShader(Label):
         self.animation_complete = True
 
         # Don't bother restarting the animation we're not on the main screen
-        if self.app.root.current == "main":
+        if self.app.sm.current == "main":
             if self.label_type == "name":
                 # Check if the artist name is animating and if so, make sure it is complete before restarting animations so that
                 # both the name and artist animations are synced up
@@ -172,7 +173,7 @@ class AnimSlider(Slider):
         Make sure to call this before doing anything with the AnimSlider
         """
         self.app: DndAudio = App.get_running_app()
-        self.main_display: MainDisplay = self.app.root.get_screen("main").main_display
+        self.main_display: MainDisplay = self.app.sm.get_screen("main").main_display
 
         self.orig_size = tuple(self.size)
         self.orig_pos = tuple(self.pos)
@@ -280,6 +281,95 @@ class VolumeSlider(AnimSlider):
             self.is_grabbed = False
             return True
 
+class AudioPanel(Widget):
+
+    def __init__(self, exclude_on_screen: list | None = None, **kwargs):
+        super().__init__(**kwargs)
+        if exclude_on_screen is None:
+            self.exclude_on_screen = []
+        else:
+            self.exclude_on_screen = exclude_on_screen
+        
+        self.previous_screen_name = "main"
+        self.app: DndAudio = App.get_running_app()
+        self._audio_player_active = False
+        self.main_display: MainDisplay = self.app.sm.get_screen("main").main_display
+
+        self.next_track_button: Button = self.ids.next_track
+        self.previous_track_button: Button = self.ids.previous_track
+        self.pause_button: Button = self.ids.pause
+        self.control_panel: BoxLayout = self.ids.control_panel
+
+        self.track_name_label: Label = self.ids.name_label
+        self.track_artist_label: Label = self.ids.artist_label
+
+        self.song_cover: Image = self.ids.song_cover
+    
+    def on_parent(self, *args):
+        # We initially offset the AudioPanel by the screen width so that we don't see it on start up.
+        self.orig_pos = tuple((self.pos[0] - self.app.width, self.pos[1]))
+        self.orig_size = tuple(self.size)
+
+    def on_current(self, manager: ScreenManager, current_screen_name: str):
+        """
+        Animation duration param and transition determined by the SlideTransition effect.
+        (duration = 0.4, transition = out_quad)
+        If screen transition is ever changed this will need to be updated.
+        """
+        if self.previous_screen_name not in self.exclude_on_screen and current_screen_name in self.exclude_on_screen:
+            if manager.transition.direction == "right":
+                self.pos = self.orig_pos
+                new_pos = (self.orig_pos[0] + self.app.width, self.orig_pos[1])
+            elif manager.transition.direction == "left":
+                self.pos = self.orig_pos
+                new_pos = (self.orig_pos[0] - self.app.width, self.orig_pos[1])
+            anim = Animation(pos=new_pos, duration=0.4, transition="out_quad")
+            anim.on_complete = self.hide_widget
+            anim.start(self)
+
+        elif self.previous_screen_name in self.exclude_on_screen and current_screen_name not in self.exclude_on_screen:
+            if manager.transition.direction == "right":
+                self.pos = (self.orig_pos[0] - self.app.width, self.orig_pos[1])
+                new_pos = self.orig_pos
+            elif manager.transition.direction == "left":
+                self.pos = (self.orig_pos[0] + self.app.width, self.orig_pos[1])
+                new_pos = self.orig_pos
+            anim = Animation(pos=new_pos, duration=0.4, transition="out_quad")
+            anim.on_start = self.show_widget
+            anim.start(self)
+        self.previous_screen_name = current_screen_name
+
+    def on_touch_down(self, touch: MotionEvent):
+        # We have to grab the touch here, so we don't interfere with RecycleViews beneath us
+        # This also sets our touch bbox larger so that we can't touch widgets behind it that
+        # aren't technically covered by the AudioPanel
+        if self.x < self.app.width and touch.y < self.y + self.height:
+            touch.grab(self)
+            if self.control_panel.collide_point(*touch.pos):
+                # Run normal on_touch_down if we are in the BoxLayout's bbox in order for our buttons to work
+                return super().on_touch_down(touch)
+            else:
+                # Prevent widgets underneath us from firing
+                return True
+    
+    def on_touch_up(self, touch: MotionEvent):
+        if touch.y < self.y + self.height and touch.x < self.control_panel.x and touch.grab_current == self:
+            self.app.sm.transition.direction = "right"
+            self.app.sm.current = "main"
+            touch.ungrab(self)
+            return True
+        elif touch.grab_current == self:
+            touch.ungrab(self)
+            return True
+    
+    def hide_widget(self, *args):
+        self.disabled = True
+        self.size = (0, 0)
+    
+    def show_widget(self, *args):
+        self.disabled = False
+        self.size = self.orig_size
+
 class MainScreen(Screen):
     
     def __init__(self, **kw):
@@ -302,15 +392,17 @@ class MainScreen(Screen):
     
     def on_pre_enter(self):
         # Turn our audio info loop back on
-        if self.main_display.audio_clock is not None:
-            self.main_display.audio_clock = Clock.schedule_interval(self.main_display.update_track_info, 0.05)
+        # if self.main_display.audio_clock is not None:
+        #     self.main_display.audio_clock = Clock.schedule_interval(self.main_display.update_track_info, 0.05)
+        pass
     
     def on_leave(self):
         
         # If we're not looking at the page, we have no reason to care about animations for song info
         # turn these off
-        if self.main_display.audio_clock is not None:
-            self.main_display.audio_clock.cancel()
+        # if self.main_display.audio_clock is not None:
+        #     print("Audio clock stopped?")
+        #     self.main_display.audio_clock.cancel()
 
         self.main_display.track_name_anim.stop(self.main_display.track_name_scrollview)
         if self.main_display.track_name_anim_trigger is not None:
@@ -445,10 +537,10 @@ class MainDisplay(EffectWidget):
     
     def get_tap_type(self, touch: MotionEvent):
         self.button_touch = touch
-        if touch.grab_current == self.next_track_button and self.next_track_event is None:
+        if touch.grab_current in (self.next_track_button, self.app.audio_panel.next_track_button) and self.next_track_event is None:
             self.next_track_event = Clock.schedule_once(lambda dt: self.play_next_track(self.button_touch), 0.2)
             return True
-        elif touch.grab_current == self.previous_track_button and self.previous_track_event is None:
+        elif touch.grab_current in (self.previous_track_button, self.app.audio_panel.previous_track_button) and self.previous_track_event is None:
             self.previous_track_event = Clock.schedule_once(lambda dt: self.play_previous_track(self.button_touch), 0.2)
             return True
 
@@ -485,6 +577,8 @@ class MainDisplay(EffectWidget):
             if pause_flag:
                 self.pause_button.background_normal = f"{common_vars.app_folder}/assets/buttons/play_normal.png"
                 self.pause_button.background_down = f"{common_vars.app_folder}/assets/buttons/play_pressed.png"
+                self.app.audio_panel.pause_button.background_normal = f"{common_vars.app_folder}/assets/buttons/play_normal.png"
+                self.app.audio_panel.pause_button.background_down = f"{common_vars.app_folder}/assets/buttons/play_pressed.png"
                 Animation.cancel_all(self.song_cover, "size")
                 new_size = (self.height * (1/3), min(1/self.song_cover.image_ratio * self.height * (1/3), self.height * (1/3)))
                 anim = Animation(size=new_size, duration=0.25, transition="out_back")
@@ -493,6 +587,8 @@ class MainDisplay(EffectWidget):
             else:
                 self.pause_button.background_normal = f"{common_vars.app_folder}/assets/buttons/pause_normal.png"
                 self.pause_button.background_down = f"{common_vars.app_folder}/assets/buttons/pause_pressed.png"
+                self.app.audio_panel.pause_button.background_normal = f"{common_vars.app_folder}/assets/buttons/pause_normal.png"
+                self.app.audio_panel.pause_button.background_down = f"{common_vars.app_folder}/assets/buttons/pause_pressed.png"
                 Animation.cancel_all(self.song_cover, "size")
                 new_size = (self.height * (5/12), min(1/self.song_cover.image_ratio * self.height * (5/12), self.height * (5/12)))
                 anim = Animation(size=new_size, duration=0.25, transition="out_back")
@@ -615,6 +711,10 @@ class MainDisplay(EffectWidget):
             self.track_name_label.norm_text = track["name"]
             self.track_artist_label.norm_text = track["artist"]
 
+            # Don't forget to update the AudioPanel as well!
+            self.app.audio_panel.track_name_label.text = track["name"]
+            self.app.audio_panel.track_artist_label.text = track["artist"]
+
             if self.audio_slider.is_grabbed:
                 self.update_time_text(self.audio_slider.value * track_length / 1000, speed, track_length)
 
@@ -622,8 +722,11 @@ class MainDisplay(EffectWidget):
         if self.song_cover_path != track["cover"] and status in ("playing", "idle", "fade_in"):
             if os.path.isfile(source := f"{common_vars.app_folder}/cache/covers/{track['persistent_id']}.jpg"):
                 self.song_cover.source = source
+                # Make sure AudioPanel uses the small one
+                self.app.audio_panel.song_cover.source = f"{common_vars.app_folder}/cache/small_covers/{track['persistent_id']}.jpg"
             else:
                 self.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover.png"
+                self.app.audio_panel.song_cover.source = f"{common_vars.app_folder}/assets/covers/default_cover_small.png"
             self.song_cover_path = track["cover"]
 
             # Don't do any cover size animations if we're not playing!!! This causes the size to small initially
@@ -940,7 +1043,7 @@ class SongButton(Widget):
 
         # Get a reference to the app and main display
         self.app: DndAudio = App.get_running_app()
-        self.main_display: MainDisplay = self.app.root.get_screen("main").main_display
+        self.main_display: MainDisplay = self.app.sm.get_screen("main").main_display
         self.touch_down_called = False
         self.track_id: int # This gets set by the SongsDisplay/PlaylistSongsDisplay init
         self.playlist_id: int # This also gets set by the SongsDisplayBase/PlaylistSongsDisplay init
@@ -1275,7 +1378,7 @@ class PlaylistSongsDisplay(SongsDisplayBase):
     
     def on_parent(self, *args):
 
-        self.playlists_display: PlaylistsDisplay = self.app.root.get_screen("playlists").playlist_display
+        self.playlists_display: PlaylistsDisplay = self.app.sm.get_screen("playlists").playlist_display
 
         self.back_button: Button = self.ids.back_button
         self.back_button.text = "\u2039 Playlists"
@@ -1383,8 +1486,8 @@ class ScreenSelectionButton(Widget):
         if self.y < touch.y < self.y + self.height and touch.grab_current is self:
             self.background_color = 0, 0, 0, 1
 
-            self.app.root.transition.direction = self.transition_direction
-            self.app.root.current = self.screen_link_name
+            self.app.sm.transition.direction = self.transition_direction
+            self.app.sm.current = self.screen_link_name
             touch.ungrab(self)
             return True
         
@@ -1426,10 +1529,10 @@ class PlaylistButton(ScreenSelectionButton):
             else:
                 Clock.schedule_once(self.set_background_color, time_diff)
 
-            self.app.root.add_widget(PlaylistSongsScreen(self.playlist_id, sort_by=self.sort_by, 
+            self.app.sm.add_widget(PlaylistSongsScreen(self.playlist_id, sort_by=self.sort_by, 
                                                          reverse_sort=self.reverse_sort, name=self.screen_link_name))
-            self.app.root.transition.direction = self.transition_direction
-            self.app.root.current = self.screen_link_name
+            self.app.sm.transition.direction = self.transition_direction
+            self.app.sm.current = self.screen_link_name
             touch.ungrab(self)
             return True
         
@@ -1547,17 +1650,24 @@ class DndAudio(App):
         if platform != "android":
             Window.size = (375, 700)
         
-        self.root: ScreenManager
-        sm = ScreenManager(transition=NoTransition())
-        sm.add_widget(SongsScreen(name="songs"))
-        sm.add_widget(MainScreen(name="main"))
-        sm.add_widget(SettingsScreen(name="settings"))
-        sm.add_widget(LibraryScreen(name="library"))
-        sm.add_widget(PlaylistsScreen(name="playlists"))
-        sm.transition.direction = "right"
-        sm.current = "main"
-        sm.transition = SlideTransition()
-        return sm
+        self.root: FloatLayout
+        root = FloatLayout()
+        self.sm = ScreenManager(transition=NoTransition())
+        self.sm.add_widget(SongsScreen(name="songs"))
+        self.sm.add_widget(MainScreen(name="main"))
+        self.sm.add_widget(SettingsScreen(name="settings"))
+        self.sm.add_widget(LibraryScreen(name="library"))
+        self.sm.add_widget(PlaylistsScreen(name="playlists"))
+        self.sm.transition.direction = "right"
+        self.sm.current = "main"
+        self.sm.transition = SlideTransition()
+
+        self.audio_panel = AudioPanel(exclude_on_screen=["main", "settings"])
+        self.sm.fbind("current", self.audio_panel.on_current)
+
+        root.add_widget(self.sm)
+        root.add_widget(self.audio_panel)
+        return root
 
     def on_resize(self, window, width, height):
         self.width = width
@@ -1709,14 +1819,14 @@ class DndAudio(App):
     def _file_drop_handler(self, window, file_path: bytes, x, y, *args):
         self.music_database.add_track(file_path.decode("utf-8"))
         self.call_audioplayer_func("reload_track_data")
-        self.root.get_screen("songs").songs_display.refresh_tracks()
+        self.sm.get_screen("songs").songs_display.refresh_tracks()
     
     def _add_file_handler(self, file_paths: list[str] | None):
         if file_paths is not None:
             for file_path in file_paths:
                 self.music_database.add_track(file_path)
             self.call_audioplayer_func("reload_track_data")
-            self.root.get_screen("songs").songs_display.refresh_tracks()
+            self.sm.get_screen("songs").songs_display.refresh_tracks()
 
 
     def _return_message(self, address: str, *values):
@@ -1730,7 +1840,7 @@ class DndAudio(App):
             func = getattr(self.music_database, func_name)
         else:
             screen, widget_name = address.split("/")[2:]
-            widget = getattr(self.root.get_screen(screen), widget_name)
+            widget = getattr(self.sm.get_screen(screen), widget_name)
             func = getattr(widget, func_name)
         if args and isinstance(args[-1], str) and args[-1][0] == "&":
             self.set_audioplayer_attr(args[-1][1:], func(*args[:-1]))
@@ -1758,7 +1868,7 @@ class DndAudio(App):
             with open(f"{common_vars.app_folder}/config", "wb") as fp:
                 (track_id, track_pos, track_length, total_frames, 
                  speed, fade_duration, volume, reverse_audio) = self.config_vars
-                main_display: MainDisplay = self.root.get_screen("main").main_display
+                main_display: MainDisplay = self.sm.get_screen("main").main_display
                 # Add special code so we know the file format is ok
                 fp.write(bytes([0x6D, 0x72, 0x72, 0x70])) # mrrp
                 fp.write(int(track_id).to_bytes(4, "little"))
@@ -1767,8 +1877,8 @@ class DndAudio(App):
                 fp.write(int(reverse_audio).to_bytes(1, "little"))
                 fp.write(int(self.music_database._shuffle).to_bytes(1, "little"))
                 fp.write(int(self.music_database.repeat).to_bytes(1, "little"))
-                fp.write(self.sort_by_bytemap[self.root.get_screen("songs").songs_display.sort_by])
-                fp.write(int(self.root.get_screen("songs").songs_display.reverse_sort).to_bytes(1, "little"))
+                fp.write(self.sort_by_bytemap[self.sm.get_screen("songs").songs_display.sort_by])
+                fp.write(int(self.sm.get_screen("songs").songs_display.reverse_sort).to_bytes(1, "little"))
                 for channel_val in main_display.c1 + main_display.c2: # c1 and c2 should be lists of floats
                     fp.write(round(channel_val * 255).to_bytes(1, "little"))
                 fp.write(int(fade_duration).to_bytes(2, "little"))
@@ -1813,7 +1923,7 @@ class DndAudio(App):
 
         if valid_file_tag:
 
-            main_display: MainDisplay = self.root.get_screen("main").main_display
+            main_display: MainDisplay = self.sm.get_screen("main").main_display
 
             if found_track:
                 # If we can't find the track, don't set track position values since these aren't valid
@@ -1835,13 +1945,13 @@ class DndAudio(App):
             if repeat: # MusicDatabase.repeat is set to False by default, so if repeat is true, flip value
                 main_display.toggle_repeat_mode()
 
-            songs_display: SongsDisplay = self.root.get_screen("songs").songs_display
+            songs_display: SongsDisplay = self.sm.get_screen("songs").songs_display
             songs_display.sort_by = sort_by
             songs_display.reverse_sort = reverse_sort
             songs_display.sort_buttons[sort_by].sort_checkbox.active = True
             songs_display.refresh_tracks()
 
-            settings_display: SettingsDisplay = self.root.get_screen("settings").settings_display
+            settings_display: SettingsDisplay = self.sm.get_screen("settings").settings_display
             settings_display.speed_slider.value = speed * 100
             settings_display.fade_slider.value = fade_duration
 
