@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from kivy.uix.checkbox import CheckBox
     from kivy.uix.textinput import TextInput
     from kivy.uix.scrollview import ScrollView
+    from kivy.uix.recycleboxlayout import RecycleBoxLayout
     from kivy.input.motionevent import MotionEvent
     
 
@@ -1504,10 +1505,11 @@ class SongRecycleView(RecycleView):
 
     def on_scroll_start(self, touch: MotionEvent):
 
+        self.layout_manager: RecycleBoxLayout
         # Make sure we're in the RecycleView before trying to highlight anything
         if (touch.y <= self.height and not touch.is_mouse_scrolling
-            and (local_touch_pos := self.to_local(*touch.pos))[1] > 0 # Make sure we're selecting only in the region of our RV objects
-            and local_touch_pos[1] < self.layout_manager._rv_positions[-1]+self.layout_manager._rv_positions[1]):
+            and (local_touch_pos := self.to_local(*touch.pos))[1] > self.layout_manager.padding[3] # Make sure we're selecting only in the region of our RV objects
+            and local_touch_pos[1] < self.layout_manager._rv_positions[-1] + self.layout_manager.default_height):
 
             index = self.layout_manager.get_view_index_at(local_touch_pos)
 
@@ -1537,10 +1539,11 @@ class PlaylistRecycleView(SongRecycleView):
 
     def on_scroll_start(self, touch: MotionEvent):
 
+        self.layout_manager: RecycleBoxLayout
         # Make sure we're in the RecycleView before trying to highlight anything
         if (touch.y <= self.height and not touch.is_mouse_scrolling
-            and (local_touch_pos := self.to_local(*touch.pos))[1] > 0 # Make sure we're selecting only in the region of our RV objects
-            and local_touch_pos[1] < self.layout_manager._rv_positions[-1]+self.layout_manager._rv_positions[1]):
+            and (local_touch_pos := self.to_local(*touch.pos))[1] > self.layout_manager.padding[3] # Make sure we're selecting only in the region of our RV objects
+            and local_touch_pos[1] < self.layout_manager._rv_positions[-1] + self.layout_manager.default_height):
 
             index = self.layout_manager.get_view_index_at(local_touch_pos)
 
