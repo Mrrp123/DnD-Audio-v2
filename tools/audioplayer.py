@@ -922,7 +922,7 @@ class AudioPlayer():
 
                 # Tell the main display to run the shaders to do the time stop effect
                 if i == 1:
-                    self.osc_client.send_message("/call/main/main_display", "_start_time_effect")
+                    self.osc_client.send_message("/call/main", "_start_time_effect")
 
                 self.get_debug_info()
                 if self.reverse_audio:

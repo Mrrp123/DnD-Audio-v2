@@ -149,8 +149,8 @@
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
         on_release:
-            root.parent.manager.transition.direction = "left"
-            root.parent.manager.current = "library"
+            root.manager.transition.direction = "left"
+            root.manager.current = "library"
 
     Button:
         id: settings
@@ -171,8 +171,8 @@
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
         on_release:
-            root.parent.manager.transition.direction = "right"
-            root.parent.manager.current = "settings"
+            root.manager.transition.direction = "right"
+            root.manager.current = "settings"
     
     Image:
         id: song_cover
@@ -699,6 +699,7 @@
         color: 0, 1, 1, 1
         x: 0
         y: app.height - self.height
+        size_hint: None, None
         # text: "\u2039 Library"
         halign: "left"
         valign: "top"
@@ -717,6 +718,7 @@
         height: root.main_label_font_size * 1.25
         x: 0
         y: back_button.y - self.height
+        size_hint: None, None
         halign: "left"
         # text: "Songs"
         text_size: self.size
@@ -732,6 +734,7 @@
         x: app.width - self.width*2
         center_y: back_button.center_y - 2
         size: app.height/20, app.height/20
+        size_hint: None, None
         #background_normal: "./assets/icon/icon.png"
         on_release: 
             dropdown.open(self)
@@ -759,6 +762,7 @@
         height: self.minimum_height
         text_size: self.size 
         font_size: app.height/45
+        size_hint: None, None
         font_name: "Roboto"
         padding: 6,6,6,6
 
@@ -782,6 +786,7 @@
         multiline: False
         x: main_label.x + main_label.padding[0]
         y: main_label.y - (size_indicator.height * 1.25)
+        size_hint: None, None
         halign: "left"
         # hint_text: "Search in Songs"
         hint_text_color: .5, .5, .5, 1
@@ -795,6 +800,7 @@
         viewclass: "SongButton"
         width: app.width
         height: int(track_search.y - size_indicator.height)
+        size_hint: None, None
         bar_width: dp(10)
         scroll_type: ["bars", "content"]
         scroll_distance: 5
@@ -841,6 +847,7 @@
         color: 1,1,1,1
         x: 0
         y: app.height * (40/48)
+        size_hint: None, None
         halign: "left"
         text: "Crossfade Duration:"
         text_size: app.width, None
@@ -858,6 +865,7 @@
         background_color: 1,1,1,1
         x: "16dp"
         center_y: app.height * (38/48)
+        size_hint: None, None
         on_touch_up: root.change_fade_duration(args[1])
         padding: "16dp"
     
@@ -866,6 +874,7 @@
         color: 1,1,1,1
         x: fade_slider.x + fade_slider.width
         y: app.height * (38/48) - self.height/2
+        size_hint: None, None
         halign: "left"
         text: f"{int(fade_slider.value / 1000)}s"
         text_size: app.width, None
@@ -878,6 +887,7 @@
         color: 1,1,1,1
         x: 0
         y: app.height * (33/48)
+        size_hint: None, None
         halign: "left"
         text: "Playback Speed:"
         text_size: app.width, None
@@ -895,6 +905,7 @@
         #background_color: 1,1,1,1
         x: "16dp"
         center_y: app.height * (31/48)
+        size_hint: None, None
         on_touch_up: root.change_speed(args[1])
         padding: "16dp"
     
@@ -903,6 +914,7 @@
         color: 1,1,1,1
         x: speed_slider.x + speed_slider.width
         y: app.height * (31/48) - self.height/2
+        size_hint: None, None
         halign: "left"
         text: f"{speed_slider.value / 100:.2f}x"
         text_size: app.width, None
@@ -915,6 +927,7 @@
         color: 1,1,0,1
         center_x: app.width * (1/2)
         center_y: app.height * (1/2)
+        size_hint: None, None
         text: "0"
     
     Label:
@@ -922,6 +935,7 @@
         color: 0,0.7,1,1
         x: app.width * (1/24)
         y: app.width * (1/24)
+        size_hint: None, None
         halign: "left"
         text: "Audio player currently not active"
         text_size: app.width * (11/12), None
@@ -934,6 +948,7 @@
         color: 0, 1, 1, 1
         x: app.width - self.width
         y: app.height - self.height
+        size_hint: None, None
         text: "Back \u203A"
         halign: "right"
         valign: "top"
@@ -943,8 +958,8 @@
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
         on_release:
-            root.parent.manager.transition.direction = "left"
-            root.parent.manager.current = "main"
+            root.manager.transition.direction = "left"
+            root.manager.current = "main"
 
 
 <ScreenSelectionButton>:
@@ -1020,6 +1035,7 @@
         color: 0, 1, 1, 1
         x: 0
         y: app.height - self.height
+        size_hint: None, None
         text: "\u2039 Back"
         halign: "left"
         valign: "top"
@@ -1030,8 +1046,8 @@
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
         on_release:
-            root.parent.manager.transition.direction = "right"
-            root.parent.manager.current = "main"
+            root.manager.transition.direction = "right"
+            root.manager.current = "main"
 
     Label:
         id: library_label
@@ -1040,6 +1056,7 @@
         height: app.height/22 * 1.25
         x: 0
         y: library_back.y - self.height
+        size_hint: None, None
         halign: "left"
         text: "Library"
         text_size: self.size
@@ -1052,6 +1069,7 @@
         height: (CoreLabel(font_size=app.height/40).get_extents("_")[1]+12)*3 # Same size as size_indicator.height * 3 (what we use for songs page)
         x: 0
         y: round(library_label.y - self.height - library_label.height / 4) # round position else seperator lines look funny
+        size_hint: None, None
 
         ScreenSelectionButton:
             id: playlists_button
@@ -1076,6 +1094,7 @@
 
 <PlaylistsDisplay>:
     main_label_font_size: app.height/22
+
     Button:
         id: playlists_back
         width: min(app.height / 4, app.width / 3)
@@ -1084,6 +1103,7 @@
         color: 0, 1, 1, 1
         x: 0
         y: app.height - self.height
+        size_hint: None, None
         text: "\u2039 Library"
         halign: "left"
         valign: "top"
@@ -1094,8 +1114,8 @@
         on_press: self.color = 0, 0.5, 0.5, 1
         on_touch_up: self.color = 0, 1, 1, 1
         on_release:
-            root.parent.manager.transition.direction = "right"
-            root.parent.manager.current = "library"
+            root.manager.transition.direction = "right"
+            root.manager.current = "library"
     
     Label:
         id: playlists_label
@@ -1104,6 +1124,7 @@
         height: root.main_label_font_size * 1.25
         x: 0
         y: playlists_back.y - self.height
+        size_hint: None, None
         halign: "left"
         text: "Playlists"
         text_size: self.size
@@ -1120,6 +1141,7 @@
         height: self.minimum_height
         text_size: self.size 
         font_size: app.height/45
+        size_hint: None, None
         font_name: "Roboto"
         padding: 6,6,6,6
 
@@ -1143,6 +1165,7 @@
         multiline: False
         x: playlists_label.x + playlists_label.padding[0]
         y: playlists_label.y - (size_indicator.height * 1.25)
+        size_hint: None, None
         halign: "left"
         hint_text: "Search in Playlists"
         hint_text_color: .5, .5, .5, 1
@@ -1156,6 +1179,7 @@
         viewclass: "PlaylistButton"
         width: app.width
         height: int(playlist_search.y - size_indicator.height)
+        size_hint: None, None
         bar_width: dp(10)
         scroll_type: ["bars", "content"]
         scroll_distance: 5

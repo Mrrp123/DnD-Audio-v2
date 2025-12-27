@@ -173,7 +173,7 @@ class AnimSlider(Slider):
         Make sure to call this before doing anything with the AnimSlider
         """
         self.app: DndAudio = App.get_running_app()
-        self.main_display: MainDisplay = self.app.sm.get_screen("main").main_display
+        self.main_display: MainDisplay = self.app.sm.get_screen("main")
 
         self.orig_size = tuple(self.size)
         self.orig_pos = tuple(self.pos)
@@ -293,7 +293,7 @@ class AudioPanel(Widget):
         self.previous_screen_name = "main"
         self.app: DndAudio = App.get_running_app()
         self._audio_player_active = False
-        self.main_display: MainDisplay = self.app.sm.get_screen("main").main_display
+        self.main_display: MainDisplay = self.app.sm.get_screen("main")
 
         self.next_track_button: Button = self.ids.next_track
         self.previous_track_button: Button = self.ids.previous_track
@@ -370,50 +370,8 @@ class AudioPanel(Widget):
         self.disabled = False
         self.size = self.orig_size
 
-class MainScreen(Screen):
-    
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        self.main_display = MainDisplay()
-        self.add_widget(self.main_display)
 
-        self.initialized = False
-    
-    def on_enter(self):
-        if not self.initialized:
-            self.main_display._frame_one_init()
-            self.initialized = True
-
-        # Turn our name/artist scrolling animations back on
-        if self.main_display.track_name_label.is_animated:
-            self.main_display.track_name_anim_trigger()
-        if self.main_display.track_artist_label.is_animated:
-            self.main_display.track_artist_anim_trigger()
-    
-    def on_pre_enter(self):
-        # Turn our audio info loop back on
-        # if self.main_display.audio_clock is not None:
-        #     self.main_display.audio_clock = Clock.schedule_interval(self.main_display.update_track_info, 0.05)
-        pass
-    
-    def on_leave(self):
-        
-        # If we're not looking at the page, we have no reason to care about animations for song info
-        # turn these off
-        # if self.main_display.audio_clock is not None:
-        #     print("Audio clock stopped?")
-        #     self.main_display.audio_clock.cancel()
-
-        self.main_display.track_name_anim.stop(self.main_display.track_name_scrollview)
-        if self.main_display.track_name_anim_trigger is not None:
-            self.main_display.track_name_anim_trigger.cancel()
-        self.main_display.track_artist_anim.stop(self.main_display.track_artist_scrollview)
-        if self.main_display.track_artist_anim_trigger is not None:
-            self.main_display.track_artist_anim_trigger.cancel()
-
-
-
-class MainDisplay(EffectWidget):
+class MainDisplay(Screen, EffectWidget):
     next_track_event = None
     previous_track_event = None
     time_stop_event = False
@@ -496,11 +454,46 @@ class MainDisplay(EffectWidget):
         self.track_artist_anim.on_progress = self.track_artist_label.on_anim_progress
         self.track_artist_anim.on_complete = self.track_artist_label.on_anim_complete
 
+        self.initialized = False
+
         # Clock.schedule_once(self._frame_zero_init, 0)
+    
+    def on_enter(self):
+        if not self.initialized:
+            self._frame_one_init()
+            self.initialized = True
+
+        # Turn our name/artist scrolling animations back on
+        if self.track_name_label.is_animated:
+            self.track_name_anim_trigger()
+        if self.track_artist_label.is_animated:
+            self.track_artist_anim_trigger()
+    
+    def on_pre_enter(self):
+        # Turn our audio info loop back on
+        # if self.main_display.audio_clock is not None:
+        #     self.main_display.audio_clock = Clock.schedule_interval(self.main_display.update_track_info, 0.05)
+        pass
+    
+    def on_leave(self):
+        
+        # If we're not looking at the page, we have no reason to care about animations for song info
+        # turn these off
+        # if self.main_display.audio_clock is not None:
+        #     print("Audio clock stopped?")
+        #     self.main_display.audio_clock.cancel()
+
+        self.track_name_anim.stop(self.track_name_scrollview)
+        if self.track_name_anim_trigger is not None:
+            self.track_name_anim_trigger.cancel()
+        self.track_artist_anim.stop(self.track_artist_scrollview)
+        if self.track_artist_anim_trigger is not None:
+            self.track_artist_anim_trigger.cancel()
 
     
     def _frame_zero_init(self, dt):
-        pass
+        self.app.profiler.disable()
+        self.app.profiler.dump_stats("dndaudio_60sec.profile")
 
     
     def _frame_one_init(self):
@@ -871,21 +864,7 @@ class MainDisplay(EffectWidget):
                 fbo[key] = value
       
 
-class SongsScreen(Screen):
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        self.songs_display = SongsDisplay()
-        self.add_widget(self.songs_display)
-    
-    # def on_enter(self, *args):
-    #     print(self.children[0].song_list.data)
-    #     if self.children[0].song_list.data is None:
-    #         self.children[0].refresh_songs()
-    #         print("adding data...")
-    #     else:
-    #         print("Not adding data...")
-
-class SongsDisplayBase(Widget):
+class SongsDisplayBase(Screen):
 
     # Same ListProperty as SortDropDown, see that for details
     dropdown_sort_settings = ListProperty()
@@ -986,8 +965,8 @@ class SongsDisplay(SongsDisplayBase):
         self.track_search.hint_text = "Search in Songs"
     
     def back_button_on_release(self, *args):
-        self.parent.manager.transition.direction = "right"
-        self.parent.manager.current = "library"
+        self.manager.transition.direction = "right"
+        self.manager.current = "library"
 
 
     def initalize_tracks(self):
@@ -1043,7 +1022,7 @@ class SongButton(Widget):
 
         # Get a reference to the app and main display
         self.app: DndAudio = App.get_running_app()
-        self.main_display: MainDisplay = self.app.sm.get_screen("main").main_display
+        self.main_display: MainDisplay = self.app.sm.get_screen("main")
         self.touch_down_called = False
         self.track_id: int # This gets set by the SongsDisplay/PlaylistSongsDisplay init
         self.playlist_id: int # This also gets set by the SongsDisplayBase/PlaylistSongsDisplay init
@@ -1193,22 +1172,8 @@ class BottomSortButton(SortButton):
 class SoloSortButton(SortButton):
     pass
 
-class SettingsScreen(Screen):
-
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        self.settings_display = SettingsDisplay()
-        self.add_widget(self.settings_display)
     
-    def on_pre_enter(self):
-        self.fps_clock = Clock.schedule_interval(self.settings_display.update_fps, 0.5)
-        self.debug_clock = Clock.schedule_interval(self.settings_display.get_debug_info, 0.05)
-    
-    def on_leave(self):
-        self.fps_clock.cancel()
-        self.debug_clock.cancel()
-    
-class SettingsDisplay(Widget):
+class SettingsDisplay(Screen):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1223,6 +1188,14 @@ class SettingsDisplay(Widget):
         # These will get overridden by config if the values exist
         self.speed_slider.value = 100
         self.fade_slider.value = 3000
+
+    def on_pre_enter(self):
+        self.fps_clock = Clock.schedule_interval(self.update_fps, 0.5)
+        self.debug_clock = Clock.schedule_interval(self.get_debug_info, 0.05)
+    
+    def on_leave(self):
+        self.fps_clock.cancel()
+        self.debug_clock.cancel()
     
     def change_speed(self, touch: MotionEvent):
         if touch.grab_current == self.speed_slider:
@@ -1256,24 +1229,11 @@ class SettingsDisplay(Widget):
         except:
             pass
 
-class LibraryScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.library_display = LibraryDisplay()
-        self.add_widget(self.library_display)
-
-class LibraryDisplay(Widget):
+class LibraryDisplay(Screen):
     pass
 
 
-class PlaylistsScreen(Screen):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.playlist_display = PlaylistsDisplay()
-        self.add_widget(self.playlist_display)
-
-
-class PlaylistsDisplay(Widget):
+class PlaylistsDisplay(Screen):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -1338,19 +1298,7 @@ class PlaylistsDisplay(Widget):
                 if self.playlist_search.text.lower() in self.app.music_database.data["playlists"][playlist_id]["name"].lower()
             ]
 
-
-
             
-
-class PlaylistSongsScreen(Screen):
-    def __init__(self, playlist_id, sort_by="order", reverse_sort=False, **kwargs):
-        super().__init__(**kwargs)
-        self.playlist_songs_display = PlaylistSongsDisplay(playlist_id, sort_by=sort_by, reverse_sort=reverse_sort)
-        self.add_widget(self.playlist_songs_display)
-    
-    def on_leave(self, *args):
-        self.manager.remove_widget(self)
-
 class PlaylistSongsDisplay(SongsDisplayBase):
 
     def __init__(self, playlist_id, sort_by="order", reverse_sort=False, **kwargs):
@@ -1376,9 +1324,12 @@ class PlaylistSongsDisplay(SongsDisplayBase):
 
         self.initalize_tracks()
     
+    def on_leave(self, *args):
+        self.manager.remove_widget(self)
+    
     def on_parent(self, *args):
 
-        self.playlists_display: PlaylistsDisplay = self.app.sm.get_screen("playlists").playlist_display
+        self.playlists_display: PlaylistsDisplay = self.app.sm.get_screen("playlists")
 
         self.back_button: Button = self.ids.back_button
         self.back_button.text = "\u2039 Playlists"
@@ -1389,8 +1340,8 @@ class PlaylistSongsDisplay(SongsDisplayBase):
         self.track_search.hint_text = "Search in Playlist"
     
     def back_button_on_release(self, *args):
-        self.parent.manager.transition.direction = "right"
-        self.parent.manager.current = "playlists"
+        self.manager.transition.direction = "right"
+        self.manager.current = "playlists"
         
 
     def initalize_tracks(self):
@@ -1529,7 +1480,7 @@ class PlaylistButton(ScreenSelectionButton):
             else:
                 Clock.schedule_once(self.set_background_color, time_diff)
 
-            self.app.sm.add_widget(PlaylistSongsScreen(self.playlist_id, sort_by=self.sort_by, 
+            self.app.sm.add_widget(PlaylistSongsDisplay(self.playlist_id, sort_by=self.sort_by, 
                                                          reverse_sort=self.reverse_sort, name=self.screen_link_name))
             self.app.sm.transition.direction = self.transition_direction
             self.app.sm.current = self.screen_link_name
@@ -1653,11 +1604,11 @@ class DndAudio(App):
         self.root: FloatLayout
         root = FloatLayout()
         self.sm = ScreenManager(transition=NoTransition())
-        self.sm.add_widget(SongsScreen(name="songs"))
-        self.sm.add_widget(MainScreen(name="main"))
-        self.sm.add_widget(SettingsScreen(name="settings"))
-        self.sm.add_widget(LibraryScreen(name="library"))
-        self.sm.add_widget(PlaylistsScreen(name="playlists"))
+        self.sm.add_widget(SongsDisplay(name="songs"))
+        self.sm.add_widget(MainDisplay(name="main"))
+        self.sm.add_widget(SettingsDisplay(name="settings"))
+        self.sm.add_widget(LibraryDisplay(name="library"))
+        self.sm.add_widget(PlaylistsDisplay(name="playlists"))
         self.sm.transition.direction = "right"
         self.sm.current = "main"
         self.sm.transition = SlideTransition()
@@ -1819,14 +1770,14 @@ class DndAudio(App):
     def _file_drop_handler(self, window, file_path: bytes, x, y, *args):
         self.music_database.add_track(file_path.decode("utf-8"))
         self.call_audioplayer_func("reload_track_data")
-        self.sm.get_screen("songs").songs_display.refresh_tracks()
+        self.sm.get_screen("songs").refresh_tracks()
     
     def _add_file_handler(self, file_paths: list[str] | None):
         if file_paths is not None:
             for file_path in file_paths:
                 self.music_database.add_track(file_path)
             self.call_audioplayer_func("reload_track_data")
-            self.sm.get_screen("songs").songs_display.refresh_tracks()
+            self.sm.get_screen("songs").refresh_tracks()
 
 
     def _return_message(self, address: str, *values):
@@ -1839,9 +1790,9 @@ class DndAudio(App):
         if address == "/call/music_database":
             func = getattr(self.music_database, func_name)
         else:
-            screen, widget_name = address.split("/")[2:]
-            widget = getattr(self.sm.get_screen(screen), widget_name)
-            func = getattr(widget, func_name)
+            screen_name = address.split("/")[2]
+            screen = self.sm.get_screen(screen_name)
+            func = getattr(screen, func_name)
         if args and isinstance(args[-1], str) and args[-1][0] == "&":
             self.set_audioplayer_attr(args[-1][1:], func(*args[:-1]))
         else:
@@ -1868,7 +1819,7 @@ class DndAudio(App):
             with open(f"{common_vars.app_folder}/config", "wb") as fp:
                 (track_id, track_pos, track_length, total_frames, 
                  speed, fade_duration, volume, reverse_audio) = self.config_vars
-                main_display: MainDisplay = self.sm.get_screen("main").main_display
+                main_display: MainDisplay = self.sm.get_screen("main")
                 # Add special code so we know the file format is ok
                 fp.write(bytes([0x6D, 0x72, 0x72, 0x70])) # mrrp
                 fp.write(int(track_id).to_bytes(4, "little"))
@@ -1877,8 +1828,8 @@ class DndAudio(App):
                 fp.write(int(reverse_audio).to_bytes(1, "little"))
                 fp.write(int(self.music_database._shuffle).to_bytes(1, "little"))
                 fp.write(int(self.music_database.repeat).to_bytes(1, "little"))
-                fp.write(self.sort_by_bytemap[self.sm.get_screen("songs").songs_display.sort_by])
-                fp.write(int(self.sm.get_screen("songs").songs_display.reverse_sort).to_bytes(1, "little"))
+                fp.write(self.sort_by_bytemap[self.sm.get_screen("songs").sort_by])
+                fp.write(int(self.sm.get_screen("songs").reverse_sort).to_bytes(1, "little"))
                 for channel_val in main_display.c1 + main_display.c2: # c1 and c2 should be lists of floats
                     fp.write(round(channel_val * 255).to_bytes(1, "little"))
                 fp.write(int(fade_duration).to_bytes(2, "little"))
@@ -1923,7 +1874,7 @@ class DndAudio(App):
 
         if valid_file_tag:
 
-            main_display: MainDisplay = self.sm.get_screen("main").main_display
+            main_display: MainDisplay = self.sm.get_screen("main")
 
             if found_track:
                 # If we can't find the track, don't set track position values since these aren't valid
@@ -1945,13 +1896,13 @@ class DndAudio(App):
             if repeat: # MusicDatabase.repeat is set to False by default, so if repeat is true, flip value
                 main_display.toggle_repeat_mode()
 
-            songs_display: SongsDisplay = self.sm.get_screen("songs").songs_display
+            songs_display: SongsDisplay = self.sm.get_screen("songs")
             songs_display.sort_by = sort_by
             songs_display.reverse_sort = reverse_sort
             songs_display.sort_buttons[sort_by].sort_checkbox.active = True
             songs_display.refresh_tracks()
 
-            settings_display: SettingsDisplay = self.sm.get_screen("settings").settings_display
+            settings_display: SettingsDisplay = self.sm.get_screen("settings")
             settings_display.speed_slider.value = speed * 100
             settings_display.fade_slider.value = fade_duration
 
