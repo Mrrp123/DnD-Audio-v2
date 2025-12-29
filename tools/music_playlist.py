@@ -431,10 +431,14 @@ class MusicDatabase():
                     continue
 
                 try:
-                    img.save(cached_img, img.format)
                     if img.mode in ("RGBA", "P"): img = img.convert("RGB")
-                    img = ImageOps.contain(img, (128,128), Image.Resampling.LANCZOS)
-                    img.save(f"{common_vars.app_folder}/cache/small_covers/{persistent_id}.jpg", "JPEG", quality=100)
+                    if img.width > 1024 or img.height > 1024:
+                        img_large = ImageOps.contain(img, (1024,1024), Image.Resampling.LANCZOS)
+                    else:
+                        img_large = img
+                    img_large.save(cached_img, "JPEG", quality=100)
+                    img_small = ImageOps.contain(img, (128,128), Image.Resampling.LANCZOS)
+                    img_small.save(f"{common_vars.app_folder}/cache/small_covers/{persistent_id}.jpg", "JPEG", quality=100)
                 except OSError:
                     print(f"Failed to save image for track {track_id}!")
         
