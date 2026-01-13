@@ -737,6 +737,8 @@ class MainDisplay(Screen, EffectWidget):
                               get_color_from_hex("111111"))
 
             self._color_updater = self._generate_background_color((self.c1, self.c2), new_colors)
+            if hasattr(self, "background_updater"):
+                self.background_updater.cancel()
             self.background_updater = Clock.schedule_interval(self._update_background_color, 0.0333)
             self.c1, self.c2 = new_colors
 
