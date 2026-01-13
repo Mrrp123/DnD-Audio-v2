@@ -16,13 +16,9 @@ from pythonosc.dispatcher import Dispatcher
 from pythonosc.osc_server import ThreadingOSCUDPServer
 from pythonosc.udp_client import SimpleUDPClient
 
-from kivy.utils import platform
-
-
-if platform in ('win', 'linux', 'linux2', 'macosx', 'android'):
-    import miniaudio
-    from miniaudio import lib, ffi, _get_filename_bytes
-    AUDIO_API = "miniaudio"
+import miniaudio
+from miniaudio import lib, ffi, _get_filename_bytes
+AUDIO_API = "miniaudio"
 
 
 
