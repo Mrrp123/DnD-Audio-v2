@@ -373,8 +373,6 @@ class AudioPanel(Widget):
 
 
 class MainDisplay(Screen, EffectWidget):
-    next_track_event = None
-    previous_track_event = None
     time_stop_event = False
     audio_clock = None
     track_name_anim_trigger = None
@@ -528,36 +526,6 @@ class MainDisplay(Screen, EffectWidget):
             self.audio_slider.disabled = False
             self.next_track_button.disabled = False
             self.previous_track_button.disabled = False
-    
-    def get_tap_type(self, touch: MotionEvent):
-        self.button_touch = touch
-        if touch.grab_current in (self.next_track_button, self.app.audio_panel.next_track_button) and self.next_track_event is None:
-            self.next_track_event = Clock.schedule_once(lambda dt: self.play_next_track(self.button_touch), 0.2)
-            return True
-        elif touch.grab_current in (self.previous_track_button, self.app.audio_panel.previous_track_button) and self.previous_track_event is None:
-            self.previous_track_event = Clock.schedule_once(lambda dt: self.play_previous_track(self.button_touch), 0.2)
-            return True
-
-
-    def play_next_track(self, touch: MotionEvent):
-        if touch.is_double_tap:
-            self.app.change_track(transition="skip", direction="forward")
-        else:
-            self.app.change_track(transition="crossfade", direction="forward")
-
-        self.next_track_event.cancel()
-        self.next_track_event = None
-    
-
-    def play_previous_track(self, touch: MotionEvent):
-        if touch.is_double_tap:
-            self.app.change_track(transition="skip", direction="backward")
-        else:
-            self.app.change_track(transition="crossfade", direction="backward")
-
-        self.previous_track_event.cancel()
-        self.previous_track_event = None
-    
 
     def pause_music(self):
         pause_flag, status = self.app.get_audioplayer_attr("pause_flag", "status")
@@ -1621,9 +1589,41 @@ class DndAudio(App):
         self.audio_panel = AudioPanel(exclude_on_screen=["main", "settings"])
         self.sm.fbind("current", self.audio_panel.on_current)
 
+        if platform in ('linux', 'linux2', 'macosx', 'win'):
+            Window.bind(on_keyboard=self.on_keyboard)
+
         root.add_widget(self.sm)
         root.add_widget(self.audio_panel)
         return root
+
+    def on_keyboard(self, window, key, scancode, codepoint, modifier):
+        if key == 275: # Right arrow key
+            self._schedule_track_change("forward")
+        elif key == 276: # Left arrow key
+            self._schedule_track_change("backward")
+    
+    def _schedule_track_change(self, direction):
+        """
+        Handles inputs for changing the track that accept a single input (crossfade) or double input (skip).
+        Cannot handle setting track id, only used for arrow keys (physical keyboard keys) 
+        and the change arrow buttons (Virtual buttons in MainDisplay and AudioPanel)
+        """
+        if direction == "forward":
+            if self.settings_display.fade_slider.value == 0:
+                self.change_track(transition="skip", direction="forward")
+            elif self.track_forward_event is not None and self.track_forward_event.is_triggered:
+                self.track_forward_event.cancel()
+                self.change_track(transition="skip", direction="forward")
+            else:
+                self.track_forward_event = Clock.schedule_once(lambda dt : self.change_track(transition="crossfade", direction="forward"), 0.25)
+        elif direction == "backward":
+            if self.settings_display.fade_slider.value == 0:
+                self.change_track(transition="skip", direction="backward")
+            elif self.track_backward_event is not None and self.track_backward_event.is_triggered:
+                self.track_backward_event.cancel()
+                self.change_track(transition="skip", direction="backward")
+            else:
+                self.track_backward_event = Clock.schedule_once(lambda dt : self.change_track(transition="crossfade", direction="backward"), 0.25)
 
     def on_resize(self, window, width, height):
         self.width = width

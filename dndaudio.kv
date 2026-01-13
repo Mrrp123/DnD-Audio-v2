@@ -42,7 +42,7 @@
             width: root.height * (3/4)
             height: self.width
             disabled: False
-            on_touch_up: root.main_display.get_tap_type(args[1])
+            on_release: app._schedule_track_change("backward")
 
             background_normal: f"{app_folder}/assets/buttons/backward_skip_normal.png"
             background_disabled_normal: f"{app_folder}/assets/buttons/backward_skip_normal.png"
@@ -69,7 +69,7 @@
             width: root.height * (3/4)
             height: self.width
             disabled: False
-            on_touch_up: root.main_display.get_tap_type(args[1])
+            on_release: app._schedule_track_change("forward")
             
             background_normal: f"{app_folder}/assets/buttons/forward_skip_normal.png"
             background_disabled_normal: f"{app_folder}/assets/buttons/forward_skip_normal.png"
@@ -438,7 +438,7 @@
         disabled: True
         # center_x: app.width * (1/4)
         # center_y: app.height * (1/6)
-        on_touch_up: root.get_tap_type(args[1])
+        on_release: app._schedule_track_change("backward")
 
         background_normal: f"{app_folder}/assets/buttons/backward_skip_normal.png"
         background_disabled_normal: f"{app_folder}/assets/buttons/backward_skip_normal.png"
@@ -456,7 +456,7 @@
         disabled: True
         # center_x: app.width * (3/4)
         # center_y: app.height * (1/6)
-        on_touch_up: root.get_tap_type(args[1])
+        on_release: app._schedule_track_change("forward")
         
         background_normal: f"{app_folder}/assets/buttons/forward_skip_normal.png"
         background_disabled_normal: f"{app_folder}/assets/buttons/forward_skip_normal.png"
