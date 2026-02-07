@@ -307,8 +307,7 @@ class AudioPanel(Widget):
         self.song_cover: Image = self.ids.song_cover
     
     def on_parent(self, *args):
-        # We initially offset the AudioPanel by the screen width so that we don't see it on start up.
-        self.orig_pos = tuple((self.pos[0] - self.app.width, self.pos[1]))
+        self.orig_pos = tuple(self.pos)
         self.orig_size = tuple(self.size)
 
     def on_current(self, manager: ScreenManager, current_screen_name: str):
@@ -318,24 +317,13 @@ class AudioPanel(Widget):
         If screen transition is ever changed this will need to be updated.
         """
         if self.previous_screen_name not in self.exclude_on_screen and current_screen_name in self.exclude_on_screen:
-            if manager.transition.direction == "right":
-                self.pos = self.orig_pos
-                new_pos = (self.orig_pos[0] + self.app.width, self.orig_pos[1])
-            elif manager.transition.direction == "left":
-                self.pos = self.orig_pos
-                new_pos = (self.orig_pos[0] - self.app.width, self.orig_pos[1])
-            anim = Animation(pos=new_pos, duration=0.4, transition="out_quad")
+            anim = Animation(opacity=0, duration=0.4, transition="out_quad")
             anim.on_complete = self.hide_widget
             anim.start(self)
 
         elif self.previous_screen_name in self.exclude_on_screen and current_screen_name not in self.exclude_on_screen:
-            if manager.transition.direction == "right":
-                self.pos = (self.orig_pos[0] - self.app.width, self.orig_pos[1])
-                new_pos = self.orig_pos
-            elif manager.transition.direction == "left":
-                self.pos = (self.orig_pos[0] + self.app.width, self.orig_pos[1])
-                new_pos = self.orig_pos
-            anim = Animation(pos=new_pos, duration=0.4, transition="out_quad")
+            # Make the panel visible slightly faster than when we're hiding it
+            anim = Animation(opacity=1, duration=0.3, transition="out_quad")
             anim.on_start = self.show_widget
             anim.start(self)
         self.previous_screen_name = current_screen_name
