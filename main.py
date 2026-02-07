@@ -1547,6 +1547,9 @@ class DndAudio(App):
 
         self.filechooser: plyer.facades.FileChooser = plyer.filechooser
 
+        self.track_forward_event = None
+        self.track_backward_event = None
+
         #self.reload_songs()
 
         # We haven't been using reload_songs for quite some time, leave it for later reworks
@@ -1577,9 +1580,13 @@ class DndAudio(App):
         self.root: FloatLayout
         root = FloatLayout()
         self.sm = ScreenManager(transition=NoTransition())
+
+        self.main_display = MainDisplay(name="main")
+        self.settings_display = SettingsDisplay(name="settings")
+
         self.sm.add_widget(SongsDisplay(name="songs"))
-        self.sm.add_widget(MainDisplay(name="main"))
-        self.sm.add_widget(SettingsDisplay(name="settings"))
+        self.sm.add_widget(self.main_display)
+        self.sm.add_widget(self.settings_display)
         self.sm.add_widget(LibraryDisplay(name="library"))
         self.sm.add_widget(PlaylistsDisplay(name="playlists"))
         self.sm.transition.direction = "right"
