@@ -556,7 +556,7 @@ class MusicDatabase():
             self.data.locked = True
         
         else:
-            new_dict_entry = {"tracks" : {new_id : new_dict_entry}, "playlists" : {}}
+            new_dict_entry = {"tracks" : {new_id : new_dict_entry}, "playlists" : {}, "histories" : {}}
             self.data = UpdatingDict(new_dict_entry)
             Thread(target=save_db, args=(common_vars.music_database_path, self.data), daemon=False).start()
 
