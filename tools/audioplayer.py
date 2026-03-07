@@ -872,7 +872,7 @@ class AudioPlayer():
                 data = change_speed(data, self.speed)
 
                 # Frame rate is 44.1 kHz because the audio we use in the assets is 44.1 kHz, not necessarily self.rate
-                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume) - 120
+                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume)
                 track_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=4)
 
                 # For the first few chunks, we want to fade down to the desired ducking volume (5 dB)
@@ -929,7 +929,7 @@ class AudioPlayer():
                 
                 # Again, resampling for track_audio should already be handled by the above code; set it to self.rate
                 track_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=4) + (min_db + amp_to_db(self.volume))
-                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume) - 120
+                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume)
 
                 # This should always be the same length
                 self.stream.write((track_audio * zw_audio).data)
@@ -950,7 +950,7 @@ class AudioPlayer():
 
             # After the slow down effect has been done, read the rest of the time_stop.wav
             while len(zw) != 0:
-                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume) - 120
+                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume)
                 self.stream.write(zw_audio.data)
                 zw = zwfp.readframes(round(self.chunk_len*self.rate/1000))
 
@@ -980,7 +980,7 @@ class AudioPlayer():
                 zw = zwfp.readframes(round(self.chunk_len*44_100/1000))
 
                 # Frame rate is 44.1 kHz because the audio we use in the assets is 44.1 kHz, not necessarily self.rate
-                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume) - 120
+                zw_audio = AudioSegment(data=zw, frame_rate=44_100, channels=2, sample_width=2) + amp_to_db(self.volume)
 
                 # Again, even though track_audio could be any sampling rate, the above change_speed function will have resampled it to self.rate
                 track_audio = AudioSegment(data=data, frame_rate=self.rate, channels=2, sample_width=4)
