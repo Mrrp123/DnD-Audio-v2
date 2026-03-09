@@ -1596,6 +1596,8 @@ class DndAudio(App):
             self._schedule_track_change("forward")
         elif key == 276: # Left arrow key
             self._schedule_track_change("backward")
+        elif key == 32: # Spacebar
+            self.main_display.pause_music()
     
     def _schedule_track_change(self, direction):
         """
