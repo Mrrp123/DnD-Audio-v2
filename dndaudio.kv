@@ -734,14 +734,14 @@
 
 
     Button:
-        text: "Song Sort"
         halign: "center"
         valign: "center"
-        x: app.width - self.width*2
-        center_y: back_button.center_y - 2
+        x: app.width - self.width - (app.height - self.y - self.height)
+        center_y: back_button.center_y
         size: app.height/20, app.height/20
         size_hint: None, None
-        #background_normal: "./assets/icon/icon.png"
+        background_normal: f"{app_folder}/assets/buttons/sort_normal.png"
+        background_down: f"{app_folder}/assets/buttons/sort_pressed.png"
         on_release: 
             dropdown.open(self)
             dropdown.x = self.x + self.width - dropdown.width
