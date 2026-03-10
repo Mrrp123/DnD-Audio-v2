@@ -5,6 +5,7 @@ from mutagen.mp3 import MP3
 from mutagen.oggvorbis import OggVorbis
 from mutagen.wave import WAVE
 from mutagen.id3 import ID3
+from mutagen.flac import FLAC, FLACNoHeaderError
 from mutagen.id3._util import ID3NoHeaderError
 from PIL import Image, ImageOps, ImageChops, UnidentifiedImageError
 import numpy as np
@@ -389,22 +390,43 @@ class MusicDatabase():
     def cache_covers(self, track_ids=None, playlist_ids=None):
 
         def get_img_from_file(file):
-            try:
-                metadata = ID3(file)
-                if (apic := metadata.getall("APIC")) != []:
-                    img_data = apic[0].data
-            except ID3NoHeaderError:
+
+            def get_img_bytes(file) -> bytes | None:
+                try:
+                    metadata = ID3(file)
+                    if (apic := metadata.getall("APIC")) != []:
+                        return apic[0].data
+                    else: 
+                        return None
+                except ID3NoHeaderError:
+                    pass
+
+                try:
+                    metadata = FLAC(file)
+                    if metadata.pictures:
+                        return metadata.pictures[0].data
+                    else:
+                        return None
+                except FLACNoHeaderError:
+                    pass
+
                 try:
                     with open(file, "rb") as fp:
-                        img_data = fp.read()
+                        return fp.read()
                 except OSError:
                     print(f"Failed to read image for track {track_id}!")
-                    return None, None
+                    return None
+            
+            img_data = get_img_bytes(file)
+
+            if img_data is None:
+                return None
+
             try:
                 img: Image.Image = Image.open(BytesIO(img_data))
             except UnidentifiedImageError:
                 print(f"Cannot identify image file: {file}")
-                return None, None
+                return None
 
             return img
 
@@ -621,18 +643,43 @@ class MusicDatabase():
                         pass
             if metadata.get("bpm") is not None: # This isn't typical to have in a vorbis file, but try anyway
                 track_info["bpm"] = metadata.get("bpm")[0]
+        
+        elif isinstance(metadata, FLAC):
+            if len(metadata.pictures) != 0:
+                track_info["cover"] = file
+            if metadata.get("title") is not None:
+                track_info["name"] = metadata.get("title")[0]
+            if metadata.get("artist") is not None:
+                track_info["artist"] = metadata.get("artist")[0]
+            if metadata.get("album") is not None:
+                track_info["album"] = metadata.get("album")[0]
+            if metadata.get("genre") is not None:
+                track_info["genre"] = metadata.get("genre")[0]
+            if metadata.get("date") is not None:
+                try:
+                    track_info["year"] = datetime.fromisoformat(metadata.get("date")[0]).year
+                except ValueError:
+                    try:
+                        track_info["year"] = int(metadata.get("date")[0])
+                    except ValueError:
+                        pass
+            if metadata.get("bpm") is not None: # This isn't typical to have in a FLAC file, but try anyway
+                track_info["bpm"] = metadata.get("bpm")[0]
 
         return track_info
 
     def _miniaudio_get_track_info(self, file: str):
         file_ext = os.path.splitext(file)[1].lower()
-        hard_link_path = f"{common_vars.app_folder}/cache/audio/temp"
+        link_path = f"{common_vars.app_folder}/cache/audio/temp"
 
         if not file.isascii():
-            if os.path.exists(hard_link_path):
-                os.remove(hard_link_path)
-            os.link(file, hard_link_path)
-            file = hard_link_path
+            if os.path.exists(link_path):
+                os.remove(link_path)
+            try:
+                os.link(file, link_path)
+            except OSError:
+                os.symlink(file, link_path)
+            file = link_path
         
         # Base dict to fill known info into
         track_info = {
@@ -660,6 +707,10 @@ class MusicDatabase():
             elif file_ext == ".mp3":
                 file_info = miniaudio.mp3_get_file_info(file)
                 metadata = MP3(file)
+
+            elif file_ext == ".flac":
+                file_info = miniaudio.flac_get_file_info(file)
+                metadata = FLAC(file)
             
             else:
                 raise ValueError("Unsupported file type!")
@@ -668,8 +719,8 @@ class MusicDatabase():
             raise miniaudio.DecodeError(f"Failed to get frame count for {file}")
         
         finally:
-            if os.path.exists(hard_link_path):
-                os.remove(hard_link_path)
+            if os.path.exists(link_path):
+                os.remove(link_path)
                 
         track_info["rate"] = file_info.sample_rate
         track_info["length"] = file_info.num_frames

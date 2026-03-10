@@ -96,7 +96,8 @@ class AudioDecoder():
     def _miniaudio_init(self):
         self.load_ogg = self._miniaudio_load_ogg
         self.load_mp3 = self._miniaudio_load_mp3
-        self.mp3_to_wav = self._miniaudio_mp3_to_wav
+        self.load_flac = self._miniaudio_load_flac
+        self.mp3_flac_to_wav = self._miniaudio_mp3_flac_to_wav
 
     def _stream_file(self, file: str, output_format=miniaudio.SampleFormat.FLOAT32,
                      nchannels=2, frames_to_read=2205, seek_frame=0):
@@ -137,7 +138,10 @@ class AudioDecoder():
     def load_mp3(self, file, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
         pass
 
-    def mp3_to_wav(self, file, persistent_track_id, frame_rate=44_100):
+    def load_flac(self, file, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
+        pass
+
+    def mp3_flac_to_wav(self, file, persistent_track_id, frame_rate=44_100):
         pass
 
 
@@ -247,7 +251,18 @@ class AudioDecoder():
 
             yield audio
     
-    def _miniaudio_mp3_to_wav(self, file: str, persistent_track_id: int, frame_rate=44_100):
+    def _miniaudio_load_flac(self, file, start_frame, num_chunks, chunk_frame_len, frame_rate=44_100):
+        # This is identical to _miniaudio_load_mp3, but has its own function in case this changes
+        decoder, file_stream = self._stream_file(file, frames_to_read=chunk_frame_len, seek_frame=round(start_frame/frame_rate*self.rate))
+        
+        for samples in file_stream:
+
+            byte_data = samples.tobytes()
+            audio = AudioSegment(data=byte_data, frame_rate=self.rate, channels=2, sample_width=4)
+
+            yield audio
+    
+    def _miniaudio_mp3_flac_to_wav(self, file: str, persistent_track_id: int, frame_rate=44_100):
                 
         # Try to delete files if there are too many (>3) in the cache
         current_cached_files = glob(f"{self.app_folder}/cache/audio/*_reversed.wav")
@@ -499,16 +514,19 @@ class AudioPlayer():
         elif file_type == ".ogg":
             audio_generator = self.decoder.load_ogg(file, start_frame, num_chunks, chunk_frame_len, self.reverse_audio, self.track_data[track_id]["rate"])
         
-        elif file_type == ".mp3":
+        elif file_type in (".mp3", ".flac"):
             persistent_track_id = self.track_data[track_id]["persistent_id"]
-            # Streaming an mp3 in reverse is impossible, so we will instead create a wav file from the mp3 and read that instead
+            # Streaming an mp3/flac in reverse is impossible, so we will instead create a wav file from the mp3/flac and read that instead
             if self.reverse_audio:
                 if not os.path.exists(f"{self.app_folder}/cache/audio/{persistent_track_id}_reversed.wav"):
-                    self.decoder.mp3_to_wav(file, persistent_track_id)
+                    self.decoder.mp3_flac_to_wav(file, persistent_track_id)
                 reversed_file = f"{self.app_folder}/cache/audio/{persistent_track_id}_reversed.wav"
                 audio_generator = self.decoder.load_wav(reversed_file, start_frame, num_chunks, chunk_frame_len, True, self.track_data[track_id]["rate"])
             else:
-                audio_generator = self.decoder.load_mp3(file, start_frame, num_chunks, chunk_frame_len, self.track_data[track_id]["rate"])
+                if file_type == ".mp3":
+                    audio_generator = self.decoder.load_mp3(file, start_frame, num_chunks, chunk_frame_len, self.track_data[track_id]["rate"])
+                elif file_type == ".flac":
+                    audio_generator = self.decoder.load_flac(file, start_frame, num_chunks, chunk_frame_len, self.track_data[track_id]["rate"])
         print(f"Using chunk_frame_len of {chunk_frame_len} for file {file}")
         for audio in audio_generator:
             yield audio
