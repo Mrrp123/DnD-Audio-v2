@@ -30,7 +30,6 @@ if TYPE_CHECKING:
     from kivy.uix.image import Image
     from kivy.uix.label import Label
     from kivy.uix.checkbox import CheckBox
-    from kivy.uix.textinput import TextInput
     from kivy.uix.scrollview import ScrollView
     from kivy.uix.recycleboxlayout import RecycleBoxLayout
     from kivy.input.motionevent import MotionEvent
@@ -1584,6 +1583,8 @@ class DndAudio(App):
         self.audio_panel = AudioPanel(exclude_on_screen=["main", "settings"])
         self.sm.fbind("current", self.audio_panel.on_current)
 
+        self.disable_keybinds = False
+
         if platform in ('linux', 'linux2', 'macosx', 'win'):
             Window.bind(on_keyboard=self.on_keyboard)
 
@@ -1592,12 +1593,13 @@ class DndAudio(App):
         return root
 
     def on_keyboard(self, window, key, scancode, codepoint, modifier):
-        if key == 275: # Right arrow key
-            self._schedule_track_change("forward")
-        elif key == 276: # Left arrow key
-            self._schedule_track_change("backward")
-        elif key == 32: # Spacebar
-            self.main_display.pause_music()
+        if not self.disable_keybinds:
+            if key == 275: # Right arrow key
+                self._schedule_track_change("forward")
+            elif key == 276: # Left arrow key
+                self._schedule_track_change("backward")
+            elif key == 32: # Spacebar
+                self.main_display.pause_music()
     
     def _schedule_track_change(self, direction):
         """
@@ -1863,10 +1865,11 @@ class DndAudio(App):
 if __name__ == '__main__':
     from kivy.core.window import Window
     from kivy.uix.dropdown import DropDown
+    from kivy.uix.textinput import TextInput
 
 
-    # Because DropDown secretly calls `from kivy.core.window import Window`
-    # We need to place the DropDown stuff in the if __name__ == "__main__" block so when
+    # Because DropDown and TextInput secretly call `from kivy.core.window import Window`
+    # We need to place the DropDown/TextInput stuff in the if __name__ == "__main__" block so when
     # we start the audioplayer (since it will rerun this script), it won't create a second blank window
     class SortDropDown(DropDown):
 
@@ -1929,6 +1932,19 @@ if __name__ == '__main__':
             for child in self.container.children:
                 child.height = new_font_size
             super().open(*args)
+
+    class FocusedTextInput(TextInput):
+
+        def __init__(self, **kwargs):
+            self.app: DndAudio = App.get_running_app()
+            super().__init__(**kwargs)
+
+        def _on_focus(self, instance, value, *largs):
+            if value:
+                self.app.disable_keybinds = True
+            else:
+                self.app.disable_keybinds = False
+            return super()._on_focus(instance, value, *largs)
 
     DndAudio().run()
         
