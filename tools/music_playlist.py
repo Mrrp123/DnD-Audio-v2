@@ -12,7 +12,6 @@ import numpy as np
 from io import BytesIO
 import random
 import hashlib
-import copy
 
 from tools.database import save_db, load_db, DatabaseFormatError
 
@@ -320,8 +319,8 @@ class MusicDatabase():
         Sets the playlist from which to play tracks from. Set playlist_id to zero to return to all tracks
         """
         self.playlist_id = playlist_id
-        self.valid_pointers = copy.deepcopy(self.playlist_pointer_dict[playlist_id])
-        self.shuffled_valid_pointers = copy.deepcopy(self.playlist_pointer_dict[playlist_id])
+        self.valid_pointers = self.playlist_pointer_dict[playlist_id][:]
+        self.shuffled_valid_pointers = self.playlist_pointer_dict[playlist_id][:]
 
     def next(self):
         return self >> 1
